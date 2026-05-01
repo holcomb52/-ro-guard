@@ -1,0 +1,123 @@
+with tabs[0]:
+    st.header("Multi Job Review")
+
+    job_count = st.number_input("Number of Jobs", 1, 10, 3)
+
+    total_claim = 0
+    hard_stop_total = 0
+
+    for i in range(job_count):
+        st.subheader(f"Job {i+1}")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            concern = st.text_area("Concern", key=f"c{i}")
+            cause = st.text_area("Cause", key=f"ca{i}")
+            correction = st.text_area("Correction", key=f"co{i}")
+
+        with col2:
+            st.markdown("### Warranty Checks")
+
+            oil_leak = st.checkbox("Oil Leak", key=f"oil{i}")
+            dye = st.checkbox("Oil Dye Billed", key=f"dye{i}")
+
+            sublet = st.checkbox("Sublet Repair", key=f"sub{i}")
+            sublet_notes = st.text_input("Sublet Notes", key=f"subn{i}")
+            sublet_vendor = st.text_input("Sublet Vendor", key=f"subv{i}")
+
+            rental = st.checkbox("Rental", key=f"rent{i}")
+            rental_days = st.number_input("Rental Days", 0, 30, key=f"rd{i}")
+            rental_signed = st.checkbox("Manager Signed Rental", key=f"rs{i}")
+
+            add_on = st.checkbox("Warranty Add-On (+)", key=f"add{i}")
+            manager_signed = st.checkbox("Manager Signed Add-On", key=f"ms{i}")
+
+            battery = st.checkbox("Battery Replacement", key=f"bat{i}")
+            battery_test = st.checkbox("Battery Test Slip", key=f"battest{i}")
+
+            ac = st.checkbox("A/C Repair", key=f"ac{i}")
+            ac_slip = st.checkbox("A/C EVAC Slip", key=f"acslip{i}")
+
+            claim_val = st.number_input("Claim Value ($)", 0.0, key=f"val{i}")
+
+        total_claim += claim_val
+
+        hard_stop = False
+
+        if not concern:
+            st.error("Missing Concern")
+            hard_stop = True
+
+        if not cause:
+            st.error("Missing Cause")
+            hard_stop = True
+
+        if not correction:
+            st.error("Missing Correction")
+            hard_stop = True
+
+        if oil_leak and not dye:
+            st.error("Oil leak requires dye billed")
+            hard_stop = True
+
+        if sublet and (not sublet_notes or not sublet_vendor):
+            st.error("Sublet missing vendor or notes")
+            hard_stop = True
+
+        if rental and (rental_days == 0 or not rental_signed):
+            st.error("Rental missing days or approval")
+            hard_stop = True
+
+        if add_on and not manager_signed:
+            st.error("Add-on requires manager approval")
+            hard_stop = True
+
+        if battery and not battery_test:
+            st.error("Battery needs test slip")
+            hard_stop = True
+
+        if ac and not ac_slip:
+            st.error("A/C needs EVAC slip")
+            hard_stop = True
+
+        if hard_stop:
+            hard_stop_total += claim_val
+
+        st.markdown("---")
+
+    st.metric("Total Claim Value", f"${total_claim:,.2f}")
+    st.metric("Hard Stop Dollar Value", f"${hard_stop_total:,.2f}")
+import streamlit as st
+
+st.set_page_config(page_title="RO Shield v74", layout="wide")
+
+st.title("RO Shield v74 - Clean Working Build")
+
+st.sidebar.title("RO Shield")
+st.sidebar.selectbox("Appearance", ["Dark","Light"])
+
+tabs = st.tabs(["Review","Claim Intelligence","Reporting","Admin"])
+
+with tabs[0]:
+    st.header("Review")
+    st.text_area("Concern")
+    st.text_area("Cause")
+    st.text_area("Correction")
+    st.checkbox("Oil leak repair")
+    st.checkbox("Sublet repair")
+    st.checkbox("Rental involved")
+    st.number_input("Claim Value ($)")
+
+with tabs[1]:
+    st.header("Claim Intelligence")
+    st.file_uploader("Upload Claim PDFs", type=["pdf"], accept_multiple_files=True)
+
+with tabs[2]:
+    st.header("Reporting")
+    st.metric("Total Claims", 0)
+
+with tabs[3]:
+    st.header("Admin")
+    st.text_input("Add User")
+
