@@ -1,7 +1,8 @@
-SUPABASE_URL = https://ro-guard-eaaifcsxfgxt5rw9bgx4eb.streamlit.app/
-SUPABASE_KEY = sb_publishable_5SXVN_OB5aIouuZAOa3b3Q_Mq4chxUT
+from supabase import create_client
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+SUPABASE_URL = "https://eyufnhnabdgekhfvhqzf.supabase.co"
+SUPABASE_KEY = "sb_publishable_5SXVN_OB5aIouuZAOa3b3Q_Mq4chxUT"
+
 import json
 import re
 import sqlite3
