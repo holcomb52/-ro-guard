@@ -200,7 +200,7 @@ def save_learned_claims(file_name, claims):
     try:
         supabase.table("claims").insert(data).execute()
     except Exception as e:
-        st.warning(f"Save failed: {e}")›)
+        st.warning(f"Save failed: {e}")
     for idx, claim in enumerate(claims, start=1):
         conn.execute("""
             INSERT INTO learned_claims (uploaded_at, source_file, claim_index, raw_text)
