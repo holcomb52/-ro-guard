@@ -27,7 +27,47 @@ DB_PATH = Path("ro_shield_final.db")
 # =========================
 def db():
     return sqlite3.connect(DB_PATH)
+# =====================
+# SUPABASE (SHARED DB)
+# =====================
 
+def save_shared_claims(file_name, claims):
+    for idx, claim in enumerate(claims, start=1):
+        data = {
+            "ro_number": file_name,
+            "vin": "",
+            "concern": "",
+            "cause": "",
+            "correction": "",
+            "tech": "",
+            "advisor": "",
+            "story": claim
+        }
+        try:
+            supabase.table("claims").insert(data).execute()
+        except Exception as e:
+            st.warning(f"Save failed: {e}")
+
+
+def load_shared_claims():
+    try:
+        response = supabase.table("claims").select("*").execute()
+        rows = response.data or []
+        df = pd.DataFrame(rows)
+
+        if df.empty:
+            return pd.DataFrame(columns=["uploaded_at", "source_file", "claim_index", "raw_text"])
+
+        return pd.DataFrame({
+            "uploaded_at": df.get("created_at", ""),
+            "source_file": df.get("ro_number", ""),
+            "claim_index": df.get("id", range(1, len(df)+1)),
+            "raw_text": df.get("story", "")
+        })
+
+    except Exception as e:
+        st.warning(f"Load failed: {e}")
+        return pd.DataFrame(columns=["uploaded_at", "source_file", "claim_index", "raw_text"])
 
 def init_db():
     conn = db()
@@ -141,7 +181,27 @@ def role_options(role):
 
 
 def save_learned_claims(file_name, claims):
-    conn = db()
+    for idx, claim in enumerate(claims, start=1):
+        data = {
+            "ro_number": file_name,
+            "vin": "",
+            "concern": "",
+            "cause": "",
+            "correction": "",
+            "tech": "",
+            "advisor": "",
+            "story": claim
+        }
+
+        try:
+            supabase.table("claims").insert(data).execute()
+        except Exception as e:
+            st.warning(f"Save failed: {e}")
+
+    try:
+        supabase.table("claims").insert(data).execute()
+    except Exception as e:
+        st.warning(f"Save failed: {e}")›)
     for idx, claim in enumerate(claims, start=1):
         conn.execute("""
             INSERT INTO learned_claims (uploaded_at, source_file, claim_index, raw_text)
