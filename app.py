@@ -198,20 +198,7 @@ def save_learned_claims(file_name, claims):
             supabase.table("claims").insert(data).execute()
         except Exception as e:
             st.warning(f"Save failed: {e}")
-
-    try:
-        supabase.table("claims").insert(data).execute()
-    except Exception as e:
-        st.warning(f"Save failed: {e}")
-    for idx, claim in enumerate(claims, start=1):
-        conn.execute("""
-            INSERT INTO learned_claims (uploaded_at, source_file, claim_index, raw_text)
-            VALUES (?, ?, ?, ?)
-        """, (datetime.now().isoformat(timespec="seconds"), file_name, idx, claim))
-    conn.commit()
-    conn.close()
-
-
+  
 def save_bulletin(title, keywords, notes):
     conn = db()
     conn.execute("""
