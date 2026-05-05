@@ -48,7 +48,6 @@ def save_shared_claims(file_name, claims):
         except Exception as e:
             st.warning(f"Save failed: {e}")
 
-
 def load_shared_claims():
     try:
         response = supabase.table("claims").select("*").execute()
