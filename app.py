@@ -1,6 +1,6 @@
 from supabase import create_client
 
-SUPABASE_URL = https://eyufnhnabdgehkfvhqzf.supabase.co
+SUPABASE_URL = SUPABASE_URL = "https://eyufnhnabdgekhfvhqzf.supabase.co"
 SUPABASE_KEY = "sb_publishable_5SXVN_0B5aIouuZA0a3b3Q_Mq4chxUT"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
