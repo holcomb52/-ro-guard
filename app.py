@@ -158,16 +158,29 @@ def save_review(row):
     conn.commit()
     conn.close()
 
+def load_personnel():
+    try:
+        response = supabase.table("personnel").select("*").eq("active", True).execute()
+        rows = response.data or []
+        return pd.DataFrame(rows)
+    except Exception as e:
+        st.warning(f"Personnel load failed: {e}")
+        return pd.DataFrame(columns=["name", "role"])
 
-def add_person(name, role):
-    conn = db()
-    conn.execute(
-        "INSERT INTO personnel (created_at, name, role, active) VALUES (?, ?, ?, 1)",
-        (datetime.now().isoformat(timespec="seconds"), name, role),
-    )
-    conn.commit()
-    conn.close()
 
+def add_person_shared(name, role):
+    try:
+        existing = supabase.table("personnel").select("id").eq("name", name).eq("role", role).execute()
+
+        if not existing.data:
+            supabase.table("personnel").insert({
+                "name": name,
+                "role": role,
+                "active": True
+            }).execute()
+
+    except Exception as e:
+        st.warning(f"Personnel save failed: {e}")
 
 def deactivate_person(pid):
     conn = db()
@@ -697,10 +710,10 @@ def render_admin():
         role = st.selectbox("Role", ["Advisor", "Technician", "Warranty Admin", "Manager"])
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
-            add_person(name.strip(), role)
+            add_person_shared(name.strip(), role)
             st.success("Person added.")
 
-    df = read_df("personnel")
+    df = load_personnel()
     if df.empty:
         st.info("No personnel added yet.")
     else:
