@@ -46,13 +46,14 @@ def save_shared_claims(file_name, claims):
             "story": claim
         }
         try:
-            supabase.table("claims").insert(data).execute()
+            supabase.table("Table name: claims")
+            .insert(data).execute()
         except Exception as e:
             st.warning(f"Save failed: {e}")
 
 def load_shared_claims():
     try:
-        response = supabase.table("claims").select("*").execute()
+        response = supabase.table("Table name: claims").select("*").execute()
         rows = response.data or []
         df = pd.DataFrame(rows)
 
