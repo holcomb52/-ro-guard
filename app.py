@@ -559,7 +559,7 @@ def render_review():
                 "parts_warranty": parts_warranty, "mopa": mopa
             })
 
-            learned = read_df("learned_claims")
+            learned = load_shared_claims()
             if not learned.empty and st.button("Suggest From Paid Claims", key=f"suggest_{i}"):
                 query = f"{concern} {cause} {correction}"
                 scored = []
@@ -649,7 +649,7 @@ def render_claims():
             total += len(claims)
         st.success(f"Total learned claim records added: {total}")
 
-    df = read_df("learned_claims")
+    df = load_shared_claims()
     st.metric("Learned Claim Records", len(df))
     if not df.empty:
         st.dataframe(df[["uploaded_at", "source_file", "claim_index"]], use_container_width=True)
