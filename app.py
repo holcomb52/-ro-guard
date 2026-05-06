@@ -2,7 +2,7 @@ from supabase import create_client
 
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "sb_publishable_5SXVN_OB5aIouuZAOa3b3Q_Mq4chxUT"
-
+ƒ
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 import json
@@ -46,7 +46,10 @@ def save_shared_claims(file_name, claims):
             "story": claim
         }
         try:
-            supabase.table("claims").insert(data).execute()
+            existing = supabase.table("claims").select("id").eq("ro_number", file_name).eq("story", claim).execute()
+
+            if not existing.data:
+                supabase.table("claims").insert(data).execute()
         except Exception as e:
             st.warning(f"Save failed: {e}")
 
