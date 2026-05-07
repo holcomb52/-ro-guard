@@ -183,10 +183,10 @@ def add_person_shared(name, role):
         st.warning(f"Personnel save failed: {e}")
 
 def deactivate_person(pid):
-    conn = db()
-    conn.execute("UPDATE personnel SET active=0 WHERE id=?", (int(pid),))
-    conn.commit()
-    conn.close()
+    try:
+        supabase.table("personnel").update({"active": False}).eq("id", int(pid)).execute()
+    except Exception as e:
+        st.warning(f"Personnel deactivate failed: {e}")
 
 
 def role_options(role):
