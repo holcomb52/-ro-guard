@@ -666,11 +666,10 @@ def render_claims():
     if not df.empty:
         st.dataframe(df[["uploaded_at", "source_file", "claim_index"]], use_container_width=True)
 
-
 def render_reporting():
     df = load_reviews()
     if not df.empty and "created_at" in df.columns:
-        df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
 
         start_date, end_date = st.date_input(
         "Report Date Range",
