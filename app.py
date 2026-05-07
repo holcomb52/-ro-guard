@@ -686,13 +686,23 @@ def render_reporting():
         ]
 
     a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
-    a.metric("Reviews", len(df))
-    avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
-    b.metric("Avg Score", f"{avg_score:.1f}")
-    c.metric("Total Claim Value", f"${df['total_claim_value'].fillna(0).sum():,.2f}")
-    d.metric("Hard Stop Value", f"${df['hard_stop_value'].fillna(0).sum():,.2f}")
-    e.metric("Hard Stops", int(df["hard_stop_count"].fillna(0).sum()))
-    f.metric("Time Bypasses", int(df.get("time_bypass", pd.Series(dtype=int)).fillna(0).sum()))
+
+a.metric("Reviews", len(df))
+
+avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
+b.metric("Avg Score", f"{avg_score:.1f}")
+
+total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
+
+hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
+
+hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
+e.metric("Hard Stops", int(hard_stop_count))
+
+time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
+f.metric("Time Bypasses", int(time_bypass))
 
     st.subheader("Time Validation Bypass Log")
     if "time_bypass" in df.columns:
