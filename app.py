@@ -683,40 +683,40 @@ def render_reporting():
         df = df[
             (df["created_at"].dt.date >= start_date) &
             (df["created_at"].dt.date <= end_date)
-        ]
- a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
+        
+        a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
 
-a.metric("Reviews", len(df))
-
-avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
-b.metric("Avg Score", f"{avg_score:.1f}")
-
-total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
-
-hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
-
-hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
-e.metric("Hard Stops", int(hard_stop_count))
-
-time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
-f.metric("Time Bypasses", int(time_bypass))
-
-st.subheader("Time Validation Bypass Log")
-if "time_bypass" in df.columns:
-        bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1][[
-            "created_at", "ro_number", "vin", "advisor", "technician", "manager",
-            "entered_by", "time_bypass_user", "status", "score"
-        ]]
-if bypass_df.empty:
-     st.success("No time-validation bypasses recorded.")
-else:
-    st.dataframe(bypass_df, use_container_width=True)
-    st.download_button("Download Time Bypass Report CSV", bypass_df.to_csv(index=False), "ro_shield_time_bypass_report.csv", "text/csv")
-    st.subheader("Review Log")
-    st.dataframe(df, use_container_width=True)
-    st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
+    a.metric("Reviews", len(df))
+    
+    avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
+    b.metric("Avg Score", f"{avg_score:.1f}")
+    
+    total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+    c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
+    
+    hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+    d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
+    
+    hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
+    e.metric("Hard Stops", int(hard_stop_count))
+    
+    time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
+    f.metric("Time Bypasses", int(time_bypass))
+    
+    st.subheader("Time Validation Bypass Log")
+    if "time_bypass" in df.columns:
+            bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1][[
+                "created_at", "ro_number", "vin", "advisor", "technician", "manager",
+                "entered_by", "time_bypass_user", "status", "score"
+            ]]
+    if bypass_df.empty:
+         st.success("No time-validation bypasses recorded.")
+    else:
+        st.dataframe(bypass_df, use_container_width=True)
+        st.download_button("Download Time Bypass Report CSV", bypass_df.to_csv(index=False), "ro_shield_time_bypass_report.csv", "text/csv")
+        st.subheader("Review Log")
+        st.dataframe(df, use_container_width=True)
+        st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
 
 
 def render_admin():
