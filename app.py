@@ -687,7 +687,8 @@ def render_reporting():
 
     a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
     a.metric("Reviews", len(df))
-    b.b.metric("Avg Score", f"{pd.to_numeric(df.get('score', pd.Series([0])), errors='coerce').fillna(0).mean():.1f}")
+    avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
+    b.b.metric("Avg Score", f"{avg_score:.1f}")
     c.metric("Total Claim Value", f"${df['total_claim_value'].fillna(0).sum():,.2f}")
     d.metric("Hard Stop Value", f"${df['hard_stop_value'].fillna(0).sum():,.2f}")
     e.metric("Hard Stops", int(df["hard_stop_count"].fillna(0).sum()))
