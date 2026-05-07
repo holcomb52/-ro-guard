@@ -680,7 +680,7 @@ def render_reporting():
         )
         )
 
-        df = df[
+    df = df[
     (df["created_at"].dt.date >= start_date) &
     (df["created_at"].dt.date <= end_date)
 ]
