@@ -190,7 +190,7 @@ def deactivate_person(pid):
 
 
 def role_options(role):
-    df = read_df("personnel")
+    df = load_personnel()
     if df.empty:
         return [""]
     df = df[(df["role"] == role) & (df["active"] == 1)]
