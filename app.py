@@ -138,25 +138,21 @@ def read_df(table):
     return df
 
 
-def save_review(row):
-    conn = db()
-    conn.execute("""
-        INSERT INTO reviews (
-            created_at, ro_number, vin, advisor, technician, warranty_admin, manager, entered_by,
-            score, status, total_claim_value, hard_stop_value, hard_stop_count, warning_count,
-            time_bypass, time_bypass_user, jobs_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.now().isoformat(timespec="seconds"),
-        row["ro_number"], row["vin"], row["advisor"], row["technician"],
-        row["warranty_admin"], row["manager"], row["entered_by"],
-        row["score"], row["status"], row["total_claim_value"], row["hard_stop_value"],
-        row["hard_stop_count"], row["warning_count"],
-        1 if row.get("time_bypass") else 0, row.get("time_bypass_user", ""),
-        json.dumps(row["jobs"])
-    ))
-    conn.commit()
-    conn.close()
+def save_review(data):
+    try:
+        supabase.table("reviews").insert(data).execute()
+    except Exception as e:
+        st.warning(f"Review save failed: {e}")
+
+def load_reviews():
+    try:
+        response = supabase.table("reviews").select("*").execute()
+        rows = response.data or []
+        return pd.DataFrame(rows)
+    except Exception as e:
+        st.warning(f"Review load failed: {e}")
+        return pd.DataFrame()
+    
 
 def load_personnel():
     try:
@@ -672,11 +668,22 @@ def render_claims():
 
 
 def render_reporting():
-    st.header("Reporting")
-    df = read_df("reviews")
-    if df.empty:
-        st.info("No reviews saved yet.")
-        return
+    df = load_reviews()
+    if not df.empty and "created_at" in df.columns:
+        df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+
+        start_date, end_date = st.date_input(
+        "Report Date Range",
+        value=(
+            df["created_at"].min().date(),
+            df["created_at"].max().date()
+        )
+        )
+
+        df = df[
+            (df["created_at"].dt.date >= start_date) &
+            (df["created_at"].dt.date <= end_date)
+        ]
 
     a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
     a.metric("Reviews", len(df))
