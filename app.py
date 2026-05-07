@@ -669,7 +669,7 @@ def render_claims():
 def render_reporting():
     df = load_reviews()
     if not df.empty and "created_at" in df.columns:
-    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+        df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
 
         start_date, end_date = st.date_input(
         "Report Date Range",
