@@ -140,9 +140,11 @@ def read_df(table):
 
 def save_review(data):
     try:
-        supabase.table("reviews").insert(data).execute()
+        result = supabase.table("reviews").insert(data).execute()
+        st.success("Review saved to Reporting.")
+        st.write(result)
     except Exception as e:
-        st.warning(f"Review save failed: {e}")
+        st.error(f"Review save failed: {e}")
 
 def load_reviews():
     try:
