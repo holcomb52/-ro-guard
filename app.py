@@ -725,7 +725,7 @@ def render_reporting():
         if bypass_df.empty:
             st.success("No time-validation bypasses recorded.")
          else:
-        st.dataframe(bypass_df, use_container_width=True)
+            st.dataframe(bypass_df, use_container_width=True)
 
         st.subheader("Review Log")
             
