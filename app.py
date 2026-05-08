@@ -717,7 +717,11 @@ def render_reporting():
             "score"
         ]]
             
-        st.subheader("Time Validation Bypass Log")
+            st.subheader("Time Validation Bypass Log")
+
+        if "time_bypass" in df.columns:
+            bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1]
+
         if bypass_df.empty:
             st.success("No time-validation bypasses recorded.")
         else:
