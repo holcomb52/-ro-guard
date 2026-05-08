@@ -705,7 +705,7 @@ def render_reporting():
     
         st.subheader("Time Validation Bypass Log")
 
-    if "time_bypass" in df.columns:
+        if "time_bypass" in df.columns:
         bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1][[
             "created_at",
             "ro_number",
