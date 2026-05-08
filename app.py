@@ -684,7 +684,7 @@ def render_reporting():
                 (df["created_at"].dt.date <= end_date)
         ]
                 
-    a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
+        a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
 
     a.metric("Reviews", len(df))
     
