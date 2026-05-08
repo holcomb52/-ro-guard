@@ -712,11 +712,11 @@ def render_reporting():
         if bypass_df.empty:
          st.success("No time-validation bypasses recorded.")
         else:
-        st.dataframe(bypass_df, use_container_width=True)
-        st.download_button("Download Time Bypass Report CSV", bypass_df.to_csv(index=False), "ro_shield_time_bypass_report.csv", "text/csv")
-        st.subheader("Review Log")
-        st.dataframe(df, use_container_width=True)
-        st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
+            st.dataframe(bypass_df, use_container_width=True)
+            st.download_button("Download Time Bypass Report CSV", bypass_df.to_csv(index=False), "ro_shield_time_bypass_report.csv", "text/csv")
+            st.subheader("Review Log")
+            st.dataframe(df, use_container_width=True)
+            st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
 
 
 def render_admin():
