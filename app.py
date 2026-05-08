@@ -717,7 +717,7 @@ def render_reporting():
             "time_bypass_user",
             "status",
             "score"
-        ]
+        ]]
 
         if bypass_df.empty:
             st.success("No time-validation bypasses recorded.")
@@ -729,6 +729,7 @@ def render_reporting():
                 bypass_df.to_csv(index=False),
                 "ro_shield_time_bypass_report.csv",
                 "text/csv"
+            )
             )
             ]
         if bypass_df.empty:
