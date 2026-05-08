@@ -703,27 +703,6 @@ def render_reporting():
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
 
-        if "time_bypass" in df.columns:
-            bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1][[
-            "created_at",
-            "ro_number",
-            "vin",
-            "advisor",
-            "technician",
-            "manager",
-            "entered_by",
-            "time_bypass_user",
-            "status",
-            "score"
-        ]]
-            
-        st.subheader("Review Log")
-            
-        if bypass_df.empty:
-         st.success("No time-validation bypasses recorded.")
-        else:
-            st.dataframe(bypass_df, use_container_width=True)
-            st.download_button("Download Time Bypass Report CSV", bypass_df.to_csv(index=False), "ro_shield_time_bypass_report.csv", "text/csv")
             st.subheader("Review Log")
             st.dataframe(df, use_container_width=True)
             st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
