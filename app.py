@@ -704,8 +704,8 @@ def render_reporting():
         f.metric("Time Bypasses", int(time_bypass))
 
         st.subheader("Review Log")
-            st.dataframe(df, use_container_width=True)
-            st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
+        st.dataframe(df, use_container_width=True)
+        st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
 
 
 def render_admin():
