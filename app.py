@@ -686,7 +686,7 @@ def render_reporting():
                 
         a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
 
-    a.metric("Reviews", len(df))
+        a.metric("Reviews", len(df))
     
     avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
     b.metric("Avg Score", f"{avg_score:.1f}")
