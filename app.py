@@ -371,7 +371,16 @@ def extract_sentence(claim_text, kind):
     if kind == "concern":
         keys = ["customer", "complaint", "concern", "inop", "leak", "noise", "no start"]
     elif kind == "cause":
-        keys = ["found", "verified", "tested", "failed", "diagnosed", "inspection", "dtc"]
+        keys = [
+    "found", "verified", "tested", "failed", "diagnosed", "inspection", "dtc",
+    "short to ground", "short to voltage", "open circuit", "internal failure",
+    "delamination", "manufacturing defect", "poor workmanship", "identified",
+    "pin fit issue", "terminal spread", "high resistance", "corrosion",
+    "broken wire", "failed internally", "leaking", "binding", "seized",
+    "out of specification", "not communicating", "intermittent failure",
+    "connector issue", "water intrusion", "damaged", "contaminated",
+    "cracked", "misaligned", "excessive play", "faulty", "defective"
+        ]
     else:
         keys = ["replaced", "repaired", "installed", "performed", "completed", "programmed"]
     for line in lines:
