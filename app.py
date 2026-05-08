@@ -638,7 +638,7 @@ def render_review():
             "warranty_admin": warranty_admin, "manager": manager, "entered_by": entered_by,
             "score": final_score, "status": status, "total_claim_value": total_value,
             "hard_stop_value": hard_value, "hard_stop_count": len(all_hard),
-            "warning_count": len(all_warn), "time_bypass": time_bypass,
+            "warning_count": len(all_warn), "time_bypass": 1 if time_bypass else 0,
             "time_bypass_user": time_bypass_user, "jobs": jobs
         })
         st.success("Review saved to Reporting.")
