@@ -688,20 +688,20 @@ def render_reporting():
 
         a.metric("Reviews", len(df))
     
-    avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
-    b.metric("Avg Score", f"{avg_score:.1f}")
+        avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
+        b.metric("Avg Score", f"{avg_score:.1f}")
     
-    total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-    c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
+        total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+        c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
     
-    hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-    d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
+        hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
+        d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
     
-    hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
-    e.metric("Hard Stops", int(hard_stop_count))
+        hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
+        e.metric("Hard Stops", int(hard_stop_count))
     
-    time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
-    f.metric("Time Bypasses", int(time_bypass))
+        time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
+        f.metric("Time Bypasses", int(time_bypass))
     
     st.subheader("Time Validation Bypass Log")
     if "time_bypass" in df.columns:
