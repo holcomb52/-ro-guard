@@ -703,7 +703,7 @@ def render_reporting():
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
     
-     st.subheader("Time Validation Bypass Log")
+         st.subheader("Time Validation Bypass Log")
 
     if "time_bypass" in df.columns:
         bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1][[
