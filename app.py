@@ -716,7 +716,8 @@ def render_reporting():
             "status",
             "score"
         ]]
-
+            
+        st.subheader("Time Validation Bypass Log")
         if bypass_df.empty:
             st.success("No time-validation bypasses recorded.")
         else:
