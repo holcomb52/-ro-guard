@@ -704,7 +704,7 @@ def render_reporting():
         f.metric("Time Bypasses", int(time_bypass))
     
         if "time_bypass" in df.columns:
-        bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1]
+            bypass_df = df[df["time_bypass"].fillna(0).astype(int) == 1]
 
         if bypass_df.empty:
             st.success("No time-validation bypasses recorded.")
