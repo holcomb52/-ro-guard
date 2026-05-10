@@ -785,33 +785,45 @@ def render_admin():
     if not bdf.empty:
         st.dataframe(bdf, use_container_width=True)
 def render_wam():
-    st.header("WAM / Warranty Manual")
+    st.header("WAM / Warranty Manual Learning")
+    st.caption("Upload WAM PDFs or warranty policy documents. RO Shield will store the text and use it for audit reference.")
 
-    st.caption("Upload warranty manual sections, policy notes, or WAM references for RO Shield to use during audits.")
+    uploaded_files = st.file_uploader(
+        "Upload WAM / Warranty Manual PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="wam_upload"
+    )
 
-    section = st.text_input("WAM Section / Topic")
-    keywords = st.text_input("Keywords")
-    content = st.text_area("Warranty Manual Content / Policy Notes", height=250)
+    if uploaded_files:
+        for file in uploaded_files:
+            try:
+                reader = PdfReader(file)
+                text = ""
 
-    if st.button("Save WAM Entry"):
-        data = {
-            "section": section,
-            "keywords": keywords,
-            "content": content,
-            "source": "manual_entry"
-        }
+                for page in reader.pages:
+                    page_text = page.extract_text() or ""
+                    text += page_text + "\n"
 
-        try:
-            supabase.table("wam_documents").insert(data).execute()
-            st.success("WAM entry saved.")
-        except Exception as e:
-            st.error(f"WAM save failed: {e}")
+                chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+
+                for idx, chunk in enumerate(chunks):
+                    supabase.table("wam_documents").insert({
+                        "source_file": file.name,
+                        "section": f"{file.name} - Section {idx + 1}",
+                        "keywords": "",
+                        "content": chunk
+                    }).execute()
+
+                st.success(f"{file.name} uploaded and learned.")
+
+            except Exception as e:
+                st.error(f"WAM upload failed for {file.name}: {e}")
 
     st.subheader("Saved WAM Entries")
 
     try:
-        response = supabase.table("wam_documents").select("*").execute()
-        rows = response.data or []
+        rows = supabase.table("wam_documents").select("*").execute().data or []
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
     except Exception as e:
         st.warning(f"WAM entries could not load: {e}")
