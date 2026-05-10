@@ -622,38 +622,8 @@ def render_wam():
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
     except Exception as e:
         st.warning(f"WAM entries could not load: {e}")
-def render_wam():
-    st.header("WAM / Warranty Manual")
 
-    st.caption("Upload and store WAM procedures, warranty policies, and audit requirements.")
-
-    section = st.text_input("WAM Section")
-    keywords = st.text_input("Keywords")
-    content = st.text_area("WAM Content", height=300)
-
-    if st.button("Save WAM Entry"):
-        try:
-            supabase.table("wam_documents").insert({
-                "section": section,
-                "keywords": keywords,
-                "content": content,
-                "source": "manual_entry"
-            }).execute()
-
-            st.success("WAM entry saved.")
-
-        except Exception as e:
-            st.error(f"WAM save failed: {e}")
-
-    st.subheader("Saved WAM Entries")
-
-    try:
-        rows = supabase.table("wam_documents").select("*").execute().data
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
-
-    except Exception as e:
-        st.warning(f"Unable to load WAM entries: {e}")
-
+   
 def main():
     init_db()
     apply_style()
@@ -664,7 +634,7 @@ def main():
 
     tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
     with tabs[0]:
-        render_claim_review()
+        render_review()
     with tabs[1]:
         render_claims()
     with tabs[2]:
