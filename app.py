@@ -493,7 +493,117 @@ def result_banner(status):
 # SCREENS
 # =========================
 
+def render_review():
+    st.header("RO Warranty Review")
+
+    ro_number = st.text_input("RO Number")
+    vin = st.text_input("VIN")
+    advisor = st.text_input("Advisor")
+    technician = st.text_input("Technician")
+    warranty_admin = st.text_input("Warranty Admin")
+    manager = st.text_input("Manager")
+    entered_by = st.text_input("Entered By")
+
+    st.subheader("Job 1")
+
+    concern = st.text_area("Concern", height=120)
+    cause = st.text_area("Cause", height=120)
+    correction = st.text_area("Correction", height=120)
+
+    tech_flagged_time = st.number_input("Tech Flagged Time", min_value=0.0, step=0.1)
+    time_allotted = st.number_input("Time Allotted", min_value=0.0, step=0.1)
+    claim_value = st.number_input("Claim Value", min_value=0.0, step=1.0)
+
+    time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
+    time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
+
+    st.subheader("Required Warranty Checks")
+
+    oil_leak = st.checkbox("Oil Leak")
+    oil_dye_billed = st.checkbox("Oil Dye Billed")
+    battery_replacement = st.checkbox("Battery Replacement")
+    battery_test_slip = st.checkbox("Battery Test Slip")
+    ac_repair = st.checkbox("A/C Repair")
+    ac_evac_slip = st.checkbox("A/C EVAC Slip")
+    warranty_add_on = st.checkbox("Warranty Add-On (+)")
+    manager_approval = st.checkbox("Manager Approval")
+    rental_involved = st.checkbox("Rental Involved")
+    rental_days = st.number_input("Rental Days Billed", min_value=0, step=1)
+    manager_signed_rental = st.checkbox("Manager Signed Rental")
+    parts_warranty = st.checkbox("Parts Warranty")
+    mopa_original_ro = st.checkbox("MOPA + Original RO")
+
+    job = {
+        "job_no": "1",
+        "concern": concern,
+        "cause": cause,
+        "correction": correction,
+        "tech_flagged_time": tech_flagged_time,
+        "time_allotted": time_allotted,
+        "claim_value": claim_value,
+        "oil_leak": oil_leak,
+        "oil_dye_billed": oil_dye_billed,
+        "battery_replacement": battery_replacement,
+        "battery_test_slip": battery_test_slip,
+        "ac_repair": ac_repair,
+        "ac_evac_slip": ac_evac_slip,
+        "warranty_add_on": warranty_add_on,
+        "manager_approval": manager_approval,
+        "rental_involved": rental_involved,
+        "rental_days": rental_days,
+        "manager_signed_rental": manager_signed_rental,
+        "parts_warranty": parts_warranty,
+        "mopa_original_ro": mopa_original_ro,
+    }
+
+    if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+        hard, warn, score = audit_job(job, time_bypass)
+
+        job["hard_stops"] = hard
+        job["warnings"] = warn
+        job["score"] = score
+
+        status = "🔴 DO NOT SUBMIT" if hard else ("🟡 NEEDS REVIEW" if warn else "🟢 READY")
+
+        result_banner(status)
+
+        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+        x1.metric("Audit Score", score)
+        x2.metric("Status", status)
+        x3.metric("Total Claim Value", f"${claim_value:,.2f}")
+        x4.metric("Hard Stop Value", f"${claim_value if hard else 0:,.2f}")
+        x5.metric("Hard Stops", len(hard))
+
+        with st.expander("Job 1 Results", expanded=True):
+            for h in hard:
+                st.error(h)
+            for w in warn:
+                st.warning(w)
+            if not hard and not warn:
+                st.success("No audit issues found.")
+
+        save_review({
+            "ro_number": ro_number,
+            "vin": vin,
+            "advisor": advisor,
+            "technician": technician,
+            "warranty_admin": warranty_admin,
+            "manager": manager,
+            "entered_by": entered_by,
+            "score": score,
+            "status": status,
+            "total_claim_value": claim_value,
+            "hard_stop_value": claim_value if hard else 0,
+            "hard_stop_count": len(hard),
+            "warning_count": len(warn),
+            "time_bypass": 1 if time_bypass else 0,
+            "time_bypass_user": time_bypass_user,
+            "jobs": [job],
+        })
+
+        st.success("Review saved to Reporting.")
 def render_claims():
+    def render_claims():
     st.header("Claim Learning Upload")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
 
