@@ -502,7 +502,7 @@ def render_review():
 
     days_to_submit = (day_submitted - ro_invoiced).days
 
-st.metric("Days to Submit", days_to_submit)
+    st.metric("Days to Submit", days_to_submit)
     personnel_df = load_personnel()
 
     advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
