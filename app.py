@@ -664,7 +664,7 @@ def main():
 
     tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
     with tabs[0]:
-        render_claim_review()
+        render_review()
     with tabs[1]:
         render_claims()
     with tabs[2]:
