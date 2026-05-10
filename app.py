@@ -497,6 +497,12 @@ def render_review():
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
+    ro_invoiced = st.date_input("RO Invoiced / Closed Date")
+    day_submitted = st.date_input("Day Submitted")
+
+    days_to_submit = (day_submitted - ro_invoiced).days
+
+st.metric("Days to Submit", days_to_submit)
     personnel_df = load_personnel()
 
     advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
@@ -667,6 +673,9 @@ def render_review():
         save_review({
             "ro_number": ro_number,
             "vin": vin,
+            "ro_invoiced": str(ro_invoiced),
+            "day_submitted": str(day_submitted),
+            "days_to_submit": days_to_submit,
             "advisor": advisor,
             "technician": technician,
             "warranty_admin": warranty_admin,
@@ -730,6 +739,9 @@ def render_reporting():
     
         avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
         b.metric("Avg Score", f"{avg_score:.1f}")
+
+        avg_days_to_submit = pd.to_numeric(df.get("days_to_submit", pd.Series([0])), errors="coerce").fillna(0).mean()
+        b.metric("Avg Days to Submit", f"{avg_days_to_submit:.1f}")
     
         total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
         c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
