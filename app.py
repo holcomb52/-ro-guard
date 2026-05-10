@@ -522,7 +522,7 @@ job_count = st.number_input(
 
 jobs = []
 
-    for i in range(int(job_count)):
+for i in range(int(job_count)):
         job_no = i + 1
 
         with st.expander(f"Job {job_no}", expanded=True):
