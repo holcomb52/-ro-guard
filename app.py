@@ -497,10 +497,17 @@ def render_review():
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
-    advisor = st.text_input("Advisor")
-    technician = st.text_input("Technician")
-    warranty_admin = st.text_input("Warranty Admin")
-    manager = st.text_input("Manager")
+    personnel_df = load_personnel()
+
+advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+manager_list = personnel_df[personnel_df["role"] == "Manager"]["name"].tolist()
+
+advisor = st.selectbox("Advisor", advisor_list)
+technician = st.selectbox("Technician", tech_list)
+warranty_admin = st.selectbox("Warranty Admin", warranty_list)
+manager = st.selectbox("Manager", manager_list)
     entered_by = st.text_input("Entered By")
 
     st.divider()
