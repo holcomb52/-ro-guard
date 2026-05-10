@@ -492,166 +492,6 @@ def result_banner(status):
 # =========================
 # SCREENS
 # =========================
-def render_review():
-    st.markdown("""
-    <div class="hero">
-        <h1>🛡️ RO Shield</h1>
-        <p>Final production validation build — warranty review, Pencil Wrench narrative grading, hard-stop audit scoring, reporting, and admin controls.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.header("Repair Order Review")
-
-    a, b, c, d = st.columns(4)
-    ro_number = a.text_input("RO Number")
-    vin = b.text_input("VIN")
-    advisor = c.selectbox("Advisor", role_options("Advisor"))
-    technician = d.selectbox("Technician", role_options("Technician"))
-
-    e, f, g = st.columns(3)
-    warranty_admin = e.selectbox("Warranty Admin", role_options("Warranty Admin"))
-    manager = f.selectbox("Manager", role_options("Manager"))
-    entered_by = g.text_input("Entered By / User")
-
-    st.markdown("### Time Validation")
-    time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted validation")
-    time_bypass_user = ""
-    if time_bypass:
-        time_bypass_user = st.text_input("Bypass entered by", value=entered_by or manager or warranty_admin or advisor)
-        st.warning("This bypass will be saved in Reporting with RO number and user information.")
-
-    job_count = st.number_input("Number of Jobs", 1, 20, 1)
-
-    jobs = []
-    for i in range(int(job_count)):
-        with st.container(border=True):
-            st.subheader(f"Job {i+1}")
-
-            j1, j2, j3, j4, j5 = st.columns(5)
-            job_no = j1.text_input("Line / Job Number", value=str(i+1), key=f"job_no_{i}")
-            job_type = j2.selectbox("Job Type", ["Warranty", "Recall/Campaign", "Service Contract", "Mopar", "Customer Pay", "Internal"], key=f"type_{i}")
-            claim_value = j3.number_input("Claim Value ($)", 0.0, step=1.0, format="%.2f", key=f"value_{i}")
-            tech_flagged_time = j4.number_input("Tech Flagged Time", 0.0, step=0.1, format="%.1f", key=f"tech_flagged_{i}", disabled=time_bypass)
-            time_allotted = j5.number_input("Time Allotted for the Job", 0.0, step=0.1, format="%.1f", key=f"time_allotted_{i}", disabled=time_bypass)
-
-            n1, n2, n3 = st.columns(3)
-            concern = n1.text_area("Concern", key=f"concern_{i}", height=135)
-            cause = n2.text_area("Cause / Diagnosis", key=f"cause_{i}", height=135, placeholder="Pencil Wrench style: identify failure, test steps, DTCs, inspection/test results.")
-            correction = n3.text_area("Correction / Repair Performed", key=f"correction_{i}", height=135, placeholder="Pencil Wrench style: identify repair, justify parts, verify proper operation.")
-
-            st.markdown("### Required Warranty Checks")
-            r1, r2, r3, r4 = st.columns(4)
-
-            oil_leak = r1.checkbox("Oil Leak", key=f"oil_{i}")
-            dye_billed = r1.checkbox("Oil Dye Billed", key=f"dye_{i}")
-            battery = r1.checkbox("Battery Replacement", key=f"battery_{i}")
-            battery_test = r1.checkbox("Battery Test Slip", key=f"battery_test_{i}")
-
-            sublet = r2.checkbox("Sublet Repair", key=f"sublet_{i}")
-            sublet_vin = False
-            sublet_mileage = False
-            sublet_repair_notes = False
-            if sublet:
-                r2.caption("Sublet invoice checklist")
-                sublet_vin = r2.checkbox("VIN on sublet invoice", key=f"sublet_vin_{i}")
-                sublet_mileage = r2.checkbox("Mileage on sublet invoice", key=f"sublet_mileage_{i}")
-                sublet_repair_notes = r2.checkbox("Detailed repair notes on sublet invoice", key=f"sublet_repair_notes_{i}")
-
-            rental = r3.checkbox("Rental Involved", key=f"rental_{i}")
-            rental_days = r3.number_input("Rental Days Billed", 0, 60, key=f"rental_days_{i}")
-            rental_signed = r3.checkbox("Manager Signed Rental", key=f"rental_signed_{i}")
-
-            add_on = r4.checkbox("Warranty Add-On (+)", key=f"addon_{i}")
-            manager_signed = r4.checkbox("Manager Approval", key=f"manager_signed_{i}")
-            ac = r4.checkbox("A/C Repair", key=f"ac_{i}")
-            ac_slip = r4.checkbox("A/C EVAC Slip", key=f"ac_slip_{i}")
-            parts_warranty = r4.checkbox("Parts Warranty", key=f"parts_warranty_{i}")
-            mopa = r4.checkbox("MOPA + Original RO", key=f"mopa_{i}")
-
-            jobs.append({
-                "job_no": job_no, "job_type": job_type, "claim_value": claim_value,
-                "tech_flagged_time": tech_flagged_time, "time_allotted": time_allotted,
-                "concern": concern, "cause": cause, "correction": correction,
-                "oil_leak": oil_leak, "dye_billed": dye_billed,
-                "sublet": sublet, "sublet_vin": sublet_vin, "sublet_mileage": sublet_mileage,
-                "sublet_repair_notes": sublet_repair_notes,
-                "rental": rental, "rental_days": rental_days, "rental_signed": rental_signed,
-                "add_on": add_on, "manager_signed": manager_signed,
-                "battery": battery, "battery_test": battery_test,
-                "ac": ac, "ac_slip": ac_slip,
-                "parts_warranty": parts_warranty, "mopa": mopa
-            })
-
-            learned = load_shared_claims()
-            if not learned.empty and st.button("Suggest From Paid Claims", key=f"suggest_{i}"):
-                query = f"{concern} {cause} {correction}"
-                scored = []
-                for _, row in learned.iterrows():
-                    s = score_match(query, row["raw_text"])
-                    if s > 8:
-                        scored.append((s, row["raw_text"]))
-                scored = sorted(scored, key=lambda x: x[0], reverse=True)[:3]
-                if scored:
-                    for n, (s, raw) in enumerate(scored, start=1):
-                        st.info(f"Paid-claim match {n} | Score {s}")
-                        st.text_area("Suggested Concern", extract_sentence(raw, "concern"), key=f"sug_con_{i}_{n}")
-                        st.text_area("Suggested Cause", extract_sentence(raw, "cause"), key=f"sug_cau_{i}_{n}")
-                        st.text_area("Suggested Correction", extract_sentence(raw, "correction"), key=f"sug_cor_{i}_{n}")
-                        lops = suggested_lops(raw)
-                        if lops:
-                            st.success("Suggested Labor Ops: " + ", ".join(lops))
-                else:
-                    st.warning("No strong paid-claim match found yet.")
-
-    if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
-        all_hard = []
-        all_warn = []
-        total_value = sum(float(j["claim_value"] or 0) for j in jobs)
-        hard_value = 0.0
-        scores = []
-
-        for j in jobs:
-            hard, warn, score = audit_job(j, time_bypass)
-            j["hard_stops"] = hard
-            j["warnings"] = warn
-            j["score"] = score
-            scores.append(score)
-            all_hard.extend(hard)
-            all_warn.extend(warn)
-            if hard:
-                hard_value += float(j["claim_value"] or 0)
-
-        final_score = int(sum(scores) / len(scores)) if scores else 0
-        status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
-
-        result_banner(status)
-
-        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-        x1.metric("Audit Score", final_score)
-        x2.metric("Status", status)
-        x3.metric("Total Claim Value", f"${total_value:,.2f}")
-        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-        x5.metric("Hard Stops", len(all_hard))
-
-        for j in jobs:
-            with st.expander(f"Job {j['job_no']} Results", expanded=True):
-                for h in j["hard_stops"]:
-                    st.error(h)
-                for w in j["warnings"]:
-                    st.warning(w)
-                if not j["hard_stops"] and not j["warnings"]:
-                    st.success("No audit issues found.")
-
-        save_review({
-            "ro_number": ro_number, "vin": vin, "advisor": advisor, "technician": technician,
-            "warranty_admin": warranty_admin, "manager": manager, "entered_by": entered_by,
-            "score": final_score, "status": status, "total_claim_value": total_value,
-            "hard_stop_value": hard_value, "hard_stop_count": len(all_hard),
-            "warning_count": len(all_warn), "time_bypass": 1 if time_bypass else 0,
-            "time_bypass_user": time_bypass_user, "jobs": jobs
-        })
-        st.success("Review saved to Reporting.")
-
 
 def render_claims():
     st.header("Claim Learning Upload")
@@ -751,7 +591,68 @@ def render_admin():
     bdf = read_df("bulletins")
     if not bdf.empty:
         st.dataframe(bdf, use_container_width=True)
+def render_wam():
+    st.header("WAM / Warranty Manual")
 
+    st.caption("Upload warranty manual sections, policy notes, or WAM references for RO Shield to use during audits.")
+
+    section = st.text_input("WAM Section / Topic")
+    keywords = st.text_input("Keywords")
+    content = st.text_area("Warranty Manual Content / Policy Notes", height=250)
+
+    if st.button("Save WAM Entry"):
+        data = {
+            "section": section,
+            "keywords": keywords,
+            "content": content,
+            "source": "manual_entry"
+        }
+
+        try:
+            supabase.table("wam_documents").insert(data).execute()
+            st.success("WAM entry saved.")
+        except Exception as e:
+            st.error(f"WAM save failed: {e}")
+
+    st.subheader("Saved WAM Entries")
+
+    try:
+        response = supabase.table("wam_documents").select("*").execute()
+        rows = response.data or []
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    except Exception as e:
+        st.warning(f"WAM entries could not load: {e}")
+def render_wam():
+    st.header("WAM / Warranty Manual")
+
+    st.caption("Upload and store WAM procedures, warranty policies, and audit requirements.")
+
+    section = st.text_input("WAM Section")
+    keywords = st.text_input("Keywords")
+    content = st.text_area("WAM Content", height=300)
+
+    if st.button("Save WAM Entry"):
+        try:
+            supabase.table("wam_documents").insert({
+                "section": section,
+                "keywords": keywords,
+                "content": content,
+                "source": "manual_entry"
+            }).execute()
+
+            st.success("WAM entry saved.")
+
+        except Exception as e:
+            st.error(f"WAM save failed: {e}")
+
+    st.subheader("Saved WAM Entries")
+
+    try:
+        rows = supabase.table("wam_documents").select("*").execute().data
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+    except Exception as e:
+        st.warning(f"Unable to load WAM entries: {e}")
 
 def main():
     init_db()
@@ -761,7 +662,7 @@ def main():
     st.sidebar.caption("Final Production Polish")
     st.sidebar.selectbox("Appearance", ["Dark"], index=0)
 
-    tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin"])
+    tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
     with tabs[0]:
         render_review()
     with tabs[1]:
@@ -770,7 +671,8 @@ def main():
         render_reporting()
     with tabs[3]:
         render_admin()
-
+    with tabs[4]:
+    render_wam()
 
 if __name__ == "__main__":
     main()
