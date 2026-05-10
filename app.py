@@ -520,7 +520,7 @@ job_count = st.number_input(
         step=1
     )
 
-    jobs = []
+jobs = []
 
     for i in range(int(job_count)):
         job_no = i + 1
