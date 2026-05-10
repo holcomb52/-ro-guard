@@ -439,7 +439,7 @@ def audit_job(job, time_bypass):
         if not job["sublet_repair_notes"]:
             hard.append("Sublet invoice must include detailed repair notes.")
 
-    if job["rental"]:
+    if job.get("rental_involved"):
         if job["rental_days"] <= 0:
             hard.append("Rental involved but rental days are not billed.")
         if not job["rental_signed"]:
