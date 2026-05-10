@@ -503,83 +503,161 @@ def render_review():
     manager = st.text_input("Manager")
     entered_by = st.text_input("Entered By")
 
-    st.subheader("Job 1")
+    st.divider()
 
-    concern = st.text_area("Concern", height=120)
-    cause = st.text_area("Cause", height=120)
-    correction = st.text_area("Correction", height=120)
+    job_count = st.number_input(
+        "How many warranty jobs are on this RO?",
+        min_value=1,
+        max_value=10,
+        value=1,
+        step=1
+    )
 
-    tech_flagged_time = st.number_input("Tech Flagged Time", min_value=0.0, step=0.1)
-    time_allotted = st.number_input("Time Allotted", min_value=0.0, step=0.1)
-    claim_value = st.number_input("Claim Value", min_value=0.0, step=1.0)
+    jobs = []
+
+    for i in range(int(job_count)):
+        job_no = i + 1
+
+        with st.expander(f"Job {job_no}", expanded=True):
+            st.subheader(f"Job {job_no} Documentation")
+
+            concern = st.text_area(f"Concern - Job {job_no}", height=110, key=f"concern_{job_no}")
+            cause = st.text_area(f"Cause - Job {job_no}", height=110, key=f"cause_{job_no}")
+            correction = st.text_area(f"Correction - Job {job_no}", height=110, key=f"correction_{job_no}")
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                tech_flagged_time = st.number_input(
+                    f"Tech Flagged Time - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    key=f"tech_time_{job_no}"
+                )
+            with c2:
+                time_allotted = st.number_input(
+                    f"Time Allotted - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    key=f"allotted_{job_no}"
+                )
+            with c3:
+                claim_value = st.number_input(
+                    f"Claim Value - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=1.0,
+                    key=f"claim_value_{job_no}"
+                )
+
+            st.subheader("Required Warranty Checks")
+
+            a, b, c, d = st.columns(4)
+
+            with a:
+                oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
+                oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
+                battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
+                battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
+
+            with b:
+                sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
+                sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
+                sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
+                sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
+
+            with c:
+                rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
+                rental_days = st.number_input(
+                    "Rental Days Billed",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=f"rental_days_{job_no}"
+                )
+                manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
+
+            with d:
+                warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
+                manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
+                ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
+                ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
+                parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
+                mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_no}")
+
+            jobs.append({
+                "job_no": str(job_no),
+                "concern": concern,
+                "cause": cause,
+                "correction": correction,
+                "tech_flagged_time": tech_flagged_time,
+                "time_allotted": time_allotted,
+                "claim_value": claim_value,
+                "oil_leak": oil_leak,
+                "oil_dye_billed": oil_dye_billed,
+                "battery_replacement": battery_replacement,
+                "battery_test_slip": battery_test_slip,
+                "sublet_repair": sublet_repair,
+                "sublet_vin": sublet_vin,
+                "sublet_mileage": sublet_mileage,
+                "sublet_notes": sublet_notes,
+                "rental_involved": rental_involved,
+                "rental_days": rental_days,
+                "manager_signed_rental": manager_signed_rental,
+                "warranty_add_on": warranty_add_on,
+                "manager_approval": manager_approval,
+                "ac_repair": ac_repair,
+                "ac_evac_slip": ac_evac_slip,
+                "parts_warranty": parts_warranty,
+                "mopa_original_ro": mopa_original_ro,
+            })
+
+    st.divider()
 
     time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
     time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
 
-    st.subheader("Required Warranty Checks")
-
-    oil_leak = st.checkbox("Oil Leak")
-    oil_dye_billed = st.checkbox("Oil Dye Billed")
-    battery_replacement = st.checkbox("Battery Replacement")
-    battery_test_slip = st.checkbox("Battery Test Slip")
-    ac_repair = st.checkbox("A/C Repair")
-    ac_evac_slip = st.checkbox("A/C EVAC Slip")
-    warranty_add_on = st.checkbox("Warranty Add-On (+)")
-    manager_approval = st.checkbox("Manager Approval")
-    rental_involved = st.checkbox("Rental Involved")
-    rental_days = st.number_input("Rental Days Billed", min_value=0, step=1)
-    manager_signed_rental = st.checkbox("Manager Signed Rental")
-    parts_warranty = st.checkbox("Parts Warranty")
-    mopa_original_ro = st.checkbox("MOPA + Original RO")
-
-    job = {
-        "job_no": "1",
-        "concern": concern,
-        "cause": cause,
-        "correction": correction,
-        "tech_flagged_time": tech_flagged_time,
-        "time_allotted": time_allotted,
-        "claim_value": claim_value,
-        "oil_leak": oil_leak,
-        "oil_dye_billed": oil_dye_billed,
-        "battery_replacement": battery_replacement,
-        "battery_test_slip": battery_test_slip,
-        "ac_repair": ac_repair,
-        "ac_evac_slip": ac_evac_slip,
-        "warranty_add_on": warranty_add_on,
-        "manager_approval": manager_approval,
-        "rental_involved": rental_involved,
-        "rental_days": rental_days,
-        "manager_signed_rental": manager_signed_rental,
-        "parts_warranty": parts_warranty,
-        "mopa_original_ro": mopa_original_ro,
-    }
-
     if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
-        hard, warn, score = audit_job(job, time_bypass)
+        all_hard = []
+        all_warn = []
+        scores = []
+        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+        hard_value = 0.0
 
-        job["hard_stops"] = hard
-        job["warnings"] = warn
-        job["score"] = score
+        for job in jobs:
+            hard, warn, score = audit_job(job, time_bypass)
+            job["hard_stops"] = hard
+            job["warnings"] = warn
+            job["score"] = score
 
-        status = "🔴 DO NOT SUBMIT" if hard else ("🟡 NEEDS REVIEW" if warn else "🟢 READY")
+            scores.append(score)
+            all_hard.extend(hard)
+            all_warn.extend(warn)
+
+            if hard:
+                hard_value += float(job.get("claim_value") or 0)
+
+        final_score = int(sum(scores) / len(scores)) if scores else 0
+        status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
 
         result_banner(status)
 
         x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-        x1.metric("Audit Score", score)
+        x1.metric("Audit Score", final_score)
         x2.metric("Status", status)
-        x3.metric("Total Claim Value", f"${claim_value:,.2f}")
-        x4.metric("Hard Stop Value", f"${claim_value if hard else 0:,.2f}")
-        x5.metric("Hard Stops", len(hard))
+        x3.metric("Total Claim Value", f"${total_value:,.2f}")
+        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+        x5.metric("Hard Stops", len(all_hard))
 
-        with st.expander("Job 1 Results", expanded=True):
-            for h in hard:
-                st.error(h)
-            for w in warn:
-                st.warning(w)
-            if not hard and not warn:
-                st.success("No audit issues found.")
+        for job in jobs:
+            with st.expander(f"Job {job['job_no']} Results", expanded=True):
+                for h in job["hard_stops"]:
+                    st.error(h)
+                for w in job["warnings"]:
+                    st.warning(w)
+                if not job["hard_stops"] and not job["warnings"]:
+                    st.success("No audit issues found.")
 
         save_review({
             "ro_number": ro_number,
@@ -589,15 +667,15 @@ def render_review():
             "warranty_admin": warranty_admin,
             "manager": manager,
             "entered_by": entered_by,
-            "score": score,
+            "score": final_score,
             "status": status,
-            "total_claim_value": claim_value,
-            "hard_stop_value": claim_value if hard else 0,
-            "hard_stop_count": len(hard),
-            "warning_count": len(warn),
+            "total_claim_value": total_value,
+            "hard_stop_value": hard_value,
+            "hard_stop_count": len(all_hard),
+            "warning_count": len(all_warn),
             "time_bypass": 1 if time_bypass else 0,
             "time_bypass_user": time_bypass_user,
-            "jobs": [job],
+            "jobs": jobs,
         })
 
         st.success("Review saved to Reporting.")
