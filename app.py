@@ -512,7 +512,7 @@ entered_by = st.text_input("Entered By")
 
 st.divider()
 
-    job_count = st.number_input(
+job_count = st.number_input(
         "How many warranty jobs are on this RO?",
         min_value=1,
         max_value=10,
