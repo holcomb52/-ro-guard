@@ -634,7 +634,7 @@ def main():
 
     tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
     with tabs[0]:
-        render_review()
+        st.warning("Review tab is temporarily disabled while we restore it.")
     with tabs[1]:
         render_claims()
     with tabs[2]:
