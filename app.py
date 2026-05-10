@@ -510,7 +510,7 @@ warranty_admin = st.selectbox("Warranty Admin", warranty_list)
 manager = st.selectbox("Manager", manager_list)
 entered_by = st.text_input("Entered By")
 
-    st.divider()
+st.divider()
 
     job_count = st.number_input(
         "How many warranty jobs are on this RO?",
