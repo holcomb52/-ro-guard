@@ -672,7 +672,7 @@ def main():
     with tabs[3]:
         render_admin()
     with tabs[4]:
-    render_wam()
+        render_wam()
 
 if __name__ == "__main__":
     main()
