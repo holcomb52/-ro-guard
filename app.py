@@ -499,20 +499,20 @@ def render_review():
     vin = st.text_input("VIN")
     personnel_df = load_personnel()
 
-advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
-tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
-warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
-manager_list = personnel_df[personnel_df["role"] == "Manager"]["name"].tolist()
+    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+    manager_list = personnel_df[personnel_df["role"] == "Manager"]["name"].tolist()
 
-advisor = st.selectbox("Advisor", advisor_list)
-technician = st.selectbox("Technician", tech_list)
-warranty_admin = st.selectbox("Warranty Admin", warranty_list)
-manager = st.selectbox("Manager", manager_list)
-entered_by = st.text_input("Entered By")
+    advisor = st.selectbox("Advisor", advisor_list)
+    technician = st.selectbox("Technician", tech_list)
+    warranty_admin = st.selectbox("Warranty Admin", warranty_list)
+    manager = st.selectbox("Manager", manager_list)
+    entered_by = st.text_input("Entered By")
 
-st.divider()
+    st.divider()
 
-job_count = st.number_input(
+    job_count = st.number_input(
         "How many warranty jobs are on this RO?",
         min_value=1,
         max_value=10,
@@ -520,9 +520,9 @@ job_count = st.number_input(
         step=1
     )
 
-jobs = []
+    jobs = []
 
-for i in range(int(job_count)):
+    for i in range(int(job_count)):
         job_no = i + 1
 
         with st.expander(f"Job {job_no}", expanded=True):
