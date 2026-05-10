@@ -507,8 +507,6 @@ def render_review():
     advisor = st.selectbox("Advisor", advisor_list)
     technician = st.selectbox("Technician", tech_list)
     warranty_admin = st.selectbox("Warranty Admin", warranty_list)
-    manager = st.selectbox("Manager", manager_list)
-    entered_by = st.text_input("Entered By")
 
     st.divider()
 
@@ -672,8 +670,6 @@ def render_review():
             "advisor": advisor,
             "technician": technician,
             "warranty_admin": warranty_admin,
-            "manager": manager,
-            "entered_by": entered_by,
             "score": final_score,
             "status": status,
             "total_claim_value": total_value,
