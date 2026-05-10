@@ -430,7 +430,7 @@ def audit_job(job, time_bypass):
         if "dye" not in text:
             hard.append("Oil leak narrative must state dye was used to locate the leak.")
 
-    if job["sublet"]:
+    if job.get("sublet_repair"):
         warn.append("Sublet selected: invoice must include VIN, mileage, and detailed repair notes.")
         if not job["sublet_vin"]:
             hard.append("Sublet invoice must show VIN.")
