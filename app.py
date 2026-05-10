@@ -6,7 +6,6 @@ SUPABASE_KEY = "sb_publishable_5SXVN_OB5aIouuZAOa3b3Q_Mq4chxUT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 import json
-import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -743,7 +742,7 @@ def main():
 
     tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
     with tabs[0]:
-        st.warning("Review tab is temporarily disabled while we restore it.")
+        render_review()
     with tabs[1]:
         render_claims()
     with tabs[2]:
