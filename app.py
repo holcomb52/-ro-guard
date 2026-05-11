@@ -391,6 +391,42 @@ def extract_sentence(claim_text, kind):
 # =========================
 # AUDIT ENGINE
 # =========================
+def find_wam_matches(job):
+    text = " ".join([
+        str(job.get("concern", "")),
+        str(job.get("cause", "")),
+        str(job.get("correction", ""))
+    ]).lower()
+
+    matches = []
+
+    try:
+        rows = supabase.table("wam_documents").select("*").execute().data or []
+
+        for row in rows:
+            keywords = str(row.get("keywords", "")).lower()
+            content = str(row.get("content", "")).lower()
+            section = row.get("section", "WAM Reference")
+
+            keyword_hits = [
+                k.strip()
+                for k in keywords.split(",")
+                if k.strip() and k.strip() in text
+            ]
+
+            content_hit = any(word in content for word in text.split() if len(word) > 5)
+
+            if keyword_hits or content_hit:
+                matches.append({
+                    "section": section,
+                    "source_file": row.get("source_file", ""),
+                    "content": row.get("content", "")[:700]
+                })
+
+    except Exception:
+        pass
+
+    return matches[:3]
 def audit_job(job, time_bypass):
     hard = []
     warn = []
@@ -475,6 +511,13 @@ def audit_job(job, time_bypass):
         hard.append("Parts warranty requires MOPA and original RO support.")
 
     score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
+    wam_matches = find_wam_matches(job)
+
+if wam_matches:
+    warn.append("WAM reference found. Review related warranty manual guidance before submission.")
+    job["wam_matches"] = wam_matches
+else:
+    job["wam_matches"] = []
     return hard, warn, score
 
 
