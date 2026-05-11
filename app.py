@@ -467,7 +467,7 @@ def audit_job(job, time_bypass):
         elif tech_flagged_time > 0 and time_allotted <= 0:
             hard.append("Time Allotted for the job is missing.")
 
-    if job["battery"] and not job["battery_test"]:
+    if job.get("battery_replacement") and not job.get("battery_test_slip"):
         hard.append("Battery replacement requires failed battery test slip/code.")
     if job["ac"] and not job["ac_slip"]:
         hard.append("A/C repair requires EVAC/recharge slip.")
