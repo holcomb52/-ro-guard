@@ -469,7 +469,7 @@ def audit_job(job, time_bypass):
 
     if job.get("battery_replacement") and not job.get("battery_test_slip"):
         hard.append("Battery replacement requires failed battery test slip/code.")
-    if job["ac"] and not job["ac_slip"]:
+    if job.get("ac_repair") and not job.get("ac_evac_slip"):
         hard.append("A/C repair requires EVAC/recharge slip.")
     if job["parts_warranty"] and not job["mopa"]:
         hard.append("Parts warranty requires MOPA and original RO support.")
