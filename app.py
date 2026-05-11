@@ -503,9 +503,9 @@ def audit_job(job, time_bypass):
         elif tech_flagged_time > 0 and time_allotted <= 0:
             hard.append("Time Allotted for the job is missing.")
 
-    if job.get("battery_replacement") and not job.get("battery_test_slip"):
-        hard.append("Battery replacement requires failed battery test slip/code.")
-    if job.get("ac_repair") and not job.get("ac_evac_slip"):
+        if job.get("battery_replacement") and not job.get("battery_test_slip"):
+         hard.append("Battery replacement requires failed battery test slip/code.")
+        if job.get("ac_repair") and not job.get("ac_evac_slip"):
         hard.append("A/C repair requires EVAC/recharge slip.")
     if job["parts_warranty"] and not job["mopa"]:
         hard.append("Parts warranty requires MOPA and original RO support.")
@@ -518,7 +518,7 @@ if wam_matches:
     job["wam_matches"] = wam_matches
 else:
     job["wam_matches"] = []
-return hard, warn, score
+    return hard, warn, score
 
 
 def result_banner(status):
