@@ -447,7 +447,7 @@ def audit_job(job, time_bypass):
         if job["rental_days"] >= 15:
             warn.append("15 or more rental days billed: make sure all documentation to support rental days is submitted to Stellantis with the claim.")
 
-    if job["add_on"] and not job["manager_signed"]:
+    if job.get("warranty_add_on") and not job.get("manager_approval"):
         hard.append("Warranty add-on requires service manager approval.")
 
     tech_flagged_time = float(job.get("tech_flagged_time") or 0)
