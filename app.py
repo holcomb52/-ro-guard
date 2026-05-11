@@ -504,11 +504,11 @@ def audit_job(job, time_bypass):
             hard.append("Time Allotted for the job is missing.")
 
         if job.get("battery_replacement") and not job.get("battery_test_slip"):
-         hard.append("Battery replacement requires failed battery test slip/code.")
+             hard.append("Battery replacement requires failed battery test slip/code.")
         if job.get("ac_repair") and not job.get("ac_evac_slip"):
-        hard.append("A/C repair requires EVAC/recharge slip.")
-    if job["parts_warranty"] and not job["mopa"]:
-        hard.append("Parts warranty requires MOPA and original RO support.")
+            hard.append("A/C repair requires EVAC/recharge slip.")
+        if job["parts_warranty"] and not job["mopa"]:
+            hard.append("Parts warranty requires MOPA and original RO support.")
 
     score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
     wam_matches = find_wam_matches(job)
