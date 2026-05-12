@@ -813,11 +813,11 @@ def render_reporting():
     }[scorecard_role]
 
         if employee_col in df.columns:
-        score_df = df.copy()
-        score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
-        score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
-        score_df["warning_count"] = pd.to_numeric(score_df.get("warning_count", 0), errors="coerce").fillna(0)
-        score_df["days_to_submit"] = pd.to_numeric(score_df.get("days_to_submit", 0), errors="coerce").fillna(0)
+            score_df = df.copy()
+            score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
+            score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+            score_df["warning_count"] = pd.to_numeric(score_df.get("warning_count", 0), errors="coerce").fillna(0)
+            score_df["days_to_submit"] = pd.to_numeric(score_df.get("days_to_submit", 0), errors="coerce").fillna(0)
 
         scorecard = score_df.groupby(employee_col).agg(
             reviews=("ro_number", "count"),
