@@ -748,8 +748,8 @@ def render_review():
                 "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
     )
 
-if not any(x in job["correction"].lower() for x in ["replaced", "repaired", "installed", "performed"]):
-    ai_suggestions.append(
+    if not any(x in job["correction"].lower() for x in ["replaced", "repaired", "installed", "performed"]):
+        ai_suggestions.append(
         "Correction recommendation: Clearly identify the repair performed and parts replaced."
     )
 
