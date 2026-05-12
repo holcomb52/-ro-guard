@@ -738,46 +738,50 @@ def render_review():
                     st.warning(w)
                 if not job["hard_stops"] and not job["warnings"]:
                     st.success("No audit issues found.")
-                    st.markdown("### AI Narrative Recommendations")
 
-                    ai_suggestions = []
+                st.markdown("### AI Narrative Recommendations")
 
-                    cause_text = str(job.get("cause", "")).lower()
-                if not any(["tested" in cause_text, "verified" in cause_text, "scanned" in cause_text, "measured" in cause_text]):
-                    ai_suggestions.append(
-                    "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
-    )
+        ai_suggestions = []
 
-                    correction_text = str(job.get("correction", "")).lower()
-                 if not any(["replaced" in correction_text, "repaired" in correction_text, "installed" in correction_text, "performed" in correction_text]):
-                    ai_suggestions.append(
-                    "Correction recommendation: Clearly identify the repair performed and parts replaced."
-    )
+        cause_text = str(job.get("cause", "")).lower()
+        correction_text = str(job.get("correction", "")).lower()
 
-                if job.get("oil_leak") and not job.get("oil_dye_billed"):
-                    ai_suggestions.append(
-                    "Oil leak recommendation: Add oil dye usage and dye billing documentation."
-    )
+        if not any(word in cause_text for word in ["tested", "verified", "scanned", "measured"]):
+            ai_suggestions.append(
+                "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
+            )
 
-                if job.get("battery_replacement") and not job.get("battery_test_slip"):
-                    ai_suggestions.append(
-                    "Battery recommendation: Include battery test slip/code documentation."
-    )
+        if not any(word in correction_text for word in ["replaced", "repaired", "installed", "performed"]):
+            ai_suggestions.append(
+                "Correction recommendation: Clearly identify the repair performed and parts replaced."
+            )
 
-                if job.get("ac_repair") and not job.get("ac_evac_slip"):
-                    ai_suggestions.append(
-                    "A/C recommendation: Include EVAC/recharge machine documentation."
-    )
+        if job.get("oil_leak") and not job.get("oil_dye_billed"):
+            ai_suggestions.append(
+                "Oil leak recommendation: Add oil dye usage and dye billing documentation."
+            )
 
-                if job.get("wam_matches"):
-                    ai_suggestions.append(
-                    "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
-    )
+        if job.get("battery_replacement") and not job.get("battery_test_slip"):
+            ai_suggestions.append(
+                "Battery recommendation: Include battery test slip/code documentation."
+            )
 
-                if ai_suggestions:
-                for suggestion in ai_suggestions:
-                    st.info(suggestion)
-    else:
+        if job.get("ac_repair") and not job.get("ac_evac_slip"):
+            ai_suggestions.append(
+                "A/C recommendation: Include EVAC/recharge machine documentation."
+            )
+
+        if job.get("wam_matches"):
+            ai_suggestions.append(
+                "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
+            )
+
+        if ai_suggestions:
+            for suggestion in ai_suggestions:
+                st.info(suggestion)
+        else:
+            st.success("Narrative documentation looks strong.")
+                  
         st.success("Narrative documentation looks strong.")
         save_review({
             "ro_number": ro_number,
