@@ -827,8 +827,8 @@ def render_reporting():
             fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
             fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
 
-    if "rejection_reason" in fp_df.columns:
-        reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""]
+        if "rejection_reason" in fp_df.columns:
+            reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""]
         if not reasons.empty:
             st.markdown("### Rejection Reasons")
             reason_summary = reasons.groupby("rejection_reason").agg(
