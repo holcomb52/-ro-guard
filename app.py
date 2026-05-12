@@ -798,7 +798,41 @@ def render_reporting():
     
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
+        st.subheader("Employee Scorecards")
 
+if not df.empty:
+    scorecard_role = st.selectbox(
+        "Scorecard Type",
+        ["Advisor", "Technician", "Warranty Admin"]
+    )
+
+    employee_col = {
+        "Advisor": "advisor",
+        "Technician": "technician",
+        "Warranty Admin": "warranty_admin"
+    }[scorecard_role]
+
+    if employee_col in df.columns:
+        score_df = df.copy()
+        score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
+        score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+        score_df["warning_count"] = pd.to_numeric(score_df.get("warning_count", 0), errors="coerce").fillna(0)
+        score_df["days_to_submit"] = pd.to_numeric(score_df.get("days_to_submit", 0), errors="coerce").fillna(0)
+
+        scorecard = score_df.groupby(employee_col).agg(
+            reviews=("ro_number", "count"),
+            avg_score=("score", "mean"),
+            hard_stops=("hard_stop_count", "sum"),
+            warnings=("warning_count", "sum"),
+            avg_days_to_submit=("days_to_submit", "mean")
+        ).reset_index()
+
+        scorecard = scorecard.sort_values(
+            by=["hard_stops", "avg_score"],
+            ascending=[False, True]
+        )
+
+        st.dataframe(scorecard, use_container_width=True)
         st.subheader("Review Log")
         st.dataframe(df, use_container_width=True)
         st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
