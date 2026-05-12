@@ -798,6 +798,40 @@ def render_reporting():
     
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
+    st.subheader("Top Offenders / Best Performers")
+
+    if not df.empty:
+    perf_df = df.copy()
+    perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
+    perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+    perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
+
+    rank_col = st.selectbox(
+        "Rank By",
+        ["advisor", "technician", "warranty_admin"],
+        key="rank_by_employee"
+    )
+
+    if rank_col in perf_df.columns:
+        ranking = perf_df.groupby(rank_col).agg(
+            reviews=("ro_number", "count"),
+            avg_score=("score", "mean"),
+            hard_stops=("hard_stop_count", "sum"),
+            warnings=("warning_count", "sum")
+        ).reset_index()
+
+        worst = ranking.sort_values(["hard_stops", "warnings"], ascending=[False, False]).head(5)
+        best = ranking.sort_values(["avg_score", "hard_stops"], ascending=[False, True]).head(5)
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown("### Top Offenders")
+            st.dataframe(worst, use_container_width=True)
+
+        with c2:
+            st.markdown("### Best Performers")
+            st.dataframe(best, use_container_width=True)
         st.subheader("Employee Scorecards")
     
         if not df.empty:
