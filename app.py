@@ -540,9 +540,9 @@ def audit_job(job, time_bypass):
         else:
          job["wam_matches"] = []
 
-return hard, warn, score
+        return hard, warn, score
     
-return hard, warn, score
+        return hard, warn, score
 
 def result_banner(status):
     if "DO NOT" in status:
