@@ -511,6 +511,7 @@ def audit_job(job, time_bypass):
             hard.append("Parts warranty requires MOPA and original RO support.")
 
              score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
+            
              wam_matches = find_wam_matches(job)
 
         if wam_matches:
