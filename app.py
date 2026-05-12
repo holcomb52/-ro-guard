@@ -759,22 +759,22 @@ def render_review():
                     "Oil leak recommendation: Add oil dye usage and dye billing documentation."
     )
 
-    if job.get("battery_replacement") and not job.get("battery_test_slip"):
-        ai_suggestions.append(
-        "Battery recommendation: Include battery test slip/code documentation."
+                if job.get("battery_replacement") and not job.get("battery_test_slip"):
+                    ai_suggestions.append(
+                    "Battery recommendation: Include battery test slip/code documentation."
     )
 
-    if job.get("ac_repair") and not job.get("ac_evac_slip"):
-        ai_suggestions.append(
-        "A/C recommendation: Include EVAC/recharge machine documentation."
+                if job.get("ac_repair") and not job.get("ac_evac_slip"):
+                    ai_suggestions.append(
+                    "A/C recommendation: Include EVAC/recharge machine documentation."
     )
 
-    if job.get("wam_matches"):
-        ai_suggestions.append(
-        "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
+                if job.get("wam_matches"):
+                    ai_suggestions.append(
+                    "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
     )
 
-    if ai_suggestions:
+                if ai_suggestions:
         for suggestion in ai_suggestions:
          st.info(suggestion)
     else:
