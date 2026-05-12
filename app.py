@@ -798,7 +798,7 @@ def render_reporting():
     
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
-     st.subheader("Employee Scorecards")
+        st.subheader("Employee Scorecards")
 
     if not df.empty:
     scorecard_role = st.selectbox(
