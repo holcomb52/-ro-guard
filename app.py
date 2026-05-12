@@ -517,8 +517,30 @@ def audit_job(job, time_bypass):
         if wam_matches:
             warn.append("WAM reference found. Review related warranty manual guidance before submission.")
             job["wam_matches"] = wam_matches
-        else:
-            job["wam_matches"] = []
+
+            for match in wam_matches:
+                section = str(match.get("section", "WAM Reference"))
+                content = str(match.get("content", ""))
+
+        if "battery" in content.lower() and not job.get("battery_test_slip"):
+            warn.append(f"WAM Suggestion - {section}: Battery claim may require battery test slip/code.")
+
+        if "a/c" in content.lower() or "evac" in content.lower() or "recharge" in content.lower():
+            if job.get("ac_repair") and not job.get("ac_evac_slip"):
+                warn.append(f"WAM Suggestion - {section}: A/C claim may require EVAC/recharge documentation.")
+
+        if "oil dye" in content.lower() or "dye" in content.lower():
+            if job.get("oil_leak") and not job.get("oil_dye_billed"):
+                warn.append(f"WAM Suggestion - {section}: Oil leak documentation should mention dye usage and dye billing.")
+
+        if "manager approval" in content.lower() or "authorization" in content.lower():
+            if job.get("add_on") and not job.get("manager_signed"):
+                hard.append(f"WAM Hard Stop - {section}: Add-on repair may require manager authorization.")
+
+else:
+    job["wam_matches"] = []
+
+return hard, warn, score
     
         return hard, warn, score
 
