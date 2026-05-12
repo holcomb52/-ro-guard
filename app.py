@@ -754,9 +754,9 @@ def render_review():
                         "Correction recommendation: Clearly identify the repair performed and parts replaced."
     )
 
-    if job.get("oil_leak") and not job.get("oil_dye_billed"):
-        ai_suggestions.append(
-        "Oil leak recommendation: Add oil dye usage and dye billing documentation."
+                if job.get("oil_leak") and not job.get("oil_dye_billed"):
+                    ai_suggestions.append(
+                    "Oil leak recommendation: Add oil dye usage and dye billing documentation."
     )
 
     if job.get("battery_replacement") and not job.get("battery_test_slip"):
