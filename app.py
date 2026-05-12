@@ -816,6 +816,32 @@ def render_admin():
             st.success("Person added.")
 
     df = load_personnel()
+    st.subheader("Edit Existing Employee")
+
+if not df.empty:
+    employee_names = df["name"].tolist()
+    selected_employee = st.selectbox("Select Employee to Edit", employee_names)
+
+    selected_row = df[df["name"] == selected_employee].iloc[0]
+
+    edit_name = st.text_input("Edit Name", value=selected_row.get("name", ""))
+    edit_employee_number = st.text_input("Edit Employee Number", value=str(selected_row.get("employee_number", "")))
+
+    edit_role = st.selectbox(
+        "Edit Role",
+        ["Advisor", "Technician", "Warranty Admin", "Manager"],
+        index=["Advisor", "Technician", "Warranty Admin", "Manager"].index(selected_row.get("role", "Advisor"))
+    )
+
+    if st.button("Save Employee Changes"):
+        supabase.table("personnel").update({
+            "name": edit_name,
+            "employee_number": edit_employee_number,
+            "role": edit_role
+        }).eq("id", selected_row["id"]).execute()
+
+        st.success("Employee updated.")
+        st.rerun()
     if df.empty:
         st.info("No personnel added yet.")
     else:
