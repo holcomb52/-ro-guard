@@ -805,7 +805,7 @@ def render_reporting():
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
 
-    st.subheader("First-Pass Approval Tracking")
+        st.subheader("First-Pass Approval Tracking")
 
 if not df.empty:
     fp_df = df.copy()
