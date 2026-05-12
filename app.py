@@ -821,11 +821,11 @@ def render_reporting():
             rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
             rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
 
-    fp1, fp2, fp3, fp4 = st.columns(4)
-    fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
-    fp2.metric("First-Pass Paid Count", first_pass_count)
-    fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
-    fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
+            fp1, fp2, fp3, fp4 = st.columns(4)
+            fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
+            fp2.metric("First-Pass Paid Count", first_pass_count)
+            fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
+            fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
 
     if "rejection_reason" in fp_df.columns:
         reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""]
