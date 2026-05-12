@@ -738,7 +738,45 @@ def render_review():
                     st.warning(w)
                 if not job["hard_stops"] and not job["warnings"]:
                     st.success("No audit issues found.")
+                st.markdown("### AI Narrative Recommendations")
 
+ai_suggestions = []
+
+if not any(x in job["cause"].lower() for x in ["tested", "verified", "scanned", "measured"]):
+    ai_suggestions.append(
+        "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
+    )
+
+if not any(x in job["correction"].lower() for x in ["replaced", "repaired", "installed", "performed"]):
+    ai_suggestions.append(
+        "Correction recommendation: Clearly identify the repair performed and parts replaced."
+    )
+
+if job.get("oil_leak") and not job.get("oil_dye_billed"):
+    ai_suggestions.append(
+        "Oil leak recommendation: Add oil dye usage and dye billing documentation."
+    )
+
+if job.get("battery_replacement") and not job.get("battery_test_slip"):
+    ai_suggestions.append(
+        "Battery recommendation: Include battery test slip/code documentation."
+    )
+
+if job.get("ac_repair") and not job.get("ac_evac_slip"):
+    ai_suggestions.append(
+        "A/C recommendation: Include EVAC/recharge machine documentation."
+    )
+
+if job.get("wam_matches"):
+    ai_suggestions.append(
+        "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
+    )
+
+if ai_suggestions:
+    for suggestion in ai_suggestions:
+        st.info(suggestion)
+else:
+    st.success("Narrative documentation looks strong.")
         save_review({
             "ro_number": ro_number,
             "vin": vin,
