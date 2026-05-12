@@ -804,6 +804,39 @@ def render_reporting():
     
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
+
+    st.subheader("First-Pass Approval Tracking")
+
+if not df.empty:
+    fp_df = df.copy()
+    fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
+    fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
+    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
+
+    total_reviews = len(fp_df)
+    first_pass_count = int(fp_df["first_pass_paid"].sum())
+    rejected_count = int(fp_df["rejected"].sum())
+
+    first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
+    rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
+    rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
+
+    fp1, fp2, fp3, fp4 = st.columns(4)
+    fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
+    fp2.metric("First-Pass Paid Count", first_pass_count)
+    fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
+    fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
+
+    if "rejection_reason" in fp_df.columns:
+        reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""]
+        if not reasons.empty:
+            st.markdown("### Rejection Reasons")
+            reason_summary = reasons.groupby("rejection_reason").agg(
+                count=("ro_number", "count"),
+                total_value=("total_claim_value", "sum")
+            ).reset_index().sort_values("count", ascending=False)
+
+            st.dataframe(reason_summary, use_container_width=True)
     
         st.subheader("Top Offenders / Best Performers")
 
