@@ -742,7 +742,7 @@ def render_review():
 
 ai_suggestions = []
 
-if not any(x in job["cause"].lower() for x in ["tested", "verified", "scanned", "measured"]):
+if not any(x in str(job.get("cause", "")).lower() for x in ["tested", "verified", "scanned", "measured"]):
     ai_suggestions.append(
         "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
     )
