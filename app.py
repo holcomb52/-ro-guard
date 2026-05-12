@@ -773,8 +773,8 @@ if job.get("wam_matches"):
     )
 
 if ai_suggestions:
-for suggestion in ai_suggestions:
-st.info(suggestion)
+    for suggestion in ai_suggestions:
+        st.info(suggestion)
 else:
     st.success("Narrative documentation looks strong.")
         save_review({
