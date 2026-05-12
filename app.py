@@ -165,13 +165,14 @@ def load_personnel():
         return pd.DataFrame(columns=["name", "role"])
 
 
-def add_person_shared(name, role):
+def add_person_shared(name, role, employee_number):
     try:
         existing = supabase.table("personnel").select("id").eq("name", name).eq("role", role).execute()
 
         if not existing.data:
             supabase.table("personnel").insert({
                 "name": name,
+                "employee_number": employee_number,
                 "role": role,
                 "active": True
             }).execute()
