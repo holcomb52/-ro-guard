@@ -801,9 +801,9 @@ def render_reporting():
         st.subheader("Employee Scorecards")
     
         if not df.empty:
-        scorecard_role = st.selectbox(
-        "Scorecard Type",
-        ["Advisor", "Technician", "Warranty Admin"]
+            scorecard_role = st.selectbox(
+            "Scorecard Type",
+            ["Advisor", "Technician", "Warranty Admin"]
     )
 
     employee_col = {
