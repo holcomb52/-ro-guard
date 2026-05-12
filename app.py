@@ -518,7 +518,7 @@ if wam_matches:
     job["wam_matches"] = wam_matches
 else:
     job["wam_matches"] = []
-return hard, warn, score
+    return hard, warn, score
 
 
 def result_banner(status):
