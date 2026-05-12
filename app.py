@@ -542,7 +542,10 @@ def render_review():
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
     ro_invoiced = st.date_input("RO Invoiced / Closed Date")
-    day_submitted = st.date_input("Day Submitted")
+    day_submitted = st.date_input("Day Submitted
+    first_pass_paid = st.checkbox("Paid on First Submission")
+    rejected = st.checkbox("Rejected / Returned")
+    rejection_reason = st.text_area("Rejection Reason", height=100) if rejected else ""
 
     days_to_submit = (day_submitted - ro_invoiced).days
 
@@ -720,6 +723,9 @@ def render_review():
             "ro_invoiced": str(ro_invoiced),
             "day_submitted": str(day_submitted),
             "days_to_submit": days_to_submit,
+            "first_pass_paid": 1 if first_pass_paid else 0,
+            "rejected": 1 if rejected else 0,
+            "rejection_reason": rejection_reason,
             "advisor": advisor,
             "technician": technician,
             "warranty_admin": warranty_admin,
