@@ -807,10 +807,11 @@ def render_admin():
     st.header("Admin")
     with st.form("add_person"):
         name = st.text_input("Name")
+        employee_number = st.text_input("Employee Number")
         role = st.selectbox("Role", ["Advisor", "Technician", "Warranty Admin", "Manager"])
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
-            add_person_shared(name.strip(), role)
+            add_person_shared(name.strip(), role, employee_number)
             st.success("Person added.")
 
     df = load_personnel()
