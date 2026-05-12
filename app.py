@@ -542,7 +542,7 @@ def render_review():
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
     ro_invoiced = st.date_input("RO Invoiced / Closed Date")
-    day_submitted = st.date_input("Day Submitted
+    day_submitted = st.date_input("Day Submitted")
     first_pass_paid = st.checkbox("Paid on First Submission")
     rejected = st.checkbox("Rejected / Returned")
     rejection_reason = st.text_area("Rejection Reason", height=100) if rejected else ""
