@@ -798,13 +798,14 @@ def render_reporting():
     
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
-    st.subheader("Top Offenders / Best Performers")
+    
+        st.subheader("Top Offenders / Best Performers")
 
-    if not df.empty:
-    perf_df = df.copy()
-    perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
-    perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
-    perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
+        if not df.empty:
+        perf_df = df.copy()
+        perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
+        perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+        perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
 
     rank_col = st.selectbox(
         "Rank By",
