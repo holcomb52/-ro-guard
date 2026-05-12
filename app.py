@@ -740,12 +740,12 @@ def render_review():
                     st.success("No audit issues found.")
                 st.markdown("### AI Narrative Recommendations")
 
-ai_suggestions = []
+                ai_suggestions = []
 
-    cause_text = str(job.get("cause", "")).lower()
-if not any(["tested" in cause_text, "verified" in cause_text, "scanned" in cause_text, "measured" in cause_text]):
-    ai_suggestions.append(
-        "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
+                cause_text = str(job.get("cause", "")).lower()
+                if not any(["tested" in cause_text, "verified" in cause_text, "scanned" in cause_text, "measured" in cause_text]):
+                ai_suggestions.append(
+                "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
     )
 
 if not any(x in job["correction"].lower() for x in ["replaced", "repaired", "installed", "performed"]):
