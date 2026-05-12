@@ -537,8 +537,8 @@ def audit_job(job, time_bypass):
             if job.get("add_on") and not job.get("manager_signed"):
                 hard.append(f"WAM Hard Stop - {section}: Add-on repair may require manager authorization.")
 
-else:
-    job["wam_matches"] = []
+    else:
+        job["wam_matches"] = []
 
 return hard, warn, score
     
