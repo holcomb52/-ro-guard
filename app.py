@@ -806,7 +806,7 @@ def render_reporting():
             ["Advisor", "Technician", "Warranty Admin"]
     )
 
-    employee_col = {
+        employee_col = {
         "Advisor": "advisor",
         "Technician": "technician",
         "Warranty Admin": "warranty_admin"
