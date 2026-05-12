@@ -807,10 +807,10 @@ def render_reporting():
             perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
             perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
 
-    rank_col = st.selectbox(
-        "Rank By",
-        ["advisor", "technician", "warranty_admin"],
-        key="rank_by_employee"
+            rank_col = st.selectbox(
+                "Rank By",
+                ["advisor", "technician", "warranty_admin"],
+                key="rank_by_employee"
     )
 
     if rank_col in perf_df.columns:
