@@ -800,7 +800,7 @@ def render_reporting():
         f.metric("Time Bypasses", int(time_bypass))
         st.subheader("Employee Scorecards")
     
-    if not df.empty:
+        if not df.empty:
         scorecard_role = st.selectbox(
         "Scorecard Type",
         ["Advisor", "Technician", "Warranty Admin"]
@@ -812,7 +812,7 @@ def render_reporting():
         "Warranty Admin": "warranty_admin"
     }[scorecard_role]
 
-    if employee_col in df.columns:
+        if employee_col in df.columns:
         score_df = df.copy()
         score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
         score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
