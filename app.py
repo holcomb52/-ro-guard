@@ -813,8 +813,8 @@ def render_reporting():
                 key="rank_by_employee"
     )
 
-    if rank_col in perf_df.columns:
-        ranking = perf_df.groupby(rank_col).agg(
+        if rank_col in perf_df.columns:
+            ranking = perf_df.groupby(rank_col).agg(
             reviews=("ro_number", "count"),
             avg_score=("score", "mean"),
             hard_stops=("hard_stop_count", "sum"),
