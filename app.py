@@ -805,12 +805,13 @@ def render_reporting():
         time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
         f.metric("Time Bypasses", int(time_bypass))
         st.subheader("First-Pass Approval Tracking")
+        st.subheader("First-Pass Approval Tracking")
 
-if not df.empty:
-    fp_df = df.copy()
-    fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
-    fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
-    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
+        if not df.empty:
+            fp_df = df.copy()
+            fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
+            fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
+            fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
 
     total_reviews = len(fp_df)
     first_pass_count = int(fp_df["first_pass_paid"].sum())
