@@ -800,7 +800,7 @@ save_review({
             "jobs": jobs,
         })
 
-        st.success("Review saved to Reporting.")
+st.success("Review saved to Reporting.")
 def render_claims():
     st.header("Claim Learning Upload")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
