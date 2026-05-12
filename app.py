@@ -818,8 +818,8 @@ def render_admin():
     df = load_personnel()
     st.subheader("Edit Existing Employee")
 
-if not df.empty:
-    employee_names = df["name"].tolist()
+    if not df.empty:
+            employee_names = df["name"].tolist()
     selected_employee = st.selectbox("Select Employee to Edit", employee_names)
 
     selected_row = df[df["name"] == selected_employee].iloc[0]
