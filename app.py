@@ -813,13 +813,13 @@ def render_reporting():
             fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
             fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
 
-    total_reviews = len(fp_df)
-    first_pass_count = int(fp_df["first_pass_paid"].sum())
-    rejected_count = int(fp_df["rejected"].sum())
+            total_reviews = len(fp_df)
+            first_pass_count = int(fp_df["first_pass_paid"].sum())
+            rejected_count = int(fp_df["rejected"].sum())
 
-    first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
-    rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
-    rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
+            first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
+            rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
+            rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
 
     fp1, fp2, fp3, fp4 = st.columns(4)
     fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
