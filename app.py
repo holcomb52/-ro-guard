@@ -671,7 +671,7 @@ with c1:
                 )
 with c2:
     time_allotted = st.number_input(
-    f"Time Allotted - Job {job_no}",
+    "Claim Value – Job 1"
     min_value=0.0,
     value=0.0,
     step=0.1,
