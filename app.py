@@ -842,7 +842,7 @@ Correction:
                     "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
             )
 
-        if ai_suggestions:
+            if ai_suggestions:
             for suggestion in ai_suggestions:
                 st.info(suggestion)
         else:
