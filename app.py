@@ -855,7 +855,7 @@ Correction:
                 keywords = str(match.get("keywords", ""))
                 content = str(match.get("content", ""))
 
-                    st.warning(f"WAM Section: {section}")
+                st.warning(f"WAM Section: {section}")
 
             if keywords:
                     st.caption(f"Keywords: {keywords}")
