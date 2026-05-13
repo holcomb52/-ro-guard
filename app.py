@@ -790,9 +790,9 @@ def render_review():
                 built_cause += " Leak diagnosis should identify the exact source of the leak and whether dye was used."
                 built_correction += " Correction should document repair of the leak and verification that no leak remains."
 
-        if job.get("wam_matches"):
-            built_cause += " Matched WAM guidance should be reviewed and referenced where applicable."
-            built_correction += " Narrative should align with matched WAM documentation requirements."
+            if job.get("wam_matches"):
+                built_cause += " Matched WAM guidance should be reviewed and referenced where applicable."
+                built_correction += " Narrative should align with matched WAM documentation requirements."
 
             ccc_text = f"""Concern:
 {built_concern}
