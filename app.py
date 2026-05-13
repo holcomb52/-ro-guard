@@ -687,7 +687,7 @@ with c3:
                 )
     st.subheader("Required Warranty Checks")
 
-            a, b, c, d = st.columns(4)
+    a, b, c, d = st.columns(4)
 
             with a:
                 oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
