@@ -856,12 +856,12 @@ Correction:
             keywords = str(match.get("keywords", ""))
             content = str(match.get("content", ""))
 
-                st.warning(f"WAM Section: {section}")
+            st.warning(f"WAM Section: {section}")
 
-                if keywords:
+            if keywords:
                     st.caption(f"Keywords: {keywords}")
 
-                if content:
+            if content:
                     st.info(content[:1000])
         save_review({
             "ro_number": ro_number,
