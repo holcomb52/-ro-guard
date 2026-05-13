@@ -850,8 +850,8 @@ Correction:
             
         if job.get("wam_matches"):
             st.markdown("### Matched WAM References")
-
             for match in job.get("wam_matches", []):
+                section = str(match.get("section"
                 section = str(match.get("section", "WAM Reference"))
                 keywords = str(match.get("keywords", ""))
                 content = str(match.get("content", ""))
