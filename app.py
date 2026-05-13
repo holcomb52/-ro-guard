@@ -628,7 +628,32 @@ def render_review():
             height=110,
             key=f"correction_{job_no}"
         )
+            c1, c2, c3, c4 = st.columns(4)
 
+with c1:
+    oil_leak = st.checkbox("Oil Leak")
+    oil_dye_billed = st.checkbox("Oil Dye Billed")
+    battery_replacement = st.checkbox("Battery Replacement")
+    battery_test_slip = st.checkbox("Battery Test Slip")
+
+with c2:
+    sublet_repair = st.checkbox("Sublet Repair")
+    sublet_vin_present = st.checkbox("Sublet VIN Present")
+    sublet_mileage_present = st.checkbox("Sublet Mileage Present")
+    sublet_notes_present = st.checkbox("Sublet Detailed Notes Present")
+
+with c3:
+    rental_involved = st.checkbox("Rental Involved")
+    rental_days = st.number_input("Rental Days Billed", min_value=0, step=1)
+    manager_signed_rental = st.checkbox("Manager Signed Rental")
+
+with c4:
+    warranty_add_on = st.checkbox("Warranty Add-On (+)")
+    manager_approval = st.checkbox("Manager Approval")
+    ac_repair = st.checkbox("A/C Repair")
+    ac_evac_slip = st.checkbox("A/C EVAC Slip")
+    parts_warranty = st.checkbox("Parts Warranty")
+    mopa_original_ro = st.checkbox("MOPA + Original RO")
         if st.button(f"Use Suggested Narrative – Job {job_no}"):
             st.session_state[f"concern_{job_no}"] = built_concern
             st.session_state[f"cause_{job_no}"] = built_cause
