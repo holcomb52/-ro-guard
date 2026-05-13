@@ -558,8 +558,8 @@ def result_banner(status):
 # SCREENS
 # =========================
 
-    def render_review():
-        st.header("RO Warranty Review")
+def render_review():
+    st.header("RO Warranty Review")
 
     col_a, col_b = st.columns([8, 2])
 
