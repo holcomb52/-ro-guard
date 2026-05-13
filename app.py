@@ -778,17 +778,17 @@ def render_review():
             built_cause = cause_text if cause_text else "Technician needs to document diagnostic steps, test results, and confirmed failure."
             built_correction = correction_text if correction_text else "Technician needs to document repair performed, parts replaced, and verification of proper operation."
 
-        if job.get("battery_replacement"):
-            built_cause += " Battery testing documentation should support the failure."
-            built_correction += " Battery test code/slip should be attached or referenced."
+            if job.get("battery_replacement"):
+                built_cause += " Battery testing documentation should support the failure."
+                built_correction += " Battery test code/slip should be attached or referenced."
 
-        if job.get("ac_repair"):
-            built_cause += " A/C diagnosis should include pressures, leak test results, and system findings."
-            built_correction += " EVAC/recharge documentation should be attached or referenced."
+            if job.get("ac_repair"):
+                built_cause += " A/C diagnosis should include pressures, leak test results, and system findings."
+                built_correction += " EVAC/recharge documentation should be attached or referenced."
 
-        if job.get("oil_leak"):
-            built_cause += " Leak diagnosis should identify the exact source of the leak and whether dye was used."
-            built_correction += " Correction should document repair of the leak and verification that no leak remains."
+            if job.get("oil_leak"):
+                built_cause += " Leak diagnosis should identify the exact source of the leak and whether dye was used."
+                built_correction += " Correction should document repair of the leak and verification that no leak remains."
 
         if job.get("wam_matches"):
             built_cause += " Matched WAM guidance should be reviewed and referenced where applicable."
