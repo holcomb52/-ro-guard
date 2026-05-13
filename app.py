@@ -809,8 +809,8 @@ Correction:
 
         ai_suggestions = []
 
-         cause_text = str(job.get("cause", "")).lower()
-         correction_text = str(job.get("correction", "")).lower()
+        cause_text = str(job.get("cause", "")).lower()
+        correction_text = str(job.get("correction", "")).lower()
 
         if not any(word in cause_text for word in ["tested", "verified", "scanned", "measured"]):
             ai_suggestions.append(
