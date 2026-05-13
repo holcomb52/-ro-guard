@@ -785,7 +785,7 @@ Correction:
 """
 
         st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
-                st.markdown("### AI Narrative Recommendations")
+        st.markdown("### AI Narrative Recommendations")
 
         ai_suggestions = []
 
