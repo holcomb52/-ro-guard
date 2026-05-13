@@ -563,7 +563,7 @@ def result_banner(status):
 
     col_a, col_b = st.columns([8, 2])
 
-    with col_b:
+with col_b:
     if st.button("Next Claim"):
         keep_keys = ["appearance"]
         for key in list(st.session_state.keys()):
