@@ -770,9 +770,9 @@ def render_review():
                     st.success("No audit issues found.")
         st.markdown("### Auto-Built CCC Narrative")
 
-            concern_text = str(job.get("concern", "")).strip()
-            cause_text = str(job.get("cause", "")).strip()
-            correction_text = str(job.get("correction", "")).strip()
+                    concern_text = str(job.get("concern", "")).strip()
+                    cause_text = str(job.get("cause", "")).strip()
+                    correction_text = str(job.get("correction", "")).strip()
 
         built_concern = concern_text if concern_text else "Customer concern needs to be clearly documented."
         built_cause = cause_text if cause_text else "Technician needs to document diagnostic steps, test results, and confirmed failure."
