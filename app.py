@@ -686,7 +686,7 @@ with c3:
         key=f"claim_value_{job_no}"
                 )
 
-            st.subheader("Required Warranty Checks")
+ st.subheader("Required Warranty Checks")
 
             a, b, c, d = st.columns(4)
 
