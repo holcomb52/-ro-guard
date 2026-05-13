@@ -847,8 +847,7 @@ Correction:
                     st.info(suggestion)
     else:
         st.success("Narrative documentation looks strong.")
-            
-    
+        
             save_review({
             "ro_number": ro_number,
             "vin": vin,
