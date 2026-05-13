@@ -804,13 +804,13 @@ Correction:
 {built_correction}
 """
 
-            st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
-            st.markdown("### AI Narrative Recommendations")
+        st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
+         st.markdown("### AI Narrative Recommendations")
 
         ai_suggestions = []
 
-            cause_text = str(job.get("cause", "")).lower()
-            correction_text = str(job.get("correction", "")).lower()
+         cause_text = str(job.get("cause", "")).lower()
+         correction_text = str(job.get("correction", "")).lower()
 
         if not any(word in cause_text for word in ["tested", "verified", "scanned", "measured"]):
             ai_suggestions.append(
