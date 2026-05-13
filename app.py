@@ -661,13 +661,13 @@ if st.button(f"Use Suggested Narrative – Job {job_no}"):
     st.rerun()
 
 c1, c2, c3 = st.columns(3)
-            with c1:
-                tech_flagged_time = st.number_input(
-                    f"Tech Flagged Time - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"tech_time_{job_no}"
+with c1:
+    tech_flagged_time = st.number_input(
+    f"Tech Flagged Time - Job {job_no}",
+     min_value=0.0,
+    value=0.0,
+    step=0.1,
+    key=f"tech_time_{job_no}"
                 )
             with c2:
                 time_allotted = st.number_input(
