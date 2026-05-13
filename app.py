@@ -859,10 +859,10 @@ Correction:
             st.warning(f"WAM Section: {section}")
 
             if keywords:
-                    st.caption(f"Keywords: {keywords}")
+                st.caption(f"Keywords: {keywords}")
 
             if content:
-                    st.info(content[:1000])
+                st.info(content[:1000])
         save_review({
             "ro_number": ro_number,
             "vin": vin,
