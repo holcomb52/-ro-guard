@@ -860,7 +860,7 @@ Correction:
         "advisor": advisor,
         "technician": technician,
         "warranty_admin": warranty_admin,
-        "score": final_score,
+        "score": 0,
         "status": status,
         "total_claim_value": total_value,
         "hard_stop_value": hard_value,
