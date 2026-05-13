@@ -710,15 +710,15 @@ with c:
     step=1,
      key=f"rental_days_{job_no}"
                 )
-                manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
+    manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
 
-            with d:
-                warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
-                manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
-                ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
-                ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-                parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
-                mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_no}")
+with d:
+    warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
+    manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
+    ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
+    ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
+    parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
+    mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_no}")
 
             jobs.append({
                 "job_no": str(job_no),
