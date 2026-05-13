@@ -748,7 +748,43 @@ def render_review():
                     st.warning(w)
                 if not job["hard_stops"] and not job["warnings"]:
                     st.success("No audit issues found.")
+        st.markdown("### Auto-Built CCC Narrative")
 
+        concern_text = str(job.get("concern", "")).strip()
+        cause_text = str(job.get("cause", "")).strip()
+        correction_text = str(job.get("correction", "")).strip()
+
+        built_concern = concern_text if concern_text else "Customer concern needs to be clearly documented."
+        built_cause = cause_text if cause_text else "Technician needs to document diagnostic steps, test results, and confirmed failure."
+        built_correction = correction_text if correction_text else "Technician needs to document repair performed, parts replaced, and verification of proper operation."
+
+        if job.get("battery_replacement"):
+            built_cause += " Battery testing documentation should support the failure."
+            built_correction += " Battery test code/slip should be attached or referenced."
+
+        if job.get("ac_repair"):
+            built_cause += " A/C diagnosis should include pressures, leak test results, and system findings."
+            built_correction += " EVAC/recharge documentation should be attached or referenced."
+
+        if job.get("oil_leak"):
+            built_cause += " Leak diagnosis should identify the exact source of the leak and whether dye was used."
+            built_correction += " Correction should document repair of the leak and verification that no leak remains."
+
+        if job.get("wam_matches"):
+            built_cause += " Matched WAM guidance should be reviewed and referenced where applicable."
+            built_correction += " Narrative should align with matched WAM documentation requirements."
+
+        ccc_text = f"""Concern:
+{built_concern}
+
+Cause:
+{built_cause}
+
+Correction:
+{built_correction}
+"""
+
+        st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
                 st.markdown("### AI Narrative Recommendations")
 
         ai_suggestions = []
