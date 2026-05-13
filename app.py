@@ -848,27 +848,27 @@ Correction:
     else:
         st.success("Narrative documentation looks strong.")
         
-            save_review({
-            "ro_number": ro_number,
-            "vin": vin,
-            "ro_invoiced": str(ro_invoiced),
-            "day_submitted": str(day_submitted),
-            "days_to_submit": days_to_submit,
-            "first_pass_paid": 1 if first_pass_paid else 0,
-            "rejected": 1 if rejected else 0,
-            "rejection_reason": rejection_reason,
-            "advisor": advisor,
-            "technician": technician,
-            "warranty_admin": warranty_admin,
-            "score": final_score,
-            "status": status,
-            "total_claim_value": total_value,
-            "hard_stop_value": hard_value,
-            "hard_stop_count": len(all_hard),
-            "warning_count": len(all_warn),
-            "time_bypass": 1 if time_bypass else 0,
-            "time_bypass_user": time_bypass_user,
-            "jobs": jobs,
+    save_review({
+         "ro_number": ro_number,
+         "vin": vin,
+         "ro_invoiced": str(ro_invoiced),
+         "day_submitted": str(day_submitted),
+         "days_to_submit": days_to_submit,
+         "first_pass_paid": 1 if first_pass_paid else 0,
+         "rejected": 1 if rejected else 0,
+         "rejection_reason": rejection_reason,
+         "advisor": advisor,
+         "technician": technician,
+         "warranty_admin": warranty_admin,
+         "score": final_score,
+         "status": status,
+         "total_claim_value": total_value,
+         "hard_stop_value": hard_value,
+         "hard_stop_count": len(all_hard),
+         "warning_count": len(all_warn),
+         "time_bypass": 1 if time_bypass else 0,
+         "time_bypass_user": time_bypass_user,
+         "jobs": jobs,
         })
 
 st.success("Review saved to Reporting.")
