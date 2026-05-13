@@ -774,9 +774,9 @@ def render_review():
             cause_text = str(job.get("cause", "")).strip()
             correction_text = str(job.get("correction", "")).strip()
 
-        built_concern = concern_text if concern_text else "Customer concern needs to be clearly documented."
-        built_cause = cause_text if cause_text else "Technician needs to document diagnostic steps, test results, and confirmed failure."
-        built_correction = correction_text if correction_text else "Technician needs to document repair performed, parts replaced, and verification of proper operation."
+            built_concern = concern_text if concern_text else "Customer concern needs to be clearly documented."
+            built_cause = cause_text if cause_text else "Technician needs to document diagnostic steps, test results, and confirmed failure."
+            built_correction = correction_text if correction_text else "Technician needs to document repair performed, parts replaced, and verification of proper operation."
 
         if job.get("battery_replacement"):
             built_cause += " Battery testing documentation should support the failure."
@@ -794,7 +794,7 @@ def render_review():
             built_cause += " Matched WAM guidance should be reviewed and referenced where applicable."
             built_correction += " Narrative should align with matched WAM documentation requirements."
 
-        ccc_text = f"""Concern:
+            ccc_text = f"""Concern:
 {built_concern}
 
 Cause:
