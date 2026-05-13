@@ -844,7 +844,7 @@ Correction:
 
             if ai_suggestions:
                 for suggestion in ai_suggestions:
-            st.info(suggestion)
+                    st.info(suggestion)
         else:
             st.success("Narrative documentation looks strong.")
                   
