@@ -689,26 +689,26 @@ with c3:
 
     a, b, c, d = st.columns(4)
 
-            with a:
-                oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
-                oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
-                battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-                battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
+with a:
+    oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
+    oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
+    battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
+    battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
 
-            with b:
-                sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
-                sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
-                sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
-                sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
+with b:
+    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
+    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
+    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
+    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
 
-            with c:
-                rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-                rental_days = st.number_input(
-                    "Rental Days Billed",
-                    min_value=0,
-                    value=0,
-                    step=1,
-                    key=f"rental_days_{job_no}"
+with c:
+    rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
+    rental_days = st.number_input(
+    "Rental Days Billed",
+    min_value=0,
+    value=0,
+    step=1,
+     key=f"rental_days_{job_no}"
                 )
                 manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
 
