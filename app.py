@@ -654,11 +654,11 @@ with c4:
     ac_evac_slip = st.checkbox("A/C EVAC Slip")
     parts_warranty = st.checkbox("Parts Warranty")
     mopa_original_ro = st.checkbox("MOPA + Original RO")
-            if st.button(f"Use Suggested Narrative – Job {job_no}"):
-                st.session_state[f"concern_{job_no}"] = built_concern
-                st.session_state[f"cause_{job_no}"] = built_cause
-                st.session_state[f"correction_{job_no}"] = built_correction
-                st.rerun()
+if st.button(f"Use Suggested Narrative – Job {job_no}"):
+    st.session_state[f"concern_{job_no}"] = built_concern
+    st.session_state[f"cause_{job_no}"] = built_cause
+    st.session_state[f"correction_{job_no}"] = built_correction
+     st.rerun()
 
             c1, c2, c3 = st.columns(3)
             with c1:
