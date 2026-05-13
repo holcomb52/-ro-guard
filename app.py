@@ -861,7 +861,7 @@ Correction:
         "technician": technician,
         "warranty_admin": warranty_admin,
         "score": 0,
-        "status": status,
+        "score": 0,
         "total_claim_value": total_value,
         "hard_stop_value": hard_value,
         "hard_stop_count": len(all_hard),
