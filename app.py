@@ -860,7 +860,7 @@ if job.get("wam_matches"):
 if keywords:
     st.caption(f"Keywords: {keywords}")
                          
- if content:
+if content:
     st.info(content[:1000])
         save_review({
             "ro_number": ro_number,
