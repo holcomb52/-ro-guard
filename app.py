@@ -563,13 +563,13 @@ def result_banner(status):
 
     col_a, col_b = st.columns([8, 2])
 
-            with col_b:
-                if st.button("Next Claim"):
-                    keep_keys = ["appearance"]
-                    for key in list(st.session_state.keys()):
-                        if key not in keep_keys:
-                            del st.session_state[key]
-                    st.rerun()
+    with col_b:
+        if st.button("Next Claim"):
+            keep_keys = ["appearance"]
+            for key in list(st.session_state.keys()):
+                if key not in keep_keys:
+                    del st.session_state[key]
+             st.rerun()
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
