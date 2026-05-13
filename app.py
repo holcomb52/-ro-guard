@@ -707,7 +707,7 @@ with c:
     "Rental Days Billed",
     min_value=0,
     value=0,
-    step=1,
+    step=1, 
      key=f"rental_days_{job_no}"
                 )
     manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
