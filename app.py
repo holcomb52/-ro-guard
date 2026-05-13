@@ -611,19 +611,19 @@ def render_review():
         with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
-             concern = st.text_area(
+            concern = st.text_area(
             f"Concern – Job {job_no}",
             height=110,
             key=f"concern_{job_no}"
         )
 
-        cause = st.text_area(
+            cause = st.text_area(
             f"Cause – Job {job_no}",
             height=110,
             key=f"cause_{job_no}"
         )
 
-        correction = st.text_area(
+            correction = st.text_area(
             f"Correction – Job {job_no}",
             height=110,
             key=f"correction_{job_no}"
