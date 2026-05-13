@@ -558,8 +558,16 @@ def result_banner(status):
 # SCREENS
 # =========================
 
-def render_review():
-    st.header("RO Warranty Review")
+    def render_review():
+        st.header("RO Warranty Review")
+
+    col_a, col_b = st.columns([8, 2])
+
+    with col_b:
+        if st.button("Next Claim"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
