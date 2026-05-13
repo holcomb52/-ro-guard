@@ -569,7 +569,7 @@ def result_banner(status):
             for key in list(st.session_state.keys()):
                 if key not in keep_keys:
                     del st.session_state[key]
-             st.rerun()
+            st.rerun()
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
