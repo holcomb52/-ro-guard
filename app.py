@@ -660,7 +660,7 @@ if st.button(f"Use Suggested Narrative – Job {job_no}"):
     st.session_state[f"correction_{job_no}"] = built_correction
     st.rerun()
 
-            c1, c2, c3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
             with c1:
                 tech_flagged_time = st.number_input(
                     f"Tech Flagged Time - Job {job_no}",
