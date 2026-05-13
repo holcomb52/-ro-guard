@@ -611,9 +611,29 @@ def render_review():
         with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
-            concern = st.text_area(f"Concern - Job {job_no}", height=110, key=f"concern_{job_no}")
-            cause = st.text_area(f"Cause - Job {job_no}", height=110, key=f"cause_{job_no}")
-            correction = st.text_area(f"Correction - Job {job_no}", height=110, key=f"correction_{job_no}")
+             concern = st.text_area(
+            f"Concern – Job {job_no}",
+            height=110,
+            key=f"concern_{job_no}"
+        )
+
+        cause = st.text_area(
+            f"Cause – Job {job_no}",
+            height=110,
+            key=f"cause_{job_no}"
+        )
+
+        correction = st.text_area(
+            f"Correction – Job {job_no}",
+            height=110,
+            key=f"correction_{job_no}"
+        )
+
+        if st.button(f"Use Suggested Narrative – Job {job_no}"):
+            st.session_state[f"concern_{job_no}"] = built_concern
+            st.session_state[f"cause_{job_no}"] = built_cause
+            st.session_state[f"correction_{job_no}"] = built_correction
+            st.rerun()
 
             c1, c2, c3 = st.columns(3)
             with c1:
