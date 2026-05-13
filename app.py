@@ -669,21 +669,21 @@ with c1:
     step=0.1,
     key=f"tech_time_{job_no}"
                 )
-            with c2:
-                time_allotted = st.number_input(
-                    f"Time Allotted - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"allotted_{job_no}"
+with c2:
+    time_allotted = st.number_input(
+    f"Time Allotted - Job {job_no}",
+    min_value=0.0,
+    value=0.0,
+    step=0.1,
+    key=f"allotted_{job_no}"
                 )
-            with c3:
-                claim_value = st.number_input(
-                    f"Claim Value - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=1.0,
-                    key=f"claim_value_{job_no}"
+with c3:
+    claim_value = st.number_input(
+     f"Claim Value - Job {job_no}",
+     min_value=0.0,
+        value=0.0,
+        step=1.0,
+        key=f"claim_value_{job_no}"
                 )
 
             st.subheader("Required Warranty Checks")
