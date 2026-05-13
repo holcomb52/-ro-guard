@@ -783,7 +783,7 @@ def render_review():
             st.success("Narrative documentation looks strong.")
                   
         st.success("Narrative documentation looks strong.")
-                if job.get("wam_matches"):
+        if job.get("wam_matches"):
             st.markdown("### Matched WAM References")
             for match in job.get("wam_matches", []):
                 section = str(match.get("section", "WAM Reference"))
