@@ -849,20 +849,20 @@ Correction:
             st.success("Narrative documentation looks strong.")
                   
         st.success("Narrative documentation looks strong.")
-                if job.get("wam_matches"):
-                     st.markdown("### Matched WAM References")
-                     for match in job.get("wam_matches", []):
-                        section = str(match.get("section", "WAM Reference"))
-                        keywords = str(match.get("keywords", ""))
-                        content = str(match.get("content", ""))
+            if job.get("wam_matches"):
+                st.markdown("### Matched WAM References")
+                for match in job.get("wam_matches", []):
+                    section = str(match.get("section", "WAM Reference"))
+                    keywords = str(match.get("keywords", ""))
+                    content = str(match.get("content", ""))
 
-                        st.warning(f"WAM Section: {section}")
+                    st.warning(f"WAM Section: {section}")
 
-                        if keywords:
-                            st.caption(f"Keywords: {keywords}")
-
-                        if content:
-                            st.info(content[:1000])
+                     if keywords:
+                         st.caption(f"Keywords: {keywords}")
+                         
+                    if content:
+                         st.info(content[:1000])
         save_review({
             "ro_number": ro_number,
             "vin": vin,
