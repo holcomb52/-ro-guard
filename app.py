@@ -804,42 +804,42 @@ Correction:
 {built_correction}
 """
 
-        st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
-        st.markdown("### AI Narrative Recommendations")
+            st.text_area("Suggested CCC Narrative", value=ccc_text, height=220, key=f"ccc_{job['job_no']}")
+            st.markdown("### AI Narrative Recommendations")
 
-        ai_suggestions = []
+            ai_suggestions = []
 
-        cause_text = str(job.get("cause", "")).lower()
-        correction_text = str(job.get("correction", "")).lower()
+            cause_text = str(job.get("cause", "")).lower()
+            correction_text = str(job.get("correction", "")).lower()
 
-        if not any(word in cause_text for word in ["tested", "verified", "scanned", "measured"]):
-            ai_suggestions.append(
-                "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
+            if not any(word in cause_text for word in ["tested", "verified", "scanned", "measured"]):
+                ai_suggestions.append(
+                    "Cause recommendation: Add diagnostic steps used to identify the failure including scan results, measurements, or testing performed."
             )
 
-        if not any(word in correction_text for word in ["replaced", "repaired", "installed", "performed"]):
-            ai_suggestions.append(
-                "Correction recommendation: Clearly identify the repair performed and parts replaced."
+            if not any(word in correction_text for word in ["replaced", "repaired", "installed", "performed"]):
+                ai_suggestions.append(
+                    "Correction recommendation: Clearly identify the repair performed and parts replaced."
             )
 
-        if job.get("oil_leak") and not job.get("oil_dye_billed"):
-            ai_suggestions.append(
-                "Oil leak recommendation: Add oil dye usage and dye billing documentation."
+            if job.get("oil_leak") and not job.get("oil_dye_billed"):
+                ai_suggestions.append(
+                    "Oil leak recommendation: Add oil dye usage and dye billing documentation."
             )
 
-        if job.get("battery_replacement") and not job.get("battery_test_slip"):
-            ai_suggestions.append(
-                "Battery recommendation: Include battery test slip/code documentation."
+            if job.get("battery_replacement") and not job.get("battery_test_slip"):
+                ai_suggestions.append(
+                    "Battery recommendation: Include battery test slip/code documentation."
             )
 
-        if job.get("ac_repair") and not job.get("ac_evac_slip"):
-            ai_suggestions.append(
-                "A/C recommendation: Include EVAC/recharge machine documentation."
+            if job.get("ac_repair") and not job.get("ac_evac_slip"):
+                ai_suggestions.append(
+                    "A/C recommendation: Include EVAC/recharge machine documentation."
             )
 
-        if job.get("wam_matches"):
-            ai_suggestions.append(
-                "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
+            if job.get("wam_matches"):
+                ai_suggestions.append(
+                    "WAM recommendation: Review matched WAM/manual guidance and incorporate required terminology into the narrative."
             )
 
         if ai_suggestions:
