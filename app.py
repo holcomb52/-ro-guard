@@ -663,11 +663,11 @@ if st.button("Use Suggested Narrative"):
 c1, c2, c3 = st.columns(3)
 with c1:
     tech_flagged_time = st.number_input(
-    f"Tech Flagged Time - Job {job_no}",
+    "Tech Flagged Time – Job 1",
      min_value=0.0,
     value=0.0,
     step=0.1,
-    key=f"tech_time_{job_no}"
+    key="tech_time_1"
                 )
 with c2:
     time_allotted = st.number_input(
@@ -675,7 +675,7 @@ with c2:
     min_value=0.0,
     value=0.0,
     step=0.1,
-    key=f"allotted_{job_no}"
+    key="allotted_1"
                 )
 with c3:
     claim_value = st.number_input(
@@ -683,7 +683,7 @@ with c3:
      min_value=0.0,
         value=0.0,
         step=1.0,
-        key=f"claim_value_{job_no}"
+        key="claim_value_1"
                 )
     st.subheader("Required Warranty Checks")
 
