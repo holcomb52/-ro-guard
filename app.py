@@ -561,39 +561,33 @@ def result_banner(status):
 
 def render_review():
     st.header("RO Warranty Review")
-
-    col_a, col_b = st.columns([8, 2])
-
-with col_a:
-    st.empty()
-
-with col_b:
-        if st.button("Next Claim"):
-            for key in list(st.session_state.keys()):
-                if key.startswith((
-                    "concern_",
-                    "cause_",
-                    "correction_",
-                    "tech_time_",
-                    "allotted_",
-                    "claim_value_",
-                    "oil_leak_",
-                    "oil_dye_",
-                    "battery_",
-                    "battery_slip_",
-                    "sublet_",
-                    "sublet_vin_",
-                    "sublet_mileage_",
-                    "sublet_notes_",
-                    "rental_",
-                    "rental_days_",
-                    "rental_signed_",
-                    "addon_",
-                    "manager_approval_",
-                    "ac_",
-                    "ac_slip_",
-                    "parts_warranty_",
-                    "mopa_"
+    
+    if st.button("Next Claim"):
+        for key in list(st.session_state.keys()):
+            if key.startswith((
+                "concern_",
+                "cause_",
+                 "correction_",
+                "tech_time_",
+                "allotted_",
+                "claim_value_",
+                "oil_leak_",
+                "oil_dye_",
+                "battery_",
+                "battery_slip_",
+                "sublet_",
+                "sublet_vin_",
+                "sublet_mileage_",
+                "sublet_notes_",
+                "rental_",
+                "rental_days_",
+                "rental_signed_",
+                "addon_",
+                "manager_approval_",
+                "ac_",
+                "ac_slip_",
+                "parts_warranty_",
+                "mopa_"
         )):
                     del st.session_state[key]
 
