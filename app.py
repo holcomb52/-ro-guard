@@ -901,8 +901,8 @@ else:
     save_review({
         "ro_number": ro_number,
         "vin": vin,
-        "ro_invoiced": str(ro_invoiced),
-        "day_submitted": str(day_submitted),
+        "ro_invoiced": str(ro_invoiced) if ro_invoiced else None,
+        "day_submitted": str(day_submitted) if day_submitted else None,
         "days_to_submit": days_to_submit,
         "first_pass_paid": 1 if first_pass_paid else 0,
         "rejected": 1 if rejected else 0,
