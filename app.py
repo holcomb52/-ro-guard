@@ -770,6 +770,7 @@ for job in jobs:
     job["warnings"] = warn
     job["score"] = score
 
+    scores = []
     scores.append(score)
     all_hard.extend(hard)
     all_warn.extend(warn)
