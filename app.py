@@ -764,31 +764,31 @@ if st.button("Run Audit + Save Review", type="primary", use_container_width=True
      total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
      hard_value = 0.0
 
-    for job in jobs:
-        hard, warn, score = audit_job(job, time_bypass)
-
-        job["hard_stops"] = hard
-        job["warnings"] = warn
-        job["score"] = score
-
-        scores.append(score)
-        all_hard.extend(hard)
-        all_warn.extend(warn)
-
-        if hard:
-            hard_value += float(job.get("claim_value") or 0)
-
-    final_score = int(sum(scores) / len(scores)) if scores else 0
-    status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
-
-    result_banner(status)
-
-    x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-    x1.metric("Audit Score", final_score)
-    x2.metric("Status", status)
-    x3.metric("Total Claim Value", f"${total_value:,.2f}")
-    x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-    x5.metric("Hard Stops", len(all_hard))
+        for job in jobs:
+            hard, warn, score = audit_job(job, time_bypass)
+    
+            job["hard_stops"] = hard
+            job["warnings"] = warn
+            job["score"] = score
+    
+            scores.append(score)
+            all_hard.extend(hard)
+            all_warn.extend(warn)
+    
+            if hard:
+                hard_value += float(job.get("claim_value") or 0)
+    
+        final_score = int(sum(scores) / len(scores)) if scores else 0
+        status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
+    
+        result_banner(status)
+    
+        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+        x1.metric("Audit Score", final_score)
+        x2.metric("Status", status)
+        x3.metric("Total Claim Value", f"${total_value:,.2f}")
+        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+        x5.metric("Hard Stops", len(all_hard))
 
 for job in jobs:
     with st.expander(f"Job {job['job_no']} Results", expanded=True):
