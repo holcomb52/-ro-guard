@@ -452,7 +452,7 @@ def audit_job(job, time_bypass):
             warn.append("Pencil Wrench Cause: failure is not clearly identified.")
 
     # Pencil Wrench correction grading
-    correction_text = job["correction"].lower()
+    correction_text = job["correction"].lower() 
     if job["correction"].strip():
         if not any(x in correction_text for x in ["replaced", "repaired", "installed", "removed", "programmed", "performed"]):
             warn.append("Pencil Wrench Correction: repair action is not clearly identified.")
