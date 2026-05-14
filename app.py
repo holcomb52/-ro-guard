@@ -525,7 +525,7 @@ def audit_job(job, time_bypass):
         if "battery" in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() and not job.get("battery_test_slip"):
             warn.append(f"WAM Suggestion - {section}: Battery claim may require battery test slip/code.")
 
-        if "a/c" in content.lower() or "evac" in content.lower() or "recharge" in content.lower():
+        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["a/c", "evac", "recharge"]):
             if job.get("ac_repair") and not job.get("ac_evac_slip"):
                 warn.append(f"WAM Suggestion - {section}: A/C claim may require EVAC/recharge documentation.")
 
