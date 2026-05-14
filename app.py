@@ -690,16 +690,16 @@ with c3:
     a, b, c, d = st.columns(4)
 
 with a:
-    oil_leak = st.checkbox("Oil Leak", key="oil_leak_1")
-    oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_1}")
-    battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_1}")
-    battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_1}")
+    oil_leak = st.checkbox("Oil Leak", key="oil_leak_1"
+    oil_dye_billed = st.checkbox("Oil Dye Billed",key="oil_dye_1"
+    battery_replacement = st.checkbox("Battery Replacement",key="battery_1"
+    battery_test_slip = st.checkbox("Battery Test Slip",key="battery_slip_1"
 
 with b:
-    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_1}")
-    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_1}")
-    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_1}")
-    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_1}")
+    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_1"
+    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_1"
+    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_1"
+    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_1"
 
 with c:
     rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_1}")
