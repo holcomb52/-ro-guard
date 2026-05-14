@@ -890,6 +890,10 @@ else:
     first_pass_paid = st.session_state.get("first_pass_paid", False)
     rejected = st.session_state.get("rejected", False)
     rejection_reason = st.session_state.get("rejection_reason", "")
+
+    advisor = st.session_state.get("advisor", "")
+    technician = st.session_state.get("technician", "")
+    warranty_admin = st.session_state.get("warranty_admin", "")
     
     save_review({
         "ro_number": ro_number,
