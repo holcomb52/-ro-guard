@@ -771,9 +771,9 @@ for job in jobs:
     job["warnings"] = warn
     job["score"] = score
 
-            scores.append(score)
-            all_hard.extend(hard)
-            all_warn.extend(warn)
+    scores.append(score)
+    all_hard.extend(hard)
+    all_warn.extend(warn)
 
             if hard:
                 hard_value += float(job.get("claim_value") or 0)
