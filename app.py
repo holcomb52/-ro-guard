@@ -748,39 +748,39 @@ with d:
         key="mopa_1"
     )
 
-    jobs.append({
-        "job_no": "1",
-        "concern": concern,
-        "cause": cause,
-        "correction": correction,
+        jobs.append({
+            "job_no": "1",
+            "concern": concern,
+            "cause": cause,
+            "correction": correction,
 
-         "tech_flagged_time": tech_flagged_time,
-         "time_allotted": time_allotted,
-         "claim_value": claim_value,
+            "tech_flagged_time": tech_flagged_time,
+            "time_allotted": time_allotted,
+            "claim_value": claim_value,
 
-         "oil_leak": oil_leak,
-         "oil_dye_billed": oil_dye_billed,
+            "oil_leak": oil_leak,
+            "oil_dye_billed": oil_dye_billed,
 
-         "battery_replacement": battery_replacement,
-         "battery_test_slip": battery_test_slip,
+            "battery_replacement": battery_replacement,
+            "battery_test_slip": battery_test_slip,
 
-        "sublet_repair": sublet_repair,
-        "sublet_vin": sublet_vin,
-        "sublet_mileage": sublet_mileage,
-        "sublet_notes": sublet_notes,
+            "sublet_repair": sublet_repair,
+            "sublet_vin": sublet_vin,
+            "sublet_mileage": sublet_mileage,
+            "sublet_notes": sublet_notes,
 
-        "rental_involved": rental_involved,
-        "rental_days": rental_days,
-        "manager_signed_rental": manager_signed_rental,
+            "rental_involved": rental_involved,
+            "rental_days": rental_days,
+            "manager_signed_rental": manager_signed_rental,
 
-        "warranty_add_on": warranty_add_on,
-         "manager_approval": manager_approval,
+            "warranty_add_on": warranty_add_on,
+            "manager_approval": manager_approval,
 
-         "ac_repair": ac_repair,
-        "ac_evac_slip": ac_evac_slip,
+            "ac_repair": ac_repair,
+            "ac_evac_slip": ac_evac_slip,
 
-        "parts_warranty": parts_warranty,
-        "mopa_original_ro": mopa_original_ro
+            "parts_warranty": parts_warranty,
+            "mopa_original_ro": mopa_original_ro
         })
 
     st.divider()
