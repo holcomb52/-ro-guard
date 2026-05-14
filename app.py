@@ -603,7 +603,7 @@ def render_review():
         step=1
     )
 
-        jobs = []
+    jobs = []
 
     for i in range(int(job_count)):
         job_no = i + 1
