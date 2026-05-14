@@ -766,9 +766,17 @@ if st.button("Run Audit + Save Review", type="primary", use_container_width=True
 
 for job in jobs:
     hard, warn, score = audit_job(job, time_bypass)
+
     job["hard_stops"] = hard
     job["warnings"] = warn
     job["score"] = score
+
+    scores.append(score)
+    all_hard.extend(hard)
+    all_warn.extend(warn)
+
+    if hard:
+        hard_value += float(job.get("claim_value") or 0)
 
     scores = []
     scores.append(score)
