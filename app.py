@@ -598,29 +598,29 @@ with col_b:
                     del st.session_state[key]
 
     
-    ro_number = st.text_input("RO Number")
-    vin = st.text_input("VIN")
-    ro_invoiced = st.date_input("RO Invoiced / Closed Date")
-    day_submitted = st.date_input("Day Submitted")
-    first_pass_paid = st.checkbox("Paid on First Submission")
-    rejected = st.checkbox("Rejected / Returned")
-    rejection_reason = st.text_area("Rejection Reason", height=100) if rejected else ""
-
-    days_to_submit = (day_submitted - ro_invoiced).days
-
-    st.metric("Days to Submit", days_to_submit)
-    personnel_df = load_personnel()
-
-    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
-    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
-    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
-    manager_list = personnel_df[personnel_df["role"] == "Manager"]["name"].tolist()
-
-    advisor = st.selectbox("Advisor", advisor_list)
-    technician = st.selectbox("Technician", tech_list)
-    warranty_admin = st.selectbox("Warranty Admin", warranty_list)
-
-    st.divider()
+        ro_number = st.text_input("RO Number")
+        vin = st.text_input("VIN")
+        ro_invoiced = st.date_input("RO Invoiced / Closed Date")
+        day_submitted = st.date_input("Day Submitted")
+        first_pass_paid = st.checkbox("Paid on First Submission")
+        rejected = st.checkbox("Rejected / Returned")
+        rejection_reason = st.text_area("Rejection Reason", height=100) if rejected else ""
+    
+        days_to_submit = (day_submitted - ro_invoiced).days
+    
+        st.metric("Days to Submit", days_to_submit)
+        personnel_df = load_personnel()
+    
+        advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+        tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+        warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+        manager_list = personnel_df[personnel_df["role"] == "Manager"]["name"].tolist()
+    
+        advisor = st.selectbox("Advisor", advisor_list)
+        technician = st.selectbox("Technician", tech_list)
+        warranty_admin = st.selectbox("Warranty Admin", warranty_list)
+    
+        st.divider()
 
 if "job_count" not in st.session_state:
     st.session_state.job_count = 1
