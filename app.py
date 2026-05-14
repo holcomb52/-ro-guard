@@ -886,6 +886,10 @@ else:
     ro_invoiced = st.session_state.get("ro_invoiced", "")
     day_submitted = st.session_state.get("day_submitted", "")
     days_to_submit = 0
+
+    first_pass_paid = st.session_state.get("first_pass_paid", False)
+    rejected = st.session_state.get("rejected", False)
+    rejection_reason = st.session_state.get("rejection_reason", "")
     
     save_review({
         "ro_number": ro_number,
