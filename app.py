@@ -690,10 +690,10 @@ with c3:
     a, b, c, d = st.columns(4)
 
 with a:
-    oil_leak = st.checkbox("Oil Leak",key="oil_leak_1" 
-    oil_dye_billed = st.checkbox("Oil Dye Billed",key="oil_dye_1"
-    battery_replacement = st.checkbox("Battery Replacement",key="battery_1"
-    battery_test_slip = st.checkbox("Battery Test Slip",key="battery_slip_1"
+    oil_leak = st.checkbox("Oil Leak", key="oil_leak_1")
+    oil_dye_billed = st.checkbox("Oil Dye Billed", key="oil_dye_1")
+    battery_replacement = st.checkbox("Battery Replacement", key="battery_1")
+    battery_test_slip = st.checkbox("Battery Test Slip", key="battery_slip_1")
 
 with b:
     sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_1"
@@ -702,7 +702,7 @@ with b:
     sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_1"
 
 with c:
-    rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_1}")
+    rental_involved = st.checkbox("Rental Involved", key=f"rental_1"
     rental_days = st.number_input(
     "Rental Days Billed",
     min_value=0,
