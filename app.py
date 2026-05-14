@@ -781,7 +781,7 @@ if hard:
     final_score = int(sum(scores) / len(scores)) if scores else 0
     status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
 
-        result_banner(status)
+    result_banner(status)
 
         x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
         x1.metric("Audit Score", final_score)
