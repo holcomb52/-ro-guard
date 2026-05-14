@@ -564,7 +564,10 @@ def render_review():
 
     col_a, col_b = st.columns([8, 2])
 
-    with col_b:
+with col_a:
+    st.empty()
+
+with col_b:
         if st.button("Next Claim"):
             for key in list(st.session_state.keys()):
                 if key.startswith((
