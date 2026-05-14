@@ -533,7 +533,7 @@ def audit_job(job, time_bypass):
             if job.get("oil_leak") and not job.get("oil_dye_billed"):
                 warn.append(f"WAM Suggestion - {section}: Oil leak documentation should mention dye usage and dye billing.")
 
-        if "manager approval" in content.lower() or "authorization" in content.lower():
+        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["manager approval", "authorization"]):
             if job.get("add_on") and not job.get("manager_signed"):
                 hard.append(f"WAM Hard Stop - {section}: Add-on repair may require manager authorization.")
 
