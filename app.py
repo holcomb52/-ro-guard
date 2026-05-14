@@ -696,10 +696,10 @@ with a:
     battery_test_slip = st.checkbox("Battery Test Slip", key="battery_slip_1")
 
 with b:
-    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_1"
-    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_1"
-    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_1"
-    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_1"
+    sublet_repair = st.checkbox("Sublet Repair",key="sublet_1"
+    sublet_vin = st.checkbox("Sublet VIN Present",key="sublet_vin_1"
+    sublet_mileage = st.checkbox("Sublet Mileage Present",key="sublet_mileage_1"
+    sublet_notes = st.checkbox("Sublet Detailed Notes Present",key="sublet_notes_1"
 
 with c:
     rental_involved = st.checkbox("Rental Involved", key=f"rental_1"
