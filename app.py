@@ -881,6 +881,12 @@ Correction:
 else:
     st.success("Narrative documentation looks strong.")
 
+    ro_number = st.session_state.get("ro_number", "")
+    vin = st.session_state.get("vin", "")
+    ro_invoiced = st.session_state.get("ro_invoiced", "")
+    day_submitted = st.session_state.get("day_submitted", "")
+    days_to_submit = 0
+    
     save_review({
         "ro_number": ro_number,
         "vin": vin,
