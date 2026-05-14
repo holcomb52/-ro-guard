@@ -875,8 +875,8 @@ Correction:
             if ai_suggestions:
                 for suggestion in ai_suggestions:
                     st.info(suggestion)
-    else:
-        st.success("Narrative documentation looks strong.")
+else:
+    st.success("Narrative documentation looks strong.")
 
     save_review({
         "ro_number": ro_number,
