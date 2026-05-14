@@ -529,7 +529,7 @@ def audit_job(job, time_bypass):
             if job.get("ac_repair") and not job.get("ac_evac_slip"):
                 warn.append(f"WAM Suggestion - {section}: A/C claim may require EVAC/recharge documentation.")
 
-        if "oil dye" in content.lower() or "dye" in content.lower():
+        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["oil dye", "dye"]):
             if job.get("oil_leak") and not job.get("oil_dye_billed"):
                 warn.append(f"WAM Suggestion - {section}: Oil leak documentation should mention dye usage and dye billing.")
 
