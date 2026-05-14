@@ -566,11 +566,35 @@ def render_review():
 
     with col_b:
         if st.button("Next Claim"):
-            keep_keys = ["appearance"]
-            for key in list(st.session_state.keys()):
-                if key not in keep_keys:
-                    del st.session_state[key]
-            st.rerun()
+    for key in list(st.session_state.keys()):
+        if key.startswith((
+            "concern_",
+            "cause_",
+            "correction_",
+            "tech_time_",
+            "allotted_",
+            "claim_value_",
+            "oil_leak_",
+            "oil_dye_",
+            "battery_",
+            "battery_slip_",
+            "sublet_",
+            "sublet_vin_",
+            "sublet_mileage_",
+            "sublet_notes_",
+            "rental_",
+            "rental_days_",
+            "rental_signed_",
+            "addon_",
+            "manager_approval_",
+            "ac_",
+            "ac_slip_",
+            "parts_warranty_",
+            "mopa_"
+        )):
+            del st.session_state[key]
+
+    st.rerun()
 
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
