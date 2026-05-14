@@ -7,6 +7,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 import json
 import sqlite3
+import re
 from datetime import datetime
 from pathlib import Path
 
