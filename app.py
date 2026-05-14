@@ -778,14 +778,6 @@ for job in jobs:
     if hard:
         hard_value += float(job.get("claim_value") or 0)
 
-    scores = []
-    scores.append(score)
-    all_hard.extend(hard)
-    all_warn.extend(warn)
-
-if hard:
-    hard_value += float(job.get("claim_value") or 0)
-
     final_score = int(sum(scores) / len(scores)) if scores else 0
     status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
 
