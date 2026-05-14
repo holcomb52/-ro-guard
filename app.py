@@ -620,13 +620,19 @@ def render_review():
 
     st.divider()
 
-    job_count = st.number_input(
-        "How many warranty jobs are on this RO?",
-        min_value=1,
-        max_value=10,
-        value=1,
-        step=1
-    )
+if "job_count" not in st.session_state:
+    st.session_state.job_count = 1
+
+job_count = st.number_input(
+    "How many warranty jobs are on this RO?",
+    min_value=1,
+    max_value=10,
+    value=st.session_state.job_count,
+    step=1,
+    key="job_count"
+)
+
+st.session_state.job_count = job_count
 
     jobs = []
 
