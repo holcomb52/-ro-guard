@@ -690,38 +690,38 @@ with c3:
     a, b, c, d = st.columns(4)
 
 with a:
-    oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
-    oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
-    battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-    battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
+    oil_leak = st.checkbox("Oil Leak", key="oil_leak_1")
+    oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_1}")
+    battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_1}")
+    battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_1}")
 
 with b:
-    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
-    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
-    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
-    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
+    sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_1}")
+    sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_1}")
+    sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_1}")
+    sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_1}")
 
 with c:
-    rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
+    rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_1}")
     rental_days = st.number_input(
     "Rental Days Billed",
     min_value=0,
     value=0,
     step=1, 
-     key=f"rental_days_{job_no}"
+     key=f"rental_days_{job_1}"
                 )
-    manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
+    manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_1}")
 
 with d:
-    warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
-    manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
-    ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
-    ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-    parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
-    mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_no}")
+    warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_1}")
+    manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_1}")
+    ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_1}")
+    ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_1}")
+    parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_1}")
+    mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_1}")
 
     jobs.append({
-        "job_no": str(job_no),
+        "job_no": str(job_1),
         "concern": concern,
         "cause": cause,
         "correction": correction,
