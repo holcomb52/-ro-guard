@@ -597,6 +597,7 @@ with col_b:
         )):
                     del st.session_state[key]
 
+    
     ro_number = st.text_input("RO Number")
     vin = st.text_input("VIN")
     ro_invoiced = st.date_input("RO Invoiced / Closed Date")
