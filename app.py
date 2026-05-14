@@ -634,9 +634,9 @@ job_count = st.number_input(
 
 st.session_state.job_count = job_count
 
-    jobs = []
+jobs = []
 
-    for i in range(int(job_count)):
+for i in range(int(job_count)):
         job_no = i + 1
 
         with st.expander(f"Job {job_no}", expanded=True):
