@@ -754,7 +754,7 @@ for i in range(int(job_count)):
 
             st.divider()
 
-time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
+time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation") 
 time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
 
 if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
