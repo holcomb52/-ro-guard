@@ -790,14 +790,14 @@ if hard:
     x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
     x5.metric("Hard Stops", len(all_hard))
 
-        for job in jobs:
-            with st.expander(f"Job {job['job_no']} Results", expanded=True):
-                for h in job["hard_stops"]:
-                    st.error(h)
-                for w in job["warnings"]:
-                    st.warning(w)
-                if not job["hard_stops"] and not job["warnings"]:
-                    st.success("No audit issues found.")
+for job in jobs:
+    with st.expander(f"Job {job['job_no']} Results", expanded=True):
+        for h in job["hard_stops"]:
+            st.error(h)
+        for w in job["warnings"]:
+            st.warning(w)
+        if not job["hard_stops"] and not job["warnings"]:
+            st.success("No audit issues found.")
             st.markdown("### Auto-Built CCC Narrative")
 
             concern_text = str(job.get("concern", "")).strip()
