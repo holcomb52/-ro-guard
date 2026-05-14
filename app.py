@@ -748,7 +748,7 @@ with d:
         key="mopa_1"
     )
 
-    jobs.append({
+jobs.append({
     "job_no": "1",
     "concern": concern,
     "cause": cause,
