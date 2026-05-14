@@ -783,7 +783,7 @@ jobs.append({
     "mopa_original_ro": mopa_original_ro
         })
 
-    st.divider()
+st.divider()
 
     time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
     time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
