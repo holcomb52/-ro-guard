@@ -690,7 +690,7 @@ with c3:
     a, b, c, d = st.columns(4)
 
 with a:
-    oil_leak = st.checkbox("Oil Leak",key="oil_leak_1"
+    oil_leak = st.checkbox("Oil Leak",key="oil_leak_1" 
     oil_dye_billed = st.checkbox("Oil Dye Billed",key="oil_dye_1"
     battery_replacement = st.checkbox("Battery Replacement",key="battery_1"
     battery_test_slip = st.checkbox("Battery Test Slip",key="battery_slip_1"
