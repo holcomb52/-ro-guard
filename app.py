@@ -758,12 +758,12 @@ for i in range(int(job_count)):
 time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
 time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
 
-    if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
-        all_hard = []
-        all_warn = []
-        scores = []
-        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
-        hard_value = 0.0
+if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+     all_hard = []
+     all_warn = []
+     scores = []
+     total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+     hard_value = 0.0
 
         for job in jobs:
             hard, warn, score = audit_job(job, time_bypass)
