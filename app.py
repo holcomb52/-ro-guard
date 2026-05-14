@@ -783,12 +783,12 @@ if hard:
 
     result_banner(status)
 
-        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-        x1.metric("Audit Score", final_score)
-        x2.metric("Status", status)
-        x3.metric("Total Claim Value", f"${total_value:,.2f}")
-        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-        x5.metric("Hard Stops", len(all_hard))
+    x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+    x1.metric("Audit Score", final_score)
+    x2.metric("Status", status)
+    x3.metric("Total Claim Value", f"${total_value:,.2f}")
+    x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+    x5.metric("Hard Stops", len(all_hard))
 
         for job in jobs:
             with st.expander(f"Job {job['job_no']} Results", expanded=True):
