@@ -658,7 +658,7 @@ def render_review():
 
     st.markdown("---")
 
-     ro_number = st.text_input("RO Number", key="ro_number")
+    ro_number = st.text_input("RO Number", key="ro_number")
     vin = st.text_input("VIN", key="vin")
     ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
     day_submitted = st.date_input("Day Submitted", key="day_submitted")
