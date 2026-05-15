@@ -709,18 +709,18 @@ if st.button("Run Audit + Save Review", type="primary", use_container_width=True
     x5.metric("Hard Stops", len(all_hard))
     
     for job in jobs:
-    with st.expander(f"Job {job['job_no']} Results", expanded=True):
-    
-        for h in job.get("hard_stops", []):
-            st.error(h)
-    
-        for w in job.get("warnings", []):
-            st.warning(w)
-    
-        if not job.get("hard_stops") and not job.get("warnings"):
-            st.success("No audit issues found.")
-    
-            st.divider()
+        with st.expander(f"Job {job['job_no']} Results", expanded=True):
+        
+            for h in job.get("hard_stops", []):
+                st.error(h)
+        
+            for w in job.get("warnings", []):
+                st.warning(w)
+        
+            if not job.get("hard_stops") and not job.get("warnings"):
+                st.success("No audit issues found.")
+        
+                st.divider()
 
     if st.button("Next Claim"):
         for key in list(st.session_state.keys()):
