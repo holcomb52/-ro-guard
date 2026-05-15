@@ -656,7 +656,9 @@ def render_review():
 
     st.markdown("---")
 
-    ro_number = st.text_input("RO Number", key="ro_number")
+    st.markdown("---")
+
+     ro_number = st.text_input("RO Number", key="ro_number")
     vin = st.text_input("VIN", key="vin")
     ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
     day_submitted = st.date_input("Day Submitted", key="day_submitted")
@@ -675,8 +677,6 @@ def render_review():
     advisor = st.selectbox("Advisor", advisor_list, key="advisor")
     technician = st.selectbox("Technician", tech_list, key="technician")
     warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
-
-    st.markdown("---")
 
     time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
     time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
