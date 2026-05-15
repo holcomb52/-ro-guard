@@ -582,10 +582,6 @@ def render_review():
                 )):
                     del st.session_state[key]
 
-            st.rerun()
-
-            for key in list(st.session_state.keys()):
-
                 if key.startswith((
                     "ro_number",
                     "vin",
