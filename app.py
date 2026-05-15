@@ -562,45 +562,7 @@ def result_banner(status):
 def render_review():
     st.header("RO Warranty Review")
 
-    if st.button("Next Claim"):
-        for key in list(st.session_state.keys()):
-            if key.startswith((
-                "ro_number", "vin", "ro_invoiced", "day_submitted",
-                "first_pass_paid", "rejected", "rejection_reason",
-                "advisor", "technician", "warranty_admin",
-                "concern_", "cause_", "correction_",
-                "tech_time_", "allotted_", "claim_value_",
-                "oil_leak_", "oil_dye_", "battery_", "battery_slip_",
-                "sublet_", "sublet_vin_", "sublet_mileage_", "sublet_notes_",
-                "rental_", "rental_days_", "rental_signed_",
-                "addon_", "manager_approval_", "ac_", "ac_slip_",
-                "parts_warranty_", "mopa_"
-            )):
-                del st.session_state[key]
-        st.rerun()
-
-if "job_count" not in st.session_state:
-    st.session_state.job_count = 1
-
-job_count = st.number_input(
-    "How many warranty jobs are on this RO?",
-    min_value=1,
-    max_value=10,
-    value=st.session_state.job_count,
-    step=1,
-    key="job_count"
-)
-
-
-jobs = []
-
-for i in range(int(job_count)):
-        job_no = i + 1
-
-        st.markdown("---")
-        st.subheader("Warranty Job Documentation")
-
-        with st.expander(f"Job {job_no}", expanded=True):
+    with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
             concern = st.text_area(
@@ -715,6 +677,44 @@ for i in range(int(job_count)):
             })
 
             st.divider()
+
+    if st.button("Next Claim"):
+        for key in list(st.session_state.keys()):
+            if key.startswith((
+                "ro_number", "vin", "ro_invoiced", "day_submitted",
+                "first_pass_paid", "rejected", "rejection_reason",
+                "advisor", "technician", "warranty_admin",
+                "concern_", "cause_", "correction_",
+                "tech_time_", "allotted_", "claim_value_",
+                "oil_leak_", "oil_dye_", "battery_", "battery_slip_",
+                "sublet_", "sublet_vin_", "sublet_mileage_", "sublet_notes_",
+                "rental_", "rental_days_", "rental_signed_",
+                "addon_", "manager_approval_", "ac_", "ac_slip_",
+                "parts_warranty_", "mopa_"
+            )):
+                del st.session_state[key]
+        st.rerun()
+
+if "job_count" not in st.session_state:
+    st.session_state.job_count = 1
+
+job_count = st.number_input(
+    "How many warranty jobs are on this RO?",
+    min_value=1,
+    max_value=10,
+    value=st.session_state.job_count,
+    step=1,
+    key="job_count"
+)
+
+
+jobs = []
+
+for i in range(int(job_count)):
+        job_no = i + 1
+
+        st.markdown("---")
+        st.subheader("Warranty Job Documentation")
 
 ro_number = st.text_input("RO Number", key="ro_number")
 vin = st.text_input("VIN", key="vin")
