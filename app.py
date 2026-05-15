@@ -584,9 +584,6 @@ def render_review():
 
             st.rerun()
 
-    with col_b:
-        if st.button("Next Claim"):
-
             for key in list(st.session_state.keys()):
 
                 if key.startswith((
