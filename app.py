@@ -563,7 +563,8 @@ def render_review():
     col_a, col_b = st.columns([8, 2])
 
     with col_a:
-        st.header("RO Warranty Review")
+        st.header("RO Warranty Review™")
+        st.caption("Patent Pending Technology")
 
     with col_b:
         if st.button("Next Claim"):
@@ -1178,7 +1179,7 @@ def main():
     apply_style()
 
     st.sidebar.markdown("## 🛡️ RO Shield")
-    st.sidebar.caption("Final Production Polish")
+    st.sidebar.caption("Final Production Polish • Patent Pending")
     st.sidebar.selectbox("Appearance", ["Dark"], index=0)
 
     tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
