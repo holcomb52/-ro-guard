@@ -897,10 +897,7 @@ def render_review():
 
         st.success("Review saved to Reporting.")
 
-    if st.button("Next Claim"):
-
-        for key in list(st.session_state.keys()):
-
+   
 
 def render_claims():
     st.header("Claim Learning Upload")
