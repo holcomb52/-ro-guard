@@ -560,7 +560,6 @@ def result_banner(status):
 # =========================
 
 def render_review():
-    def render_review():
     st.header("RO Warranty Review")
 
     if st.button("Next Claim"):
