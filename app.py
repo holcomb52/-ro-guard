@@ -560,11 +560,10 @@ def result_banner(status):
 # =========================
 
 def render_review():
-    st.header("RO Warranty Review")
 
     if "job_count" not in st.session_state:
         st.session_state.job_count = 1
-
+st.header("RO Warranty Review")
     job_count = st.number_input(
         "How many warranty jobs are on this RO?",
         min_value=1,
