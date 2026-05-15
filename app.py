@@ -561,7 +561,16 @@ def result_banner(status):
 
 def render_review():
     st.header("RO Warranty Review")
-
+    if st.session_state.get("scroll_to_top"):
+        st.session_state["scroll_to_top"] = False
+        st.markdown(
+            """
+            <script>
+            window.scrollTo(0,0);
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
     with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
@@ -737,6 +746,7 @@ if st.button("Run Audit + Save Review", type="primary", use_container_width=True
                 "parts_warranty_", "mopa_"
             )):
                 del st.session_state[key]
+        st.session_state["scroll_to_top"] = True
         st.rerun()
 
 if "job_count" not in st.session_state:
