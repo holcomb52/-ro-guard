@@ -579,30 +579,7 @@ def render_review():
                 del st.session_state[key]
         st.rerun()
 
-    ro_number = st.text_input("RO Number", key="ro_number")
-    vin = st.text_input("VIN", key="vin")
-    ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
-    day_submitted = st.date_input("Day Submitted", key="day_submitted")
-    first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
-    rejected = st.checkbox("Rejected / Returned", key="rejected")
-    rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
-
-    days_to_submit = (day_submitted - ro_invoiced).days
-    st.metric("Days to Submit", days_to_submit)
-
-    personnel_df = load_personnel()
-    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
-    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
-    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
-
-    advisor = st.selectbox("Advisor", advisor_list, key="advisor")
-    technician = st.selectbox("Technician", tech_list, key="technician")
-    warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
-
-    st.divider()
-
-
-if "job_count" not in st.session_state:
+    if "job_count" not in st.session_state:
     st.session_state.job_count = 1
 
 job_count = st.number_input(
@@ -738,6 +715,29 @@ for i in range(int(job_count)):
             })
 
             st.divider()
+
+    ro_number = st.text_input("RO Number", key="ro_number")
+    vin = st.text_input("VIN", key="vin")
+    ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
+    day_submitted = st.date_input("Day Submitted", key="day_submitted")
+    first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
+    rejected = st.checkbox("Rejected / Returned", key="rejected")
+    rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
+
+    days_to_submit = (day_submitted - ro_invoiced).days
+    st.metric("Days to Submit", days_to_submit)
+
+    personnel_df = load_personnel()
+    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+
+    advisor = st.selectbox("Advisor", advisor_list, key="advisor")
+    technician = st.selectbox("Technician", tech_list, key="technician")
+    warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
+
+    st.divider()
+
 
 time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation") 
 time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
