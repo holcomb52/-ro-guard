@@ -579,7 +579,7 @@ def render_review():
                 del st.session_state[key]
         st.rerun()
 
-    if "job_count" not in st.session_state:
+if "job_count" not in st.session_state:
     st.session_state.job_count = 1
 
 job_count = st.number_input(
