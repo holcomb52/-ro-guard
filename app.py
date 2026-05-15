@@ -630,7 +630,7 @@ def render_review():
     )
 
      warranty_admin = st.selectbox(
-        "Warranty Admin",
+        "Warranty Admin", 
         warranty_list,
         key="warranty_admin"
     )
