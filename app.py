@@ -719,7 +719,6 @@ with st.expander(f"Job {job['job_no']} Results", expanded=True):
 
     if not job.get("hard_stops") and not job.get("warnings"):
         st.success("No audit issues found.")
-        })
 
         st.divider()
 
