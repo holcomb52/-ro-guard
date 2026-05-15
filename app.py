@@ -690,7 +690,7 @@ def render_review():
             jobs.append({
                 "job_no": str(job_no),
                 "concern": concern,
-                "cause": cause,
+                "cause": cause, 
                 "correction": correction,
                 "tech_flagged_time": tech_flagged_time,
                 "time_allotted": time_allotted,
