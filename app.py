@@ -561,96 +561,66 @@ def result_banner(status):
 
 def render_review():
     st.header("RO Warranty Review")
-    if st.session_state.get("scroll_to_top"):
-        st.session_state["scroll_to_top"] = False
-        st.markdown(
-            """
-            <script>
-            window.scrollTo(0,0);
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
-    with st.expander(f"Job {job_no}", expanded=True):
+
+    if "job_count" not in st.session_state:
+        st.session_state.job_count = 1
+
+    job_count = st.number_input(
+        "How many warranty jobs are on this RO?",
+        min_value=1,
+        max_value=10,
+        value=st.session_state.job_count,
+        step=1,
+        key="job_count"
+    )
+
+    st.markdown("---")
+    st.subheader("Warranty Job Documentation")
+
+    jobs = []
+
+    for i in range(int(job_count)):
+        job_no = i + 1
+
+        with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
-            concern = st.text_area(
-                f"Concern - Job {job_no}",
-                height=110,
-                key=f"concern_{job_no}"
-            )
-
-            cause = st.text_area(
-                f"Cause - Job {job_no}",
-                height=110,
-                key=f"cause_{job_no}"
-            )
-
-            correction = st.text_area(
-                f"Correction - Job {job_no}",
-                height=110,
-                key=f"correction_{job_no}"
-            )
+            concern = st.text_area(f"Concern - Job {job_no}", height=110, key=f"concern_{job_no}")
+            cause = st.text_area(f"Cause - Job {job_no}", height=110, key=f"cause_{job_no}")
+            correction = st.text_area(f"Correction - Job {job_no}", height=110, key=f"correction_{job_no}")
 
             st.button(f"Use Suggested Narrative - Job {job_no}", key=f"use_suggested_{job_no}")
 
             c1, c2, c3 = st.columns(3)
-
             with c1:
-                tech_flagged_time = st.number_input(
-                    f"Tech Flagged Time - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"tech_time_{job_no}"
-                )
-
+                tech_flagged_time = st.number_input(f"Tech Flagged Time - Job {job_no}", min_value=0.0, value=0.0, step=0.1, key=f"tech_time_{job_no}")
             with c2:
-                time_allotted = st.number_input(
-                    f"Time Allotted - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"allotted_{job_no}"
-                )
-
+                time_allotted = st.number_input(f"Time Allotted - Job {job_no}", min_value=0.0, value=0.0, step=0.1, key=f"allotted_{job_no}")
             with c3:
-                claim_value = st.number_input(
-                    f"Claim Value - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=1.0,
-                    key=f"claim_value_{job_no}"
-                )
+                claim_value = st.number_input(f"Claim Value - Job {job_no}", min_value=0.0, value=0.0, step=1.0, key=f"claim_value_{job_no}")
 
             st.subheader("Required Warranty Checks")
 
-            a, b, c, d = st.columns(4)
+            c1, c2, c3, c4 = st.columns(4)
 
-            with a:
+            with c1:
                 oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
                 oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
                 battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
                 battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
 
-            with b:
+            with c2:
                 sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
                 sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
                 sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
                 sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
 
-            with c:
+            with c3:
                 rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-                rental_days = st.number_input(
-                    "Rental Days Billed",
-                    min_value=0,
-                    value=0,
-                    step=1,
-                    key=f"rental_days_{job_no}"
-                )
+                rental_days = st.number_input("Rental Days Billed", min_value=0, value=0, step=1, key=f"rental_days_{job_no}")
                 manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
 
-            with d:
+            with c4:
                 warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
                 manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
                 ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
@@ -683,53 +653,97 @@ def render_review():
                 "ac_evac_slip": ac_evac_slip,
                 "parts_warranty": parts_warranty,
                 "mopa_original_ro": mopa_original_ro
+            })
+
+    st.markdown("---")
+
+    ro_number = st.text_input("RO Number", key="ro_number")
+    vin = st.text_input("VIN", key="vin")
+    ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
+    day_submitted = st.date_input("Day Submitted", key="day_submitted")
+    first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
+    rejected = st.checkbox("Rejected / Returned", key="rejected")
+    rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
+
+    days_to_submit = (day_submitted - ro_invoiced).days
+    st.metric("Days to Submit", days_to_submit)
+
+    personnel_df = load_personnel()
+    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+
+    advisor = st.selectbox("Advisor", advisor_list, key="advisor")
+    technician = st.selectbox("Technician", tech_list, key="technician")
+    warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
+
+    st.markdown("---")
+
+    time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
+    time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
+
+    if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+        all_hard = []
+        all_warn = []
+        scores = []
+        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+        hard_value = 0.0
+
+        for job in jobs:
+            hard, warn, score = audit_job(job, time_bypass)
+            job["hard_stops"] = hard
+            job["warnings"] = warn
+            job["score"] = score
+
+            scores.append(score)
+            all_hard.extend(hard)
+            all_warn.extend(warn)
+
+            if hard:
+                hard_value += float(job.get("claim_value") or 0)
+
+        final_score = int(sum(scores) / len(scores)) if scores else 0
+        status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
+
+        result_banner(status)
+
+        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+        x1.metric("Audit Score", final_score)
+        x2.metric("Status", status)
+        x3.metric("Total Claim Value", f"${total_value:,.2f}")
+        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+        x5.metric("Hard Stops", len(all_hard))
+
+        for job in jobs:
+            with st.expander(f"Job {job['job_no']} Results", expanded=True):
+                for h in job.get("hard_stops", []):
+                    st.error(h)
+
+                for w in job.get("warnings", []):
+                    st.warning(w)
+
+                if not job.get("hard_stops") and not job.get("warnings"):
+                    st.success("No audit issues found.")
+
+        save_review({
+            "ro_number": ro_number,
+            "vin": vin,
+            "ro_invoiced": str(ro_invoiced),
+            "day_submitted": str(day_submitted),
+            "days_to_submit": days_to_submit,
+            "first_pass_paid": 1 if first_pass_paid else 0,
+            "rejected": 1 if rejected else 0,
+            "rejection_reason": rejection_reason,
+            "advisor": advisor,
+            "technician": technician,
+            "warranty_admin": warranty_admin,
+            "score": final_score,
+            "time_bypass": 1 if time_bypass else 0,
+            "time_bypass_user": time_bypass_user,
+            "jobs": jobs,
         })
-if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
-    all_hard = []
-    all_warn = []
-    scores = []
-    total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
-    hard_value = 0.0
-    
-    for job in jobs:
-        hard, warn, score = audit_job(job, time_bypass)
-    
-        job["hard_stops"] = hard
-        job["warnings"] = warn
-        job["score"] = score
-    
-        scores.append(score)
-        all_hard.extend(hard)
-        all_warn.extend(warn)
-    
-        if hard:
-            hard_value += float(job.get("claim_value") or 0)
-    
-    final_score = int(sum(scores) / len(scores)) if scores else 0
-    status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
-    
-    result_banner(status)
-    
-    x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-    x1.metric("Audit Score", final_score)
-    x2.metric("Status", status)
-    x3.metric("Total Claim Value", f"${total_value:,.2f}")
-    x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-    x5.metric("Hard Stops", len(all_hard))
-    
-    for job in jobs:
-        with st.expander(f"Job {job['job_no']} Results", expanded=True):
-        
-            for h in job.get("hard_stops", []):
-                st.error(h)
-        
-            for w in job.get("warnings", []):
-                st.warning(w)
-        
-            if not job.get("hard_stops") and not job.get("warnings"):
-                st.success("No audit issues found.")
-        
-                st.divider()
+
+        st.success("Review saved to Reporting.")
 
     if st.button("Next Claim"):
         for key in list(st.session_state.keys()):
@@ -746,58 +760,9 @@ if st.button("Run Audit + Save Review", type="primary", use_container_width=True
                 "parts_warranty_", "mopa_"
             )):
                 del st.session_state[key]
+
         st.session_state["scroll_to_top"] = True
-        st.rerun()
-
-if "job_count" not in st.session_state:
-    st.session_state.job_count = 1
-
-job_count = st.number_input(
-    "How many warranty jobs are on this RO?",
-    min_value=1,
-    max_value=10,
-    value=st.session_state.job_count,
-    step=1,
-    key="job_count"
-)
-
-
-jobs = []
-
-for i in range(int(job_count)):
-        job_no = i + 1
-
-        st.markdown("---")
-        st.subheader("Warranty Job Documentation")
-
-ro_number = st.text_input("RO Number", key="ro_number")
-vin = st.text_input("VIN", key="vin")
-ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
-day_submitted = st.date_input("Day Submitted", key="day_submitted")
-first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
-rejected = st.checkbox("Rejected / Returned", key="rejected")
-rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
-
-days_to_submit = (day_submitted - ro_invoiced).days
-st.metric("Days to Submit", days_to_submit)
-
-personnel_df = load_personnel()
-advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
-tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
-warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
-
-advisor = st.selectbox("Advisor", advisor_list, key="advisor")
-technician = st.selectbox("Technician", tech_list, key="technician")
-warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
-
-st.divider()
-
-
-time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation") 
-time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
-
-
-      
+        st.rerun()      
 def render_claims():
     st.header("Claim Learning Upload")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
