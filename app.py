@@ -674,9 +674,53 @@ def render_review():
                 "ac_evac_slip": ac_evac_slip,
                 "parts_warranty": parts_warranty,
                 "mopa_original_ro": mopa_original_ro
-            })
+            if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+all_hard = []
+all_warn = []
+scores = []
+total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+hard_value = 0.0
 
-            st.divider()
+for job in jobs:
+    hard, warn, score = audit_job(job, time_bypass)
+
+    job["hard_stops"] = hard
+    job["warnings"] = warn
+    job["score"] = score
+
+    scores.append(score)
+    all_hard.extend(hard)
+    all_warn.extend(warn)
+
+    if hard:
+        hard_value += float(job.get("claim_value") or 0)
+
+final_score = int(sum(scores) / len(scores)) if scores else 0
+status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
+
+result_banner(status)
+
+x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+x1.metric("Audit Score", final_score)
+x2.metric("Status", status)
+x3.metric("Total Claim Value", f"${total_value:,.2f}")
+x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+x5.metric("Hard Stops", len(all_hard))
+
+for job in jobs:
+with st.expander(f"Job {job['job_no']} Results", expanded=True):
+
+    for h in job.get("hard_stops", []):
+        st.error(h)
+
+    for w in job.get("warnings", []):
+        st.warning(w)
+
+    if not job.get("hard_stops") and not job.get("warnings"):
+        st.success("No audit issues found.")
+        })
+
+        st.divider()
 
     if st.button("Next Claim"):
         for key in list(st.session_state.keys()):
@@ -742,50 +786,7 @@ st.divider()
 time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation") 
 time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
 
-if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
-    all_hard = []
-    all_warn = []
-    scores = []
-    total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
-    hard_value = 0.0
 
-    for job in jobs:
-        hard, warn, score = audit_job(job, time_bypass)
-
-        job["hard_stops"] = hard
-        job["warnings"] = warn
-        job["score"] = score
-
-        scores.append(score)
-        all_hard.extend(hard)
-        all_warn.extend(warn)
-
-        if hard:
-            hard_value += float(job.get("claim_value") or 0)
-
-    final_score = int(sum(scores) / len(scores)) if scores else 0
-    status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
-
-    result_banner(status)
-    
-    x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-    x1.metric("Audit Score", final_score)
-    x2.metric("Status", status)
-    x3.metric("Total Claim Value", f"${total_value:,.2f}")
-    x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-    x5.metric("Hard Stops", len(all_hard))
-
-for job in jobs:
-    with st.expander(f"Job {job['job_no']} Results", expanded=True):
-
-        for h in job.get("hard_stops", []):
-            st.error(h)
-
-        for w in job.get("warnings", []):
-            st.warning(w)
-
-        if not job.get("hard_stops") and not job.get("warnings"):
-            st.success("No audit issues found.")
       
 def render_claims():
     st.header("Claim Learning Upload")
