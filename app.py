@@ -560,7 +560,7 @@ def result_banner(status):
 # =========================
 
 def render_review():
-        col_a, col_b = st.columns([8, 2])
+    col_a, col_b = st.columns([8, 2])
 
     with col_a:
         st.header("RO Warranty Review")
@@ -582,44 +582,6 @@ def render_review():
                 )):
                     del st.session_state[key]
 
-                if key.startswith((
-                    "ro_number",
-                    "vin",
-                    "ro_invoiced",
-                    "day_submitted",
-                    "first_pass_paid",
-                    "rejected",
-                    "rejection_reason",
-                    "advisor",
-                    "technician",
-                    "warranty_admin",
-                    "concern_",
-                    "cause_",
-                    "correction_",
-                    "tech_time_",
-                    "allotted_",
-                    "claim_value_",
-                    "oil_leak_",
-                    "oil_dye_",
-                    "battery_",
-                    "battery_slip_",
-                    "sublet_",
-                    "sublet_vin_",
-                    "sublet_mileage_",
-                    "sublet_notes_",
-                    "rental_",
-                    "rental_days_",
-                    "rental_signed_",
-                    "addon_",
-                    "manager_approval_",
-                    "ac_",
-                    "ac_slip_",
-                    "parts_warranty_",
-                    "mopa_"
-                )):
-                    del st.session_state[key]
-
-            st.session_state["scroll_to_top"] = True
             st.rerun()
 
     if "job_count" not in st.session_state:
