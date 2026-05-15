@@ -674,7 +674,7 @@ def render_review():
                 "ac_evac_slip": ac_evac_slip,
                 "parts_warranty": parts_warranty,
                 "mopa_original_ro": mopa_original_ro
-            if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
 all_hard = []
 all_warn = []
 scores = []
