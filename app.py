@@ -584,9 +584,6 @@ def render_review():
 
             st.rerun()
 
-    with col_a:
-        st.header("RO Warranty Review")
-
     with col_b:
         if st.button("Next Claim"):
 
