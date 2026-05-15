@@ -560,36 +560,47 @@ def result_banner(status):
 # =========================
 
 def render_review():
+    def render_review():
     st.header("RO Warranty Review")
-    
+
     if st.button("Next Claim"):
         for key in list(st.session_state.keys()):
             if key.startswith((
-                "concern_",
-                "cause_",
-                 "correction_",
-                "tech_time_",
-                "allotted_",
-                "claim_value_",
-                "oil_leak_",
-                "oil_dye_",
-                "battery_",
-                "battery_slip_",
-                "sublet_",
-                "sublet_vin_",
-                "sublet_mileage_",
-                "sublet_notes_",
-                "rental_",
-                "rental_days_",
-                "rental_signed_",
-                "addon_",
-                "manager_approval_",
-                "ac_",
-                "ac_slip_",
-                "parts_warranty_",
-                "mopa_"
-        )):
-                    del st.session_state[key]
+                "ro_number", "vin", "ro_invoiced", "day_submitted",
+                "first_pass_paid", "rejected", "rejection_reason",
+                "advisor", "technician", "warranty_admin",
+                "concern_", "cause_", "correction_",
+                "tech_time_", "allotted_", "claim_value_",
+                "oil_leak_", "oil_dye_", "battery_", "battery_slip_",
+                "sublet_", "sublet_vin_", "sublet_mileage_", "sublet_notes_",
+                "rental_", "rental_days_", "rental_signed_",
+                "addon_", "manager_approval_", "ac_", "ac_slip_",
+                "parts_warranty_", "mopa_"
+            )):
+                del st.session_state[key]
+        st.rerun()
+
+    ro_number = st.text_input("RO Number", key="ro_number")
+    vin = st.text_input("VIN", key="vin")
+    ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
+    day_submitted = st.date_input("Day Submitted", key="day_submitted")
+    first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
+    rejected = st.checkbox("Rejected / Returned", key="rejected")
+    rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
+
+    days_to_submit = (day_submitted - ro_invoiced).days
+    st.metric("Days to Submit", days_to_submit)
+
+    personnel_df = load_personnel()
+    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
+    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
+    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
+
+    advisor = st.selectbox("Advisor", advisor_list, key="advisor")
+    technician = st.selectbox("Technician", tech_list, key="technician")
+    warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
+
+    st.divider()
 
     
         ro_number = st.text_input("RO Number")
