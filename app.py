@@ -617,7 +617,7 @@ def render_review():
         personnel_df["role"] == "Warranty Admin"
     ]["name"].tolist()
 
-    advisor = st.selectbox(
+        advisor = st.selectbox(
         "Advisor",
         advisor_list,
         key="advisor"
@@ -629,13 +629,12 @@ def render_review():
         key="technician"
     )
 
-     warranty_admin = st.selectbox(
-        "Warranty Admin", 
+    warranty_admin = st.selectbox(
+        "Warranty Admin",
         warranty_list,
         key="warranty_admin"
     )
-
-    
+ 
     st.markdown("---")
     st.subheader("Warranty Job Documentation")
 
