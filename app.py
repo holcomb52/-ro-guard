@@ -573,7 +573,7 @@ def render_review():
         step=1,
         key="job_count"
     )
- ro_number = st.text_input("RO Number", key="ro_number")
+    ro_number = st.text_input("RO Number", key="ro_number")
     vin = st.text_input("VIN", key="vin")
     ro_invoiced = st.date_input(
         "RO Invoiced / Closed Date",
