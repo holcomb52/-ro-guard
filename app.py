@@ -629,6 +629,12 @@ def render_review():
         key="technician"
     )
 
+     warranty_admin = st.selectbox(
+        "Warranty Admin",
+        warranty_list,
+        key="warranty_admin"
+    )
+
     
     st.markdown("---")
     st.subheader("Warranty Job Documentation")
@@ -771,13 +777,6 @@ def render_review():
             })
 
     st.markdown("---")
-
-   
-    warranty_admin = st.selectbox(
-        "Warranty Admin",
-        warranty_list,
-        key="warranty_admin"
-    )
 
     st.markdown("---")
 
