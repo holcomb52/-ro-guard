@@ -620,6 +620,9 @@ jobs = []
 for i in range(int(job_count)):
         job_no = i + 1
 
+        st.markdown("---")
+        st.subheader("Warranty Job Documentation")
+
         with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
