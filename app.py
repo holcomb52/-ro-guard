@@ -560,10 +560,11 @@ def result_banner(status):
 # =========================
 
 def render_review():
+    st.header("RO Warranty Review")
 
     if "job_count" not in st.session_state:
         st.session_state.job_count = 1
-    st.header("RO Warranty Review")
+
     job_count = st.number_input(
         "How many warranty jobs are on this RO?",
         min_value=1,
@@ -584,19 +585,57 @@ def render_review():
         with st.expander(f"Job {job_no}", expanded=True):
             st.subheader(f"Job {job_no} Documentation")
 
-            concern = st.text_area(f"Concern - Job {job_no}", height=110, key=f"concern_{job_no}")
-            cause = st.text_area(f"Cause - Job {job_no}", height=110, key=f"cause_{job_no}")
-            correction = st.text_area(f"Correction - Job {job_no}", height=110, key=f"correction_{job_no}")
+            concern = st.text_area(
+                f"Concern - Job {job_no}",
+                height=110,
+                key=f"concern_{job_no}"
+            )
 
-            st.button(f"Use Suggested Narrative - Job {job_no}", key=f"use_suggested_{job_no}")
+            cause = st.text_area(
+                f"Cause - Job {job_no}",
+                height=110,
+                key=f"cause_{job_no}"
+            )
+
+            correction = st.text_area(
+                f"Correction - Job {job_no}",
+                height=110,
+                key=f"correction_{job_no}"
+            )
+
+            st.button(
+                f"Use Suggested Narrative - Job {job_no}",
+                key=f"use_suggested_{job_no}"
+            )
 
             c1, c2, c3 = st.columns(3)
+
             with c1:
-                tech_flagged_time = st.number_input(f"Tech Flagged Time - Job {job_no}", min_value=0.0, value=0.0, step=0.1, key=f"tech_time_{job_no}")
+                tech_flagged_time = st.number_input(
+                    f"Tech Flagged Time - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    key=f"tech_time_{job_no}"
+                )
+
             with c2:
-                time_allotted = st.number_input(f"Time Allotted - Job {job_no}", min_value=0.0, value=0.0, step=0.1, key=f"allotted_{job_no}")
+                time_allotted = st.number_input(
+                    f"Time Allotted - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    key=f"allotted_{job_no}"
+                )
+
             with c3:
-                claim_value = st.number_input(f"Claim Value - Job {job_no}", min_value=0.0, value=0.0, step=1.0, key=f"claim_value_{job_no}")
+                claim_value = st.number_input(
+                    f"Claim Value - Job {job_no}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=1.0,
+                    key=f"claim_value_{job_no}"
+                )
 
             st.subheader("Required Warranty Checks")
 
@@ -616,16 +655,37 @@ def render_review():
 
             with c3:
                 rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-                rental_days = st.number_input("Rental Days Billed", min_value=0, value=0, step=1, key=f"rental_days_{job_no}")
-                manager_signed_rental = st.checkbox("Manager Signed Rental", key=f"rental_signed_{job_no}")
+                rental_days = st.number_input(
+                    "Rental Days Billed",
+                    min_value=0,
+                    value=0,
+                    step=1,
+                    key=f"rental_days_{job_no}"
+                )
+                manager_signed_rental = st.checkbox(
+                    "Manager Signed Rental",
+                    key=f"rental_signed_{job_no}"
+                )
 
             with c4:
-                warranty_add_on = st.checkbox("Warranty Add-On (+)", key=f"addon_{job_no}")
-                manager_approval = st.checkbox("Manager Approval", key=f"manager_approval_{job_no}")
+                warranty_add_on = st.checkbox(
+                    "Warranty Add-On (+)",
+                    key=f"addon_{job_no}"
+                )
+                manager_approval = st.checkbox(
+                    "Manager Approval",
+                    key=f"manager_approval_{job_no}"
+                )
                 ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
                 ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-                parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
-                mopa_original_ro = st.checkbox("MOPA + Original RO", key=f"mopa_{job_no}")
+                parts_warranty = st.checkbox(
+                    "Parts Warranty",
+                    key=f"parts_warranty_{job_no}"
+                )
+                mopa_original_ro = st.checkbox(
+                    "MOPA + Original RO",
+                    key=f"mopa_{job_no}"
+                )
 
             jobs.append({
                 "job_no": str(job_no),
@@ -656,40 +716,98 @@ def render_review():
 
     st.markdown("---")
 
-    st.markdown("---")
-
     ro_number = st.text_input("RO Number", key="ro_number")
     vin = st.text_input("VIN", key="vin")
-    ro_invoiced = st.date_input("RO Invoiced / Closed Date", key="ro_invoiced")
-    day_submitted = st.date_input("Day Submitted", key="day_submitted")
-    first_pass_paid = st.checkbox("Paid on First Submission", key="first_pass_paid")
-    rejected = st.checkbox("Rejected / Returned", key="rejected")
-    rejection_reason = st.text_area("Rejection Reason", height=100, key="rejection_reason") if rejected else ""
+    ro_invoiced = st.date_input(
+        "RO Invoiced / Closed Date",
+        key="ro_invoiced"
+    )
+    day_submitted = st.date_input(
+        "Day Submitted",
+        key="day_submitted"
+    )
+
+    first_pass_paid = st.checkbox(
+        "Paid on First Submission",
+        key="first_pass_paid"
+    )
+
+    rejected = st.checkbox(
+        "Rejected / Returned",
+        key="rejected"
+    )
+
+    rejection_reason = st.text_area(
+        "Rejection Reason",
+        height=100,
+        key="rejection_reason"
+    ) if rejected else ""
 
     days_to_submit = (day_submitted - ro_invoiced).days
     st.metric("Days to Submit", days_to_submit)
 
     personnel_df = load_personnel()
-    advisor_list = personnel_df[personnel_df["role"] == "Advisor"]["name"].tolist()
-    tech_list = personnel_df[personnel_df["role"] == "Technician"]["name"].tolist()
-    warranty_list = personnel_df[personnel_df["role"] == "Warranty Admin"]["name"].tolist()
 
-    advisor = st.selectbox("Advisor", advisor_list, key="advisor")
-    technician = st.selectbox("Technician", tech_list, key="technician")
-    warranty_admin = st.selectbox("Warranty Admin", warranty_list, key="warranty_admin")
+    advisor_list = personnel_df[
+        personnel_df["role"] == "Advisor"
+    ]["name"].tolist()
 
-    time_bypass = st.checkbox("Bypass Tech Flagged Time / Time Allotted Validation")
-    time_bypass_user = st.text_input("Bypass Approved By") if time_bypass else ""
+    tech_list = personnel_df[
+        personnel_df["role"] == "Technician"
+    ]["name"].tolist()
 
-    if st.button("Run Audit + Save Review", type="primary", use_container_width=True):
+    warranty_list = personnel_df[
+        personnel_df["role"] == "Warranty Admin"
+    ]["name"].tolist()
+
+    advisor = st.selectbox(
+        "Advisor",
+        advisor_list,
+        key="advisor"
+    )
+
+    technician = st.selectbox(
+        "Technician",
+        tech_list,
+        key="technician"
+    )
+
+    warranty_admin = st.selectbox(
+        "Warranty Admin",
+        warranty_list,
+        key="warranty_admin"
+    )
+
+    st.markdown("---")
+
+    time_bypass = st.checkbox(
+        "Bypass Tech Flagged Time / Time Allotted Validation"
+    )
+
+    time_bypass_user = st.text_input(
+        "Bypass Approved By"
+    ) if time_bypass else ""
+
+    if st.button(
+        "Run Audit + Save Review",
+        type="primary",
+        use_container_width=True
+    ):
+
         all_hard = []
         all_warn = []
         scores = []
-        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+
+        total_value = sum(
+            float(j.get("claim_value") or 0)
+            for j in jobs
+        )
+
         hard_value = 0.0
 
         for job in jobs:
             hard, warn, score = audit_job(job, time_bypass)
+
             job["hard_stops"] = hard
             job["warnings"] = warn
             job["score"] = score
@@ -702,11 +820,21 @@ def render_review():
                 hard_value += float(job.get("claim_value") or 0)
 
         final_score = int(sum(scores) / len(scores)) if scores else 0
-        status = "🔴 DO NOT SUBMIT" if all_hard else ("🟡 NEEDS REVIEW" if all_warn else "🟢 READY")
+
+        status = (
+            "🔴 DO NOT SUBMIT"
+            if all_hard
+            else (
+                "🟡 NEEDS REVIEW"
+                if all_warn
+                else "🟢 READY"
+            )
+        )
 
         result_banner(status)
 
         x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+
         x1.metric("Audit Score", final_score)
         x2.metric("Status", status)
         x3.metric("Total Claim Value", f"${total_value:,.2f}")
@@ -714,7 +842,11 @@ def render_review():
         x5.metric("Hard Stops", len(all_hard))
 
         for job in jobs:
-            with st.expander(f"Job {job['job_no']} Results", expanded=True):
+            with st.expander(
+                f"Job {job['job_no']} Results",
+                expanded=True
+            ):
+
                 for h in job.get("hard_stops", []):
                     st.error(h)
 
@@ -745,23 +877,49 @@ def render_review():
         st.success("Review saved to Reporting.")
 
     if st.button("Next Claim"):
+
         for key in list(st.session_state.keys()):
+
             if key.startswith((
-                "ro_number", "vin", "ro_invoiced", "day_submitted",
-                "first_pass_paid", "rejected", "rejection_reason",
-                "advisor", "technician", "warranty_admin",
-                "concern_", "cause_", "correction_",
-                "tech_time_", "allotted_", "claim_value_",
-                "oil_leak_", "oil_dye_", "battery_", "battery_slip_",
-                "sublet_", "sublet_vin_", "sublet_mileage_", "sublet_notes_",
-                "rental_", "rental_days_", "rental_signed_",
-                "addon_", "manager_approval_", "ac_", "ac_slip_",
-                "parts_warranty_", "mopa_"
+                "ro_number",
+                "vin",
+                "ro_invoiced",
+                "day_submitted",
+                "first_pass_paid",
+                "rejected",
+                "rejection_reason",
+                "advisor",
+                "technician",
+                "warranty_admin",
+                "concern_",
+                "cause_",
+                "correction_",
+                "tech_time_",
+                "allotted_",
+                "claim_value_",
+                "oil_leak_",
+                "oil_dye_",
+                "battery_",
+                "battery_slip_",
+                "sublet_",
+                "sublet_vin_",
+                "sublet_mileage_",
+                "sublet_notes_",
+                "rental_",
+                "rental_days_",
+                "rental_signed_",
+                "addon_",
+                "manager_approval_",
+                "ac_",
+                "ac_slip_",
+                "parts_warranty_",
+                "mopa_"
             )):
                 del st.session_state[key]
 
         st.session_state["scroll_to_top"] = True
-        st.rerun()      
+        st.rerun()
+
 def render_claims():
     st.header("Claim Learning Upload")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
