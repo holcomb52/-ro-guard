@@ -429,6 +429,66 @@ def find_wam_matches(job):
         pass
 
     return matches[:3]
+def find_similar_paid_claims(current_job, limit=5):
+    try:
+        current_text = " ".join([
+            str(current_job.get("concern", "")),
+            str(current_job.get("cause", "")),
+            str(current_job.get("correction", ""))
+        ]).lower()
+
+        rows = supabase.table("learned_claims").select("*").execute().data or []
+
+        matches = []
+
+        for row in rows:
+            claim_text = " ".join([
+                str(row.get("concern", "")),
+                str(row.get("cause", "")),
+                str(row.get("correction", "")),
+                str(row.get("labor_ops", "")),
+                str(row.get("parts", ""))
+            ]).lower()
+
+            if not claim_text.strip():
+                continue
+
+            current_words = set(current_text.split())
+            claim_words = set(claim_text.split())
+
+            if not current_words:
+                continue
+
+            overlap = current_words.intersection(claim_words)
+
+            score = int(
+                (len(overlap) / max(len(current_words), 1)) * 100
+            )
+
+            if score >= 15:
+                matches.append({
+                    "score": score,
+                    "ro_number": row.get("ro_number", ""),
+                    "concern": row.get("concern", ""),
+                    "cause": row.get("cause", ""),
+                    "correction": row.get("correction", ""),
+                    "labor_ops": row.get("labor_ops", ""),
+                    "parts": row.get("parts", ""),
+                    "claim_status": row.get("claim_status", "Paid")
+                })
+
+        matches = sorted(
+            matches,
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        return matches[:limit]
+
+    except Exception as e:
+        st.warning(f"Claim Intelligence could not load: {e}")
+        return []
+
 def audit_job(job, time_bypass):
     hard = []
     warn = []
