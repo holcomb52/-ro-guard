@@ -958,6 +958,8 @@ WAM Reference:
                         st.markdown(f"**RO:** {match.get('ro_number', '')}")
                         st.markdown(f"**Labor Ops:** {match.get('labor_ops', '')}")
                         st.markdown(f"**Parts:** {match.get('parts', '')}")
+                        st.markdown("**Stored Claim Text Preview:**")
+                        st.write(match.get("story", "")[:1500] or match.get("content", "")[:1500] or "No stored claim text found.")
                         st.markdown("---")
             else:
                 st.warning("No similar paid claims found yet. Upload more paid claims in Claim Learning.")
