@@ -442,13 +442,18 @@ def find_similar_paid_claims(current_job, limit=5):
         matches = []
 
         for row in rows:
-            claim_text = " ".join([
-                str(row.get("concern", "")),
-                str(row.get("cause", "")),
-                str(row.get("correction", "")),
-                str(row.get("labor_ops", "")),
-                str(row.get("parts", ""))
-            ]).lower()
+                 claim_text = " ".join([
+                    str(row.get("concern", "")),
+                    str(row.get("cause", "")),
+                    str(row.get("correction", "")),
+                    str(row.get("labor_ops", "")),
+                    str(row.get("parts", "")),
+                    str(row.get("story", "")),
+                    str(row.get("content", "")),
+                    str(row.get("wam", "")),
+                    str(row.get("wam_reference", "")),
+                    str(row.get("reference", ""))
+                ]).lower()
 
             if not claim_text.strip():
                 continue
