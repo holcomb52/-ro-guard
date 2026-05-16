@@ -1109,7 +1109,6 @@ def render_claims():
         except Exception:
             pass
 
-    st.success(f"Reprocessed {updated} stored claims.")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
 
     if PdfReader is None:
