@@ -196,25 +196,25 @@ def role_options(role):
     return [""] + sorted(df["name"].astype(str).tolist())
 
 
-    def extract_claim_fields(claim_text):
-        text = str(claim_text)
-        
-        bad_sections = [
-            "warranty contact center",
-            "thank you from the warranty contact center",
-            "authorization number",
-            "parts price based",
-            "dealer cost",
-            "please contact",
-            "@chrysler.com",
-            "policy",
-            "terms and conditions",
-            "acknowledgement"
-        ]
+def extract_claim_fields(claim_text):
+    text = str(claim_text or "")
 
-        cleaned_lines = []
+    bad_sections = [
+        "warranty contact center",
+        "thank you from the warranty contact center",
+        "authorization number",
+        "parts price based",
+        "dealer cost",
+        "please contact",
+        "@chrysler.com",
+        "policy",
+        "terms and conditions",
+        "acknowledgement"
+    ]
 
-            for line in text.splitlines():
+    cleaned_lines = []
+
+    for line in text.splitlines():
         lower_line = line.lower()
 
         if any(bad in lower_line for bad in bad_sections):
@@ -223,9 +223,24 @@ def role_options(role):
         if len(line.strip()) < 8:
             continue
 
-        cleaned_lines.append(line)
-    
-        text = "\n".join(cleaned_lines)
+        cleaned_lines.append(line.strip())
+
+    text = "\n".join(cleaned_lines)
+
+
+def find_after(labels, max_len=700):
+    lower = text.lower()
+
+    for label in labels:
+        idx = lower.find(label)
+
+        if idx != -1:
+            start = idx + len(label)
+            chunk = text[start:start + max_len]
+
+            return chunk.strip(" :-\n\r\t")
+
+    return ""
     
     def find_after(labels, max_len=700):
             lower = text.lower()
