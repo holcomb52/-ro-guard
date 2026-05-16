@@ -226,7 +226,14 @@ def extract_claim_fields(claim_text):
         cleaned_lines.append(line.strip())
 
     text = "\n".join(cleaned_lines)
-
+    return {
+        "concern": text[:500],
+        "cause": "",
+        "correction": text[:1200],
+        "labor_ops": "",
+        "parts": "",
+        "wam_reference": ""
+    }
 
 def find_after(labels, max_len=700):
     lower = text.lower()
