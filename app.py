@@ -848,23 +848,20 @@ def render_review():
                     f"""
 Recommended Direction Based on Paid Claims:
 
-Concern Pattern:
-{best_match.get("concern", "") or best_match.get("story", "")[:300]}
+Matched Claim:
+{best_match.get("ro_number", "")}
 
-Cause Pattern:
-{best_match.get("cause", "") or best_match.get("content", "")[:300]}
-
-Correction Pattern:
-{best_match.get("correction", "") or best_match.get("story", "")[:300]}
+Suggested Narrative Source:
+{best_match.get("correction", "") or best_match.get("cause", "") or "Review similar claim details below."}
 
 Common Labor Ops:
-{best_match.get("labor_ops", "")}
+{best_match.get("labor_ops", "") or "Review similar claim packet for labor operation."}
 
 Common Parts:
-{best_match.get("parts", "")}
+{best_match.get("parts", "") or "Review similar claim packet for parts used."}
 
 WAM Reference:
-{best_match.get("wam_reference", "") or best_match.get("wam", "") or best_match.get("reference", "")}
+{best_match.get("wam_reference", "") or best_match.get("wam", "") or best_match.get("reference", "") or "No WAM reference found in matched claim."}
 """
                 )
 
