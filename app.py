@@ -845,7 +845,7 @@ def render_review():
                 st.success(f"Similar Paid Claim Match: {best_match['score']}%")
 
                 st.info(
-            
+                    f"""
 Recommended Direction Based on Paid Claims:
 
 Concern Pattern:
