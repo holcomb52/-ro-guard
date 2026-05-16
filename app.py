@@ -1076,6 +1076,36 @@ WAM Reference:
 
 def render_claims():
     st.header("Claim Learning Upload")
+    if st.button("Reprocess Existing Claims"):
+
+    rows = supabase.table("claims").select("*").execute().data or []
+
+    updated = 0
+
+    for row in rows:
+
+        story = str(row.get("story", ""))
+
+        if not story.strip():
+            continue
+
+        fields = extract_claim_fields(story)
+
+        update_data = {
+            "concern": fields.get("concern", ""),
+            "cause": fields.get("cause", ""),
+            "correction": fields.get("correction", ""),
+            "labor_ops": fields.get("labor_ops", ""),
+            "wam_reference": fields.get("wam_reference", "")
+        }
+
+        try:
+            supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
+            updated += 1
+        except Exception:
+            pass
+
+    st.success(f"Reprocessed {updated} stored claims.")
     st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
 
     if PdfReader is None:
