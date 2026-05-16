@@ -566,6 +566,7 @@ def find_similar_paid_claims(current_job, limit=5):
             if score >= 25:
                 matches.append({
                     "score": score,
+                    "matching_codes": ", ".join(sorted(matching_codes)),
                     "ro_number": row.get("ro_number", ""),
                     "concern": row.get("concern", ""),
                     "cause": row.get("cause", ""),
@@ -965,6 +966,7 @@ WAM Reference:
                 with st.expander("View Similar Paid Claims"):
                     for match in similar_claims:
                         st.markdown(f"**Match Score:** {match['score']}%")
+                        st.markdown(f"**Matching Codes:** {match.get('matching_codes', '')}")
                         st.markdown(f"**RO:** {match.get('ro_number', '')}")
                         st.markdown(f"**Labor Ops:** {match.get('labor_ops', '')}")
                         st.markdown(f"**Parts:** {match.get('parts', '')}")
