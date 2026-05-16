@@ -527,8 +527,6 @@ def find_similar_paid_claims(current_job, limit=5):
 
             if any(term in ro_name for term in bad_terms):
                 continue
-
-            claim_text = " ".join([
             
             claim_text = " ".join([
                 str(row.get("concern", "")),
