@@ -1076,28 +1076,34 @@ WAM Reference:
 
 def render_claims():
     st.header("Claim Learning Upload")
-    if st.button("Reprocess Existing Claims"):
+        if st.button("Reprocess Existing Claims"):
+        rows = supabase.table("claims").select("*").execute().data or []
 
-    rows = supabase.table("claims").select("*").execute().data or []
+        updated = 0
 
-    updated = 0
+        for row in rows:
+            story = str(row.get("story", ""))
 
-    for row in rows:
+            if not story.strip():
+                continue
 
-        story = str(row.get("story", ""))
+            fields = extract_claim_fields(story)
 
-        if not story.strip():
-            continue
+            update_data = {
+                "concern": fields.get("concern", ""),
+                "cause": fields.get("cause", ""),
+                "correction": fields.get("correction", ""),
+                "labor_ops": fields.get("labor_ops", ""),
+                "wam_reference": fields.get("wam_reference", "")
+            }
 
-        fields = extract_claim_fields(story)
+            try:
+                supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
+                updated += 1
+            except Exception:
+                pass
 
-        update_data = {
-            "concern": fields.get("concern", ""),
-            "cause": fields.get("cause", ""),
-            "correction": fields.get("correction", ""),
-            "labor_ops": fields.get("labor_ops", ""),
-            "wam_reference": fields.get("wam_reference", "")
-        }
+        st.success(f"Reprocessed {updated} stored claims.")
 
         try:
             supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
