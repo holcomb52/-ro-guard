@@ -509,7 +509,7 @@ def find_similar_paid_claims(current_job, limit=5):
         ]).lower()
         import re
 
-        code_pattern = r"\b[A-Z][0-9A-Z]{1,4}[-]?[0-9A-Z]{0,4}\b"
+        code_pattern = r"\b[PCBU][0-9][0-9A-Z]{2,3}(?:-[0-9A-Z]{2})?\b"
         current_codes = set(re.findall(code_pattern, current_text.upper()))
 
         rows = supabase.table("claims").select("*").execute().data or []
@@ -561,7 +561,9 @@ def find_similar_paid_claims(current_job, limit=5):
             matching_codes = current_codes.intersection(claim_codes)
 
             if matching_codes:
-                score += 50
+                score += 75
+            elif current_codes:
+                continue
 
             if score >= 25:
                 matches.append({
