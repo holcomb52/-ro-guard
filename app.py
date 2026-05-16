@@ -438,39 +438,35 @@ def find_similar_paid_claims(current_job, limit=5):
         ]).lower()
 
         rows = supabase.table("claims").select("*").execute().data or []
-
         matches = []
 
         for row in rows:
-                 claim_text = " ".join([
-                    str(row.get("concern", "")),
-                    str(row.get("cause", "")),
-                    str(row.get("correction", "")),
-                    str(row.get("labor_ops", "")),
-                    str(row.get("parts", "")),
-                    str(row.get("story", "")),
-                    str(row.get("content", "")),
-                    str(row.get("wam", "")),
-                    str(row.get("wam_reference", "")),
-                    str(row.get("reference", ""))
-                ]).lower()
+            claim_text = " ".join([
+                str(row.get("concern", "")),
+                str(row.get("cause", "")),
+                str(row.get("correction", "")),
+                str(row.get("labor_ops", "")),
+                str(row.get("parts", "")),
+                str(row.get("story", "")),
+                str(row.get("content", "")),
+                str(row.get("wam", "")),
+                str(row.get("wam_reference", "")),
+                str(row.get("reference", ""))
+            ]).lower()
 
-                if not claim_text.strip():
-                    continue
+            if not claim_text.strip():
+                continue
 
-                current_words = set(current_text.split())
-                claim_words = set(claim_text.split())
+            current_words = set(current_text.split())
+            claim_words = set(claim_text.split())
 
-                if not current_words:
-                    continue
+            if not current_words:
+                continue
 
             overlap = current_words.intersection(claim_words)
+            score = int((len(overlap) / max(len(current_words), 1)) * 100)
 
-            score = int(
-                (len(overlap) / max(len(current_words), 1)) * 100
-            )
-
-            if score >= 15:
+            if score >= 10:
                 matches.append({
                     "score": score,
                     "ro_number": row.get("ro_number", ""),
@@ -479,16 +475,14 @@ def find_similar_paid_claims(current_job, limit=5):
                     "correction": row.get("correction", ""),
                     "labor_ops": row.get("labor_ops", ""),
                     "parts": row.get("parts", ""),
+                    "story": row.get("story", ""),
+                    "wam": row.get("wam", ""),
+                    "wam_reference": row.get("wam_reference", ""),
+                    "reference": row.get("reference", ""),
                     "claim_status": row.get("claim_status", "Paid")
                 })
 
-        matches = sorted(
-            matches,
-            key=lambda x: x["score"],
-            reverse=True
-        )
-
-        return matches[:limit]
+        return sorted(matches, key=lambda x: x["score"], reverse=True)[:limit]
 
     except Exception as e:
         st.warning(f"Claim Intelligence could not load: {e}")
