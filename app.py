@@ -437,7 +437,7 @@ def find_similar_paid_claims(current_job, limit=5):
             str(current_job.get("correction", ""))
         ]).lower()
 
-        rows = supabase.table("learned_claims").select("*").execute().data or []
+        rows = supabase.table("claims").select("*").execute().data or []
 
         matches = []
 
