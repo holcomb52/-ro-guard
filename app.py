@@ -223,7 +223,7 @@ def role_options(role):
         if len(line.strip()) < 8:
                     continue
     
-                cleaned_lines.append(line)
+        cleaned_lines.append(line)
     
             text = "\n".join(cleaned_lines)
     
