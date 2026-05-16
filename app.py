@@ -199,17 +199,17 @@ def role_options(role):
     def extract_claim_fields(claim_text):
         text = str(claim_text)
         
-            bad_sections = [
-                "warranty contact center",
-                "thank you from the warranty contact center",
-                "authorization number",
-                "parts price based",
-                "dealer cost",
-                "please contact",
-                "@chrysler.com",
-                "policy",
-                "terms and conditions",
-                "acknowledgement"
+        bad_sections = [
+            "warranty contact center",
+            "thank you from the warranty contact center",
+            "authorization number",
+            "parts price based",
+            "dealer cost",
+            "please contact",
+            "@chrysler.com",
+            "policy",
+            "terms and conditions",
+            "acknowledgement"
         ]
 
             cleaned_lines = []
