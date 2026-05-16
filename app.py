@@ -107,7 +107,7 @@ def init_db():
         )
     """)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS learned_claims (
+        CREATE TABLE IF NOT EXISTS claims (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             uploaded_at TEXT,
             source_file TEXT,
