@@ -198,6 +198,33 @@ def role_options(role):
 
 def extract_claim_fields(claim_text):
     text = str(claim_text)
+            bad_sections = [
+            "warranty contact center",
+            "thank you from the warranty contact center",
+            "authorization number",
+            "parts price based",
+            "dealer cost",
+            "please contact",
+            "@chrysler.com",
+            "policy",
+            "terms and conditions",
+            "acknowledgement"
+        ]
+
+        cleaned_lines = []
+
+        for line in text.splitlines():
+            lower_line = line.lower()
+
+            if any(bad in lower_line for bad in bad_sections):
+                continue
+
+            if len(line.strip()) < 8:
+                continue
+
+            cleaned_lines.append(line)
+
+        text = "\n".join(cleaned_lines)
 
     def find_after(labels, max_len=700):
         lower = text.lower()
