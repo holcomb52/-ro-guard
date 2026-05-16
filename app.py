@@ -507,6 +507,10 @@ def find_similar_paid_claims(current_job, limit=5):
             str(current_job.get("cause", "")),
             str(current_job.get("correction", ""))
         ]).lower()
+        import re
+
+        code_pattern = r"\b[A-Z][0-9A-Z]{1,4}[-]?[0-9A-Z]{0,4}\b"
+        current_codes = set(re.findall(code_pattern, current_text.upper()))
 
         rows = supabase.table("claims").select("*").execute().data or []
         matches = []
@@ -552,6 +556,12 @@ def find_similar_paid_claims(current_job, limit=5):
 
             overlap = current_words.intersection(claim_words)
             score = int((len(overlap) / max(len(current_words), 1)) * 100)
+
+            claim_codes = set(re.findall(code_pattern, claim_text.upper()))
+            matching_codes = current_codes.intersection(claim_codes)
+
+            if matching_codes:
+                score += 50
 
             if score >= 25:
                 matches.append({
