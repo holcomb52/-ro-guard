@@ -196,18 +196,89 @@ def role_options(role):
     return [""] + sorted(df["name"].astype(str).tolist())
 
 
+def extract_claim_fields(claim_text):
+    text = str(claim_text)
+
+    def find_after(labels, max_len=700):
+        lower = text.lower()
+        for label in labels:
+            idx = lower.find(label.lower())
+            if idx != -1:
+                start = idx + len(label)
+                chunk = text[start:start + max_len]
+                return chunk.strip(" :-\n\t")
+        return ""
+
+    concern = find_after([
+        "customer states",
+        "customer concern",
+        "concern",
+        "condition"
+    ])
+
+    cause = find_after([
+        "cause",
+        "found",
+        "diagnosis",
+        "verified"
+    ])
+
+    correction = find_after([
+        "correction",
+        "repair performed",
+        "replaced",
+        "performed"
+    ])
+
+    wam_reference = ""
+    for token in text.replace("\n", " ").split():
+        token_clean = token.strip(" ,.;:()[]")
+        if "WAM" in token_clean.upper() or "WARRANTY" in token_clean.upper():
+            wam_reference = token_clean
+            break
+
+    labor_ops = []
+    for token in text.replace("\n", " ").split():
+        cleaned = token.strip(" ,.;:()[]")
+        if "-" in cleaned and any(char.isdigit() for char in cleaned):
+            if len(cleaned) >= 6:
+                labor_ops.append(cleaned)
+
+    labor_ops = ", ".join(sorted(set(labor_ops))[:10])
+
+    return {
+        "concern": concern,
+        "cause": cause,
+        "correction": correction,
+        "labor_ops": labor_ops,
+        "parts": "",
+        "wam_reference": wam_reference,
+        "story": text[:5000]
+    }
+
+
 def save_learned_claims(file_name, claims):
     for idx, claim in enumerate(claims, start=1):
+        fields = extract_claim_fields(claim)
+
         data = {
             "ro_number": file_name,
             "vin": "",
-            "concern": "",
-            "cause": "",
-            "correction": "",
+            "concern": fields.get("concern", ""),
+            "cause": fields.get("cause", ""),
+            "correction": fields.get("correction", ""),
             "tech": "",
             "advisor": "",
-            "story": claim
+            "story": fields.get("story", ""),
+            "labor_ops": fields.get("labor_ops", ""),
+            "parts": fields.get("parts", ""),
+            "wam_reference": fields.get("wam_reference", "")
         }
+
+        try:
+            supabase.table("claims").insert(data).execute()
+        except Exception as e:
+            st.warning(f"Could not save learned claim {idx}: {e}")
 
         try:
             supabase.table("claims").insert(data).execute()
