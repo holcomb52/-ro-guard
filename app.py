@@ -212,7 +212,7 @@ def role_options(role):
             "acknowledgement"
         ]
 
-            cleaned_lines = []
+        cleaned_lines = []
 
             for line in text.splitlines():
                 lower_line = line.lower()
