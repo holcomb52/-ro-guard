@@ -849,20 +849,22 @@ def render_review():
 Recommended Direction Based on Paid Claims:
 
 Concern Pattern:
-{best_match.get("concern", "")}
+{best_match.get("concern", "") or best_match.get("story", "")[:300]}
 
 Cause Pattern:
-{best_match.get("cause", "")}
+{best_match.get("cause", "") or best_match.get("content", "")[:300]}
 
 Correction Pattern:
-{best_match.get("correction", "")}
+{best_match.get("correction", "") or best_match.get("story", "")[:300]}
 
 Common Labor Ops:
 {best_match.get("labor_ops", "")}
 
 Common Parts:
 {best_match.get("parts", "")}
-"""
+
+WAM Reference:
+{best_match.get("wam_reference", "") or best_match.get("wam", "") or best_match.get("reference", "")}
                 )
 
                 with st.expander("View Similar Paid Claims"):
