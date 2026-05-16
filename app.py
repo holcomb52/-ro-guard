@@ -512,6 +512,26 @@ def find_similar_paid_claims(current_job, limit=5):
         matches = []
 
         for row in rows:
+
+for row in rows:
+
+            ro_name = str(row.get("ro_number", "")).lower()
+
+            bad_terms = [
+                "acknowledgement",
+                "servlet",
+                "policy",
+                "privacy",
+                "terms",
+                "authorization",
+                "disclosure"
+            ]
+
+            if any(term in ro_name for term in bad_terms):
+                continue
+
+            claim_text = " ".join([
+            
             claim_text = " ".join([
                 str(row.get("concern", "")),
                 str(row.get("cause", "")),
