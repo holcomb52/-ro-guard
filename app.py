@@ -1150,7 +1150,11 @@ def render_claims():
                 continue
                 
             story = str(row.get("story", "") or row.get("content", "") or "")
-            fields = extract_claim_fields(story)
+                        try:
+                fields = extract_claim_fields(story)
+            except Exception as e:
+                st.error(f"extract_claim_fields failed: {type(e).__name__}: {e}")
+                return
 
             update_data = {
                 "concern": fields.get("concern", ""),
