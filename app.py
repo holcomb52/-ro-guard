@@ -1149,10 +1149,10 @@ def render_claims():
             if not story.strip():
                 continue
                 
-                        story = str(row.get("story", "") or row.get("content", "") or "")
-                            try:
-                fields = extract_claim_fields(story)
-            except Exception as e:
+        story = str(row.get("story", "") or row.get("content", "") or "")
+        try:
+            fields = extract_claim_fields(story)
+        except Exception as e:
                 st.error(f"extract_claim_fields failed: {type(e).__name__}: {e}")
                 return
 
