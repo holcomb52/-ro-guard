@@ -1164,7 +1164,7 @@ def render_claims():
                 "wam_reference": fields.get("wam_reference", "")
             }
 
-            try:
+        try:
                 supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
                 updated += 1
             except Exception:
