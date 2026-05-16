@@ -197,7 +197,7 @@ def role_options(role):
 
 
 def extract_claim_fields(claim_text):
-    text = str(claim_text)
+text = str(claim_text)
             bad_sections = [
             "warranty contact center",
             "thank you from the warranty contact center",
