@@ -865,6 +865,7 @@ Common Parts:
 
 WAM Reference:
 {best_match.get("wam_reference", "") or best_match.get("wam", "") or best_match.get("reference", "")}
+"""
                 )
 
                 with st.expander("View Similar Paid Claims"):
