@@ -1156,7 +1156,7 @@ def render_claims():
                 st.error(f"extract_claim_fields failed: {type(e).__name__}: {e}")
                 return
 
-            update_data = {
+        update_data = {
                 "concern": fields.get("concern", ""),
                 "cause": fields.get("cause", ""),
                 "correction": fields.get("correction", ""),
