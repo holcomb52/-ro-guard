@@ -1103,8 +1103,6 @@ def render_claims():
             except Exception:
                 pass
 
-        st.success(f"Reprocessed {updated} stored claims.")
-
         try:
             supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
             updated += 1
