@@ -553,7 +553,7 @@ def find_similar_paid_claims(current_job, limit=5):
             overlap = current_words.intersection(claim_words)
             score = int((len(overlap) / max(len(current_words), 1)) * 100)
 
-            if score >= 10:
+            if score >= 25:
                 matches.append({
                     "score": score,
                     "ro_number": row.get("ro_number", ""),
