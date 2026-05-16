@@ -613,6 +613,12 @@ def find_similar_paid_claims(current_job, limit=5):
             if matching_codes:
                 score += 75
             elif current_codes:
+            component_terms = ["esim", "evap", "leak", "leaking", "purge", "canister", "fuel", "emissions"]
+            component_hits = [term for term in component_terms if term in current_text and term in claim_text]
+
+            if component_hits:
+                score += 35
+            else:
                 continue
 
             if score >= 25:
