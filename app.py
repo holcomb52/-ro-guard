@@ -1148,7 +1148,8 @@ def render_claims():
 
             if not story.strip():
                 continue
-
+                
+            story = str(row.get("story", "") or row.get("content", "") or "")
             fields = extract_claim_fields(story)
 
             update_data = {
