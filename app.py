@@ -1167,8 +1167,8 @@ def render_claims():
         try:
                 supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
                 updated += 1
-            except Exception:
-                pass
+        except Exception:
+            pass
 
         try:
             supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
