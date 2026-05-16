@@ -1076,7 +1076,7 @@ WAM Reference:
 
 def render_claims():
     st.header("Claim Learning Upload")
-        if st.button("Reprocess Existing Claims"):
+    if st.button("Reprocess Existing Claims"):
         rows = supabase.table("claims").select("*").execute().data or []
 
         updated = 0
