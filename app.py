@@ -214,15 +214,15 @@ def role_options(role):
 
         cleaned_lines = []
 
-        for line in text.splitlines():
-            lower_line = line.lower()
+            for line in text.splitlines():
+        lower_line = line.lower()
 
         if any(bad in lower_line for bad in bad_sections):
             continue
-    
+
         if len(line.strip()) < 8:
             continue
-    
+
         cleaned_lines.append(line)
     
         text = "\n".join(cleaned_lines)
