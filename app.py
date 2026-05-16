@@ -594,24 +594,24 @@ def find_similar_paid_claims(current_job, limit=5):
                 str(row.get("wam_reference", "")),
                 str(row.get("reference", ""))
             ]).lower()
-                    junk_phrases = [
-                    "warranty pays for parts",
-                    "thank you from the warranty contact center",
-                    "please contact",
-                    "authorization number",
-                    "date completed",
-                    "date received",
-                    "technician identification",
-                    "line item number",
-                    "part number description",
-                    "quantity",
-                    "vehicle description",
-                    "customer states",
-                    "performed a visual inspection"
-                ]
-    
-                for phrase in junk_phrases:
-                    claim_text = claim_text.replace(phrase, "")
+                junk_phrases = [
+                "warranty pays for parts",
+                "thank you from the warranty contact center",
+                "please contact",
+                "authorization number",
+                "date completed",
+                "date received",
+                "technician identification",
+                "line item number",
+                "part number description",
+                "quantity",
+                "vehicle description",
+                "customer states",
+                "performed a visual inspection"
+            ]
+
+            for phrase in junk_phrases:
+                claim_text = claim_text.replace(phrase, "")
             if not claim_text.strip():
                 continue
 
