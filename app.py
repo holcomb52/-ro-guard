@@ -455,8 +455,8 @@ def find_similar_paid_claims(current_job, limit=5):
                     str(row.get("reference", ""))
                 ]).lower()
 
-            if not claim_text.strip():
-                continue
+                if not claim_text.strip():
+                    continue
 
             current_words = set(current_text.split())
             claim_words = set(claim_text.split())
