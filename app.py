@@ -196,19 +196,19 @@ def role_options(role):
     return [""] + sorted(df["name"].astype(str).tolist())
 
 
-def extract_claim_fields(claim_text):
-text = str(claim_text)
-            bad_sections = [
-            "warranty contact center",
-            "thank you from the warranty contact center",
-            "authorization number",
-            "parts price based",
-            "dealer cost",
-            "please contact",
-            "@chrysler.com",
-            "policy",
-            "terms and conditions",
-            "acknowledgement"
+    def extract_claim_fields(claim_text):
+        text = str(claim_text)
+        bad_sections = [
+        "warranty contact center",
+        "thank you from the warranty contact center",
+        "authorization number",
+        "parts price based",
+        "dealer cost",
+        "please contact",
+        "@chrysler.com",
+        "policy",
+        "terms and conditions",
+        "acknowledgement"
         ]
 
         cleaned_lines = []
