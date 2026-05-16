@@ -3,7 +3,7 @@ from supabase import create_client
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "sb_publishable_5SXVN_OB5aIouuZAOa3b3Q_Mq4chxUT"
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)ƒ
 
 import json
 import sqlite3
@@ -770,7 +770,51 @@ def render_review():
                     "MOPA + Original RO",
                     key=f"mopa_{job_no}"
                 )
+            st.markdown("### Claim Intelligence AI Recommendations")
 
+            current_job_preview = {
+                "concern": concern,
+                "cause": cause,
+                "correction": correction
+            }
+
+            similar_claims = find_similar_paid_claims(current_job_preview)
+
+            if similar_claims:
+                best_match = similar_claims[0]
+
+                st.success(f"Similar Paid Claim Match: {best_match['score']}%")
+
+                st.info(
+                    f"""
+Recommended Direction Based on Paid Claims:
+
+Concern Pattern:
+{best_match.get("concern", "")}
+
+Cause Pattern:
+{best_match.get("cause", "")}
+
+Correction Pattern:
+{best_match.get("correction", "")}
+
+Common Labor Ops:
+{best_match.get("labor_ops", "")}
+
+Common Parts:
+{best_match.get("parts", "")}
+"""
+                )
+
+                with st.expander("View Similar Paid Claims"):
+                    for match in similar_claims:
+                        st.markdown(f"**Match Score:** {match['score']}%")
+                        st.markdown(f"**RO:** {match.get('ro_number', '')}")
+                        st.markdown(f"**Labor Ops:** {match.get('labor_ops', '')}")
+                        st.markdown(f"**Parts:** {match.get('parts', '')}")
+                        st.markdown("---")
+            else:
+                st.warning("No similar paid claims found yet. Upload more paid claims in Claim Learning.")
             jobs.append({
                 "job_no": str(job_no),
                 "concern": concern,
