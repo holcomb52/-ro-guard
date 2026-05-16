@@ -557,31 +557,51 @@ def find_similar_paid_claims(current_job, limit=5):
             str(current_job.get("cause", "")),
             str(current_job.get("correction", ""))
         ]).lower()
-        import re
-
-        code_pattern = r"\b[PCBU][0-9][0-9A-Z]{2,3}(?:-[0-9A-Z]{2})?\b"
-        current_codes = set(re.findall(code_pattern, current_text.upper()))
 
         rows = supabase.table("claims").select("*").execute().data or []
         matches = []
 
+        bad_terms = [
+            "acknowledgement", "servlet", "policy", "privacy", "terms",
+            "authorization", "disclosure"
+        ]
+
+        junk_phrases = [
+            "warranty pays for parts",
+            "thank you from the warranty contact center",
+            "please contact",
+            "authorization number",
+            "date completed",
+            "date received",
+            "technician identification",
+            "line item number",
+            "part number description",
+            "quantity",
+            "vehicle description"
+        ]
+
+        stop_words = {
+            "the", "and", "for", "with", "that", "this", "from", "was", "were",
+            "are", "has", "have", "had", "customer", "states", "vehicle",
+            "performed", "removed", "replaced", "checked", "found", "warranty",
+            "claim", "number", "date", "line", "part", "parts"
+        }
+
+        current_words = {
+            w.strip(".,:;()[]").lower()
+            for w in current_text.split()
+            if len(w.strip(".,:;()[]")) > 4 and w.strip(".,:;()[]").lower() not in stop_words
+        }
+
+        if not current_words:
+            return []
+
         for row in rows:
-
             ro_name = str(row.get("ro_number", "")).lower()
-
-            bad_terms = [
-                "acknowledgement",
-                "servlet",
-                "policy",
-                "privacy",
-                "terms",
-                "authorization",
-                "disclosure"
-            ]
 
             if any(term in ro_name for term in bad_terms):
                 continue
-            
+
             claim_text = " ".join([
                 str(row.get("concern", "")),
                 str(row.get("cause", "")),
@@ -594,54 +614,26 @@ def find_similar_paid_claims(current_job, limit=5):
                 str(row.get("wam_reference", "")),
                 str(row.get("reference", ""))
             ]).lower()
-            junk_phrases = [
-            "warranty pays for parts",
-            "thank you from the warranty contact center",
-            "please contact",
-            "authorization number",
-            "date completed",
-            "date received",
-            "technician identification",
-            "line item number",
-            "part number description",
-            "quantity",
-            "vehicle description",
-            "customer states",
-            "performed a visual inspection"
-        ]
 
-        for phrase in junk_phrases:
-            claim_text = claim_text.replace(phrase, "")
+            for phrase in junk_phrases:
+                claim_text = claim_text.replace(phrase, "")
+
             if not claim_text.strip():
                 continue
 
-            current_words = set(current_text.split())
-            claim_words = set(claim_text.split())
-
-            if not current_words:
-                continue
+            claim_words = {
+                w.strip(".,:;()[]").lower()
+                for w in claim_text.split()
+                if len(w.strip(".,:;()[]")) > 4 and w.strip(".,:;()[]").lower() not in stop_words
+            }
 
             overlap = current_words.intersection(claim_words)
+
             score = int((len(overlap) / max(len(current_words), 1)) * 100)
-
-            claim_codes = set(re.findall(code_pattern, claim_text.upper()))
-            matching_codes = current_codes.intersection(claim_codes)
-
-            if matching_codes:
-                score += 75
-                elif current_codes:
-                component_terms = ["esim", "evap", "leak", "leaking", "purge", "canister", "fuel", "emissions"]
-                component_hits = [term for term in component_terms if term in current_text and term in claim_text]
-    
-                if component_hits:
-                    score += 35
-                else:
-                    continue
 
             if score >= 25:
                 matches.append({
                     "score": score,
-                    "matching_codes": ", ".join(sorted(matching_codes)),
                     "ro_number": row.get("ro_number", ""),
                     "concern": row.get("concern", ""),
                     "cause": row.get("cause", ""),
@@ -649,13 +641,18 @@ def find_similar_paid_claims(current_job, limit=5):
                     "labor_ops": row.get("labor_ops", ""),
                     "parts": row.get("parts", ""),
                     "story": row.get("story", ""),
+                    "content": row.get("content", ""),
                     "wam": row.get("wam", ""),
                     "wam_reference": row.get("wam_reference", ""),
-                    "reference": row.get("reference", ""),
-                    "claim_status": row.get("claim_status", "Paid")
+                    "reference": row.get("reference", "")
                 })
 
-        return sorted(matches, key=lambda x: x["score"], reverse=True)[:limit]
+        matches = sorted(matches, key=lambda x: x["score"], reverse=True)
+        return matches[:limit]
+
+    except Exception as e:
+        st.warning(f"Claim Intelligence could not load: {e}")
+        return []
 
     except Exception as e:
         st.warning(f"Claim Intelligence could not load: {e}")
