@@ -218,10 +218,10 @@ def role_options(role):
             lower_line = line.lower()
 
         if any(bad in lower_line for bad in bad_sections):
-                    continue
+                continue
     
         if len(line.strip()) < 8:
-                    continue
+                continue
     
         cleaned_lines.append(line)
     
