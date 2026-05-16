@@ -227,7 +227,7 @@ def role_options(role):
     
             text = "\n".join(cleaned_lines)
     
-        def find_after(labels, max_len=700):
+    def find_after(labels, max_len=700):
             lower = text.lower()
             for label in labels:
                 idx = lower.find(label.lower())
