@@ -57,21 +57,11 @@ def load_shared_claims():
     try:
         response = supabase.table("claims").select("*").execute()
         rows = response.data or []
-        df = pd.DataFrame(rows)
-
-        if df.empty:
-            return pd.DataFrame(columns=["uploaded_at", "source_file", "claim_index", "raw_text"])
-
-        return pd.DataFrame({
-            "uploaded_at": df.get("created_at", ""),
-            "source_file": df.get("ro_number", ""),
-            "claim_index": df.get("id", range(1, len(df)+1)),
-            "raw_text": df.get("story", "")
-        })
+        return pd.DataFrame(rows)
 
     except Exception as e:
         st.warning(f"Load failed: {e}")
-        return pd.DataFrame(columns=["uploaded_at", "source_file", "claim_index", "raw_text"])
+        return pd.DataFrame()
 
 def init_db():
     conn = db()
