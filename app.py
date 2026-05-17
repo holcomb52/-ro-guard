@@ -1226,7 +1226,7 @@ def render_claims():
     df = load_shared_claims()
     st.metric("Learned Claim Records", len(df))
     if not df.empty:
-        st.dataframe(df[["uploaded_at", "source_file", "claim_index"]], use_container_width=True)
+        st.dataframe(df, use_container_width=True)
 
 def render_reporting():
         df =load_reviews()
