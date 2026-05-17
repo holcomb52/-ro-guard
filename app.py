@@ -110,7 +110,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS claims (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             uploaded_at TEXT,
-            source_file TEXT,
+            source_file TEXT, 
             claim_index INTEGER,
             raw_text TEXT
         )
