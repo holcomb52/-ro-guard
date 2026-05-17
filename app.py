@@ -1201,7 +1201,6 @@ def render_claims():
                 "concern": fields.get("concern", ""),
                 "cause": fields.get("cause", ""),
                 "correction": fields.get("correction", ""),
-                "labor_ops": fields.get("labor_ops", ""),
                 "wam_reference": fields.get("wam_reference", "")
             }
 
