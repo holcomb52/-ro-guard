@@ -230,7 +230,6 @@ def extract_claim_fields(claim_text):
         "concern": text[:500],
         "cause": "",
         "correction": text[:1200],
-        "labor_ops": "",
         "parts": "",
         "wam_reference": ""
     }
