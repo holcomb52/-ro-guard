@@ -9,8 +9,12 @@
 
 | Store | Purpose |
 |-------|---------|
-| `ro_shield_final.db` | Local SQLite (reviews, personnel, bulletins, local claims table) |
-| Supabase (`claims`, personnel, `wam_documents`, etc.) | Shared cloud data — credentials in `.env` |
+| **Supabase** | Reviews, claims, personnel, WAM, bulletins (team-wide) |
+| `ro_shield_final.db` | Legacy local SQLite — use Reporting → Import to migrate old reviews |
+
+### First-time Supabase setup
+
+Run `docs/SUPABASE_SCHEMA.sql` in Supabase → SQL Editor before saving reviews.
 
 ## Do not touch
 

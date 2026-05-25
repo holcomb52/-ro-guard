@@ -35,11 +35,20 @@ In the app → **Settings** → **Secrets**, paste:
 ```toml
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "your_publishable_key_here"
+RO_SHIELD_APP_URL = "https://YOUR-APP.streamlit.app"
 ```
 
-Use the same values as your local `.env`. Save — the app will reboot.
+Use the same Supabase values as your local `.env`. Set `RO_SHIELD_APP_URL` to your **live Streamlit URL** so password reset emails return to the deployed app. Save — the app will reboot.
 
-## 4. After deploy
+## 4. Supabase SMTP (password reset emails)
+
+Without custom SMTP, reset emails often never arrive. Follow **`docs/SUPABASE_SMTP.md`** (Outlook, Gmail, or Yahoo):
+
+1. Supabase → **Authentication** → **Emails** → enable **custom SMTP** (Office 365, Google, or SendGrid)
+2. **Authentication** → **URL Configuration** → add your Streamlit URL to **Site URL** and **Redirect URLs**
+3. Test **Forgot your password?** on the live app
+
+## 5. After deploy
 
 1. Open the live URL.
 2. **Claim Learning** → **Reprocess Existing Claims**.

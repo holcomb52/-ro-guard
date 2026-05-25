@@ -1,12 +1,63 @@
+from __future__ import annotations
+
+import html
 import json
 import os
 import re
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+from charts import (
+    advisor_hard_stops_chart,
+    audit_outcomes_pie,
+    first_pass_pie,
+    issue_breakdown_pie,
+    review_status_pie,
+    score_distribution_chart,
+    weekly_activity_chart,
+)
+from pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
+from auth import (
+    capture_recovery_from_query,
+    inject_auth_hash_bridge,
+    is_authenticated,
+    is_password_recovery_mode,
+    is_valid_email,
+    normalize_email,
+    render_authenticated_sidebar,
+    render_login_page,
+    render_password_reset_page,
+    restore_client_session,
+    sync_personnel_identity,
+)
+from review_store import (
+    AUDIT_RULE_LABELS,
+    active_rejection_reason_labels,
+    compute_roi_metrics,
+    load_audit_rules,
+    filter_bulletins_df,
+    load_bulletins,
+    load_rejection_reason_library,
+    sort_bulletins_df,
+    load_reviews as fetch_reviews,
+    load_smart_warranty_settings,
+    migrate_sqlite_to_supabase,
+    normalize_audit_rules,
+    normalize_rejection_reason_library,
+    normalize_reviews_dataframe,
+    save_audit_rules,
+    save_bulletin as persist_bulletin,
+    save_rejection_reason_library,
+    save_review as persist_review,
+    save_smart_warranty_settings,
+    smart_warranty_punch_exempt,
+)
+from theme_styles import THEME_CSS
+from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
+from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
 
 try:
     from dotenv import load_dotenv
@@ -55,13 +106,37 @@ DB_PATH = Path("ro_shield_final.db")
 
 
 # =========================
-# DATABASE
+# DATABASE (Supabase = source of truth for reviews, claims, personnel, WAM)
 # =========================
-def db():
-    return sqlite3.connect(DB_PATH)
-# =====================
-# SUPABASE (SHARED DB)
-# =====================
+def save_review(data):
+    try:
+        persist_review(supabase, data)
+        return True
+    except Exception as e:
+        st.error(f"Review save failed: {e}")
+        st.caption("If this is your first deploy, run docs/SUPABASE_SCHEMA.sql in Supabase SQL Editor.")
+        return False
+
+
+def load_reviews():
+    try:
+        return fetch_reviews(supabase)
+    except Exception as e:
+        st.warning(f"Review load failed: {e}")
+        return pd.DataFrame()
+
+
+def save_bulletin(title, keywords, notes, **kwargs):
+    try:
+        persist_bulletin(supabase, title, keywords, notes, **kwargs)
+    except Exception as e:
+        st.warning(f"Bulletin save failed: {e}")
+        st.caption("Run docs/SUPABASE_SCHEMA.sql in Supabase if the bulletins table is missing columns.")
+
+
+def init_db():
+    """Legacy local DB — kept only for one-time SQLite → Supabase migration."""
+    pass
 
 def save_shared_claims(file_name, claims):
     for idx, claim in enumerate(claims, start=1):
@@ -93,90 +168,6 @@ def load_shared_claims():
         st.warning(f"Load failed: {e}")
         return pd.DataFrame()
 
-def init_db():
-    conn = db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS reviews (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT,
-            ro_number TEXT,
-            vin TEXT,
-            advisor TEXT,
-            technician TEXT,
-            warranty_admin TEXT,
-            manager TEXT,
-            entered_by TEXT,
-            score INTEGER,
-            status TEXT,
-            total_claim_value REAL,
-            hard_stop_value REAL,
-            hard_stop_count INTEGER,
-            warning_count INTEGER,
-            time_bypass INTEGER DEFAULT 0,
-            time_bypass_user TEXT,
-            jobs_json TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS personnel (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT,
-            name TEXT,
-            role TEXT,
-            active INTEGER DEFAULT 1
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS claims (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uploaded_at TEXT,
-            source_file TEXT, 
-            claim_index INTEGER,
-            raw_text TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS bulletins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT,
-            title TEXT,
-            keywords TEXT,
-            notes TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
-def read_df(table):
-    conn = db()
-    try:
-        df = pd.read_sql_query(f"SELECT * FROM {table} ORDER BY id DESC", conn)
-    except Exception:
-        df = pd.DataFrame()
-    conn.close()
-    return df
-
-
-def save_review(data):
-    try:
-        result = supabase.table("reviews").insert(data).execute()
-        st.write("SAVE RESULT:", result.data)
-        return True
-    except Exception as e:
-        st.error(f"Review save failed: {e}")
-        return False
-
-def load_reviews():
-    try:
-        response = supabase.table("reviews").select("*").order("created_at", desc=True).limit(5000).execute()
-        rows = response.data or []
-        return pd.DataFrame(rows)
-    except Exception as e:
-        st.warning(f"Review load failed: {e}")
-        return pd.DataFrame()
-    
-
 def load_personnel():
     try:
         response = supabase.table("personnel").select("*").eq("active", True).execute()
@@ -184,20 +175,24 @@ def load_personnel():
         return pd.DataFrame(rows)
     except Exception as e:
         st.warning(f"Personnel load failed: {e}")
-        return pd.DataFrame(columns=["name", "role"])
+        return pd.DataFrame(columns=["name", "role", "email"])
 
 
-def add_person_shared(name, role, employee_number):
+def add_person_shared(name, role, employee_number, email=""):
     try:
         existing = supabase.table("personnel").select("id").eq("name", name).eq("role", role).execute()
 
         if not existing.data:
-            supabase.table("personnel").insert({
+            payload = {
                 "name": name,
                 "employee_number": employee_number,
                 "role": role,
-                "active": True
-            }).execute()
+                "active": True,
+            }
+            email_clean = normalize_email(email)
+            if email_clean:
+                payload["email"] = email_clean
+            supabase.table("personnel").insert(payload).execute()
 
     except Exception as e:
         st.warning(f"Personnel save failed: {e}")
@@ -209,11 +204,89 @@ def deactivate_person(pid):
         st.warning(f"Personnel deactivate failed: {e}")
 
 
+ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin")
+PERSONNEL_ADMIN_ROLES = ("Manager",)
+CONTENT_ADMIN_ROLES = ("Manager", "Warranty Admin")
+
+
+def admin_write_names() -> list[str]:
+    df = load_personnel()
+    if df.empty:
+        return []
+    return df[df["role"].isin(ADMIN_WRITE_ROLES)]["name"].astype(str).tolist()
+
+
+def current_person_name() -> str:
+    return str(st.session_state.get("current_person_name") or "").strip()
+
+
+def current_person_role() -> str:
+    return str(st.session_state.get("current_person_role") or "").strip()
+
+
+def is_signed_in() -> bool:
+    return is_authenticated()
+
+
+def user_has_role(*roles: str) -> bool:
+    return current_person_role() in roles
+
+
+def user_can_admin_write() -> bool:
+    return user_has_role(*ADMIN_WRITE_ROLES)
+
+
+def user_can_manage_personnel() -> bool:
+    return user_has_role(*PERSONNEL_ADMIN_ROLES)
+
+
+def user_can_upload_library() -> bool:
+    return user_has_role(*CONTENT_ADMIN_ROLES)
+
+
+def render_role_gate_message(required_roles: tuple[str, ...], action_label: str = "make changes"):
+    roles_text = " or ".join(required_roles)
+    who = current_person_name() or "—"
+    role = current_person_role() or "no linked role"
+    st.warning(
+        f"Your account needs a linked **{roles_text}** personnel record to {action_label}. "
+        f"Signed in as **{who}** ({role})."
+    )
+
+
+def resolve_admin_author(authorized_names: list[str]) -> str:
+    name = current_person_name()
+    if name and user_can_admin_write() and name in authorized_names:
+        return name
+    return ""
+
+
+def render_admin_author_field(authorized_names: list[str], *, key: str) -> str:
+    locked = resolve_admin_author(authorized_names)
+    if locked:
+        st.text_input(
+            "Authorized by (Manager / Warranty Admin)",
+            value=locked,
+            disabled=True,
+            key=f"{key}_locked",
+        )
+        return locked
+    if not user_can_admin_write():
+        st.caption("Admin save requires a linked Manager or Warranty Admin account.")
+        return ""
+    return st.selectbox(
+        "Authorized by (Manager / Warranty Admin)",
+        options=[""] + authorized_names,
+        disabled=not authorized_names,
+        key=key,
+    )
+
+
 def role_options(role):
     df = load_personnel()
     if df.empty:
         return [""]
-    df = df[(df["role"] == role) & (df["active"] == 1)]
+    df = df[(df["role"] == role) & (df["active"].astype(bool))]
     return [""] + sorted(df["name"].astype(str).tolist())
 
 
@@ -619,6 +692,254 @@ def enrich_paid_claim_match(match):
     return out
 
 
+def _paid_claim_reference_text(match: dict) -> str:
+    return claim_source_text(
+        match.get("story"),
+        match.get("content"),
+        match.get("correction"),
+        match.get("cause"),
+        match.get("concern"),
+        match.get("labor_ops"),
+        match.get("parts"),
+    )
+
+
+def analyze_narrative_gaps(current_job: dict, paid_match: dict) -> dict:
+    """Compare current job narrative to a matched paid claim and list documentation gaps."""
+    concern = str(current_job.get("concern") or "").lower()
+    cause = str(current_job.get("cause") or "").lower()
+    correction = str(current_job.get("correction") or "").lower()
+    current_all = f"{concern} {cause} {correction}".strip()
+
+    paid = enrich_paid_claim_match(paid_match)
+    paid_ref = _paid_claim_reference_text(paid).lower()
+    paid_cause = str(paid.get("cause") or "").lower()
+    paid_correction = str(paid.get("correction") or "").lower()
+    paid_blob = paid_ref or f"{paid.get('concern', '')} {paid_cause} {paid_correction}".lower()
+
+    gaps = []
+
+    def _add_gap(category, message):
+        gaps.append({"category": category, "message": message})
+
+    def _paid_has_phrases(phrases, text):
+        return [p for p in phrases if p in text]
+
+    def _current_missing(paid_hits, current_text):
+        return paid_hits and not any(p in current_text for p in paid_hits)
+
+    cause_blob = f"{paid_cause} {paid_blob}"
+    diagnostic = _paid_has_phrases(
+        ["found", "tested", "verified", "diagnosed", "inspected", "scanned"],
+        cause_blob,
+    )
+    if _current_missing(diagnostic, cause):
+        _add_gap(
+            "Cause",
+            "Paid claims documented diagnostic steps (tested, scanned, verified, etc.) — "
+            "your cause does not.",
+        )
+
+    evidence = _paid_has_phrases(
+        ["dtc", "code", "inspection", "measured", "scan", "test", "voltage", "pressure", "leak test"],
+        cause_blob,
+    )
+    if _current_missing(evidence, cause):
+        _add_gap(
+            "Cause",
+            "Paid claims included supporting evidence (DTC, test result, measurement, etc.) — "
+            "your cause does not.",
+        )
+
+    failure = _paid_has_phrases(
+        [
+            "failed", "failure", "inoperative", "not working", "leak", "leaking",
+            "shorted", "open circuit", "broken", "faulty", "damaged", "internal failure",
+        ],
+        cause_blob,
+    )
+    if _current_missing(failure, cause):
+        _add_gap(
+            "Cause",
+            "Paid claims clearly identified the failure — your cause may not state what failed.",
+        )
+
+    correction_blob = f"{paid_correction} {paid_blob}"
+    repair = _paid_has_phrases(
+        ["replaced", "repaired", "installed", "removed", "programmed", "performed", "flashed"],
+        correction_blob,
+    )
+    if _current_missing(repair, correction):
+        _add_gap(
+            "Correction",
+            "Paid claims clearly state the repair action — your correction may be missing it.",
+        )
+
+    justification = _paid_has_phrases(
+        [
+            "due to", "because", "failed", "failure", "leaking", "shorted", "open",
+            "damaged", "removed and replaced", "reprogrammed", "updated",
+        ],
+        correction_blob,
+    )
+    if _current_missing(justification, correction):
+        _add_gap(
+            "Correction",
+            "Paid claims tied the repair to the failure — your correction may need a 'due to / because' link.",
+        )
+
+    verification = _paid_has_phrases(
+        ["verified", "operates", "working", "proper operation", "test drove", "road test", "no further issues"],
+        correction_blob,
+    )
+    if _current_missing(verification, correction):
+        _add_gap(
+            "Correction",
+            "Paid claims verified proper operation or test drove — your correction does not.",
+        )
+
+    paid_dtcs = set(re.findall(r"\b[A-Z][0-9A-Z]{4}(?:-[0-9A-Z]{2})?\b", paid_blob.upper()))
+    current_dtcs = set(re.findall(r"\b[A-Z][0-9A-Z]{4}(?:-[0-9A-Z]{2})?\b", current_all.upper()))
+    missing_dtcs = sorted(paid_dtcs - current_dtcs)
+    if missing_dtcs:
+        _add_gap(
+            "Cause",
+            f"Paid claim cited DTC(s): {', '.join(missing_dtcs[:4])} — include applicable codes in your cause.",
+        )
+
+    paid_lops = set(re.findall(r"\b\d{7,8}\b", paid_blob))
+    current_lops = set(re.findall(r"\b\d{7,8}\b", current_all))
+    missing_lops = sorted(paid_lops - current_lops)
+    if missing_lops:
+        _add_gap(
+            "Labor",
+            f"Paid claim used labor op(s): {', '.join(missing_lops[:4])} — confirm your narrative/claim matches.",
+        )
+
+    wam_ref = str(paid.get("wam_reference") or "").strip()
+    if wam_ref and wam_ref.lower() not in current_all:
+        _add_gap("WAM", f"Paid claim referenced **{wam_ref}** — verify if WAM applies to this job.")
+
+    parts_text = str(paid.get("parts") or "")
+    if parts_text.strip():
+        part_tokens = re.findall(r"\b[A-Z0-9]{2,}(?:[-\s][A-Z0-9]{2,})+\b", parts_text.upper())
+        part_tokens += re.findall(r"\b\d{5,}\w*\b", parts_text)
+        missing_parts = []
+        for token in part_tokens:
+            token_clean = token.strip().lower().replace(" ", "")
+            if len(token_clean) >= 5 and token_clean not in current_all.replace(" ", ""):
+                missing_parts.append(token)
+            if len(missing_parts) >= 3:
+                break
+        if missing_parts:
+            _add_gap(
+                "Parts",
+                f"Paid claim listed part(s) not mentioned in your narrative: {', '.join(missing_parts[:3])}.",
+            )
+
+    for component in paid.get("match_reasons") or []:
+        if component and component not in current_all:
+            _add_gap(
+                "Component",
+                f"Matched paid claim documented **{component}** — confirm your narrative mentions it.",
+            )
+
+    strengths = []
+    if not gaps:
+        strengths.append("Your narrative matches key documentation patterns from the paid claim.")
+    elif len(gaps) <= 2:
+        strengths.append("Core component match is good — tighten the remaining narrative gaps above.")
+
+    return {
+        "gaps": gaps,
+        "strengths": strengths,
+        "gap_count": len(gaps),
+    }
+
+
+def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: int):
+    st.markdown("### Narrative Gap Coach")
+    st.caption(
+        "Compares this job's concern, cause, and correction to similar **paid claims** "
+        "in your Claim Learning library."
+    )
+
+    text_len = len(
+        f"{current_job.get('concern', '')} {current_job.get('cause', '')} {current_job.get('correction', '')}".strip()
+    )
+    if text_len < 20:
+        st.info("Enter more narrative text to activate the gap coach.")
+        return
+
+    if not similar_claims:
+        st.info(
+            "No similar paid claims found yet. Upload paid warranty claims on the **Claim Learning** tab "
+            "to build your library."
+        )
+        return
+
+    best_match = enrich_paid_claim_match(similar_claims[0])
+    analysis = analyze_narrative_gaps(current_job, best_match)
+
+    st.success(
+        f"Similar paid claim match: **{best_match.get('score', 0)}%** · "
+        f"{best_match.get('ro_number', 'Paid claim')}"
+    )
+
+    if analysis["gaps"]:
+        st.warning(
+            f"**{analysis['gap_count']} narrative gap(s) vs paid claim** — consider addressing before submit:"
+        )
+        for gap in analysis["gaps"][:10]:
+            st.markdown(f"- **{gap['category']}:** {gap['message']}")
+    else:
+        st.success("No major narrative gaps detected vs the matched paid claim.")
+
+    for note in analysis.get("strengths") or []:
+        st.caption(note)
+
+    reference = (
+        best_match.get("correction", "")
+        or best_match.get("cause", "")
+        or best_match.get("concern", "")
+        or str(best_match.get("story", ""))[:600]
+    )
+    labor_list = format_recommendation_list(
+        best_match.get("labor_ops"),
+        "No labor operations found in this paid claim.",
+    )
+    parts_list = format_recommendation_list(
+        best_match.get("parts"),
+        "No parts list found in this paid claim.",
+    )
+    wam_display = (best_match.get("wam_reference") or "").strip() or "No WAM reference in paid claim."
+
+    with st.expander("Paid claim reference (what passed)", expanded=analysis["gap_count"] > 0):
+        st.markdown("**Suggested narrative source**")
+        st.write(reference)
+        st.markdown("**Labor ops**")
+        st.markdown(labor_list)
+        st.markdown("**Parts**")
+        st.markdown(parts_list)
+        st.markdown(f"**WAM reference:** {wam_display}")
+
+    if len(similar_claims) > 1:
+        with st.expander(f"Other similar paid claims ({len(similar_claims) - 1} more)"):
+            for raw_match in similar_claims[1:]:
+                match = enrich_paid_claim_match(raw_match)
+                st.markdown(f"**{match.get('score', 0)}%** · {match.get('ro_number', '')}")
+                if match.get("match_reasons"):
+                    st.caption(f"Components: {', '.join(match['match_reasons'][:5])}")
+                preview = (
+                    match.get("correction")
+                    or match.get("cause")
+                    or match.get("concern")
+                    or str(match.get("story", ""))[:300]
+                )
+                st.write(preview)
+                st.markdown("---")
+
+
 def save_learned_claims(file_name, claims):
     for idx, claim in enumerate(claims, start=1):
         fields = extract_claim_fields(claim)
@@ -671,99 +992,14 @@ def save_learned_claims(file_name, claims):
                 supabase.table("claims").insert(data).execute()
         except Exception as e:
             st.warning(f"Could not save learned claim {idx}: {e}")
-  
-def save_bulletin(title, keywords, notes):
-    conn = db()
-    conn.execute("""
-        INSERT INTO bulletins (created_at, title, keywords, notes)
-        VALUES (?, ?, ?, ?)
-    """, (datetime.now().isoformat(timespec="seconds"), title, keywords, notes))
-    conn.commit()
-    conn.close()
 
 
 # =========================
 # STYLE
 # =========================
-def apply_style():
-    st.markdown("""
-    <style>
-    .stApp {
-        background:
-            linear-gradient(rgba(1, 7, 14, .91), rgba(1, 7, 14, .95)),
-            radial-gradient(circle at 14% 8%, rgba(0, 114, 255, .32), transparent 28%),
-            radial-gradient(circle at 90% 10%, rgba(45, 156, 255, .18), transparent 26%),
-            linear-gradient(135deg, #06101d 0%, #02070d 100%);
-        color: #ffffff !important;
-    }
-    header[data-testid="stHeader"] { background: rgba(0,0,0,0); }
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #071322, #030811) !important;
-        border-right: 1px solid rgba(36,135,255,.30);
-    }
-    h1,h2,h3,h4,h5,h6,p,span,label,div { color: #ffffff !important; }
-    .hero {
-        padding: 28px 30px;
-        border-radius: 22px;
-        background: linear-gradient(135deg, rgba(10, 31, 57, .94), rgba(2, 9, 19, .94));
-        border: 1px solid rgba(62,150,255,.40);
-        box-shadow: 0 20px 60px rgba(0,0,0,.35);
-        margin-bottom: 22px;
-    }
-    .hero h1 { margin: 0; font-size: 48px; letter-spacing: .5px; }
-    .hero p { color: #d6e8ff !important; font-size: 16px; }
-    .section-card {
-        padding: 18px;
-        border-radius: 18px;
-        background: rgba(7, 19, 34, .62);
-        border: 1px solid rgba(62,150,255,.22);
-        margin: 10px 0 18px 0;
-    }
-    textarea, input {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        background-color: rgba(13, 30, 55, .96) !important;
-        border: 1px solid rgba(140, 200, 255, .70) !important;
-    }
-    textarea::placeholder, input::placeholder { color: #d8eaff !important; opacity: 1 !important; }
-    div[data-baseweb="select"] > div {
-        background-color: rgba(13, 30, 55, .96) !important;
-        border: 1px solid rgba(140, 200, 255, .70) !important;
-    }
-    div[data-baseweb="select"] span,
-    div[data-baseweb="select"] input,
-    div[data-baseweb="select"] svg {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        fill: #ffffff !important;
-    }
-    section[data-testid="stFileUploaderDropzone"] {
-        background-color: rgba(13, 30, 55, .92) !important;
-        border: 1px dashed rgba(140, 200, 255, .70) !important;
-    }
-    div[data-testid="stMetric"] {
-        background: rgba(7, 19, 34, .86);
-        border: 1px solid rgba(62,150,255,.28);
-        border-radius: 16px;
-        padding: 14px;
-        min-height: 112px;
-    }
-    div[data-testid="stMetricValue"] {
-        white-space: nowrap !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        font-size: 1.9rem !important;
-    }
-    div[data-testid="stMetricLabel"] {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-    }
-    .status-ready {background:rgba(0,150,90,.20); border:1px solid rgba(0,220,130,.45); padding:16px; border-radius:16px;}
-    .status-review {background:rgba(255,200,0,.18); border:1px solid rgba(255,210,0,.50); padding:16px; border-radius:16px;}
-    .status-stop {background:rgba(255,50,50,.18); border:1px solid rgba(255,90,90,.50); padding:16px; border-radius:16px;}
-    </style>
-    """, unsafe_allow_html=True)
+def apply_style(theme="Dark"):
+    css = THEME_CSS.get(theme, THEME_CSS["Dark"])
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
 # =========================
@@ -851,42 +1087,481 @@ def extract_sentence(claim_text, kind):
 # =========================
 # AUDIT ENGINE
 # =========================
-def find_wam_matches(job):
-    text = " ".join([
+MANUAL_STOP_WORDS = {
+    "the", "and", "for", "with", "that", "this", "from", "was", "were", "are",
+    "has", "have", "had", "customer", "states", "vehicle", "performed", "removed",
+    "replaced", "checked", "found", "verified", "repair", "concern", "cause",
+    "correction", "warranty", "claim", "technician", "advisor",
+    # Generic pencil-wrench / narrative words — too broad to match WAM sections.
+    "inspection", "operating", "accessed", "visual", "examination", "designed",
+    "system", "internal", "malfunction", "binding", "jammed", "switch", "button",
+    "further", "concern", "complaint", "diagnostic", "proper", "working",
+    "operates", "designed", "start", "stop", "replaced", "removed",
+}
+
+JOB_MANUAL_TRIGGERS = {
+    "battery_replacement": ["battery test", "battery replacement", "test slip", "failed battery", "aux battery"],
+    "ac_repair": ["a/c repair", "evac", "recharge", "refrigerant", "compressor"],
+    "oil_leak": ["oil leak", "oil leakage", "oil dye", "leak detection", "engine oil"],
+    "sublet_repair": ["sublet", "sublet invoice", "outside repair"],
+    "rental_involved": ["rental", "loaner", "rental days"],
+    "warranty_add_on": ["add-on", "add on", "manager approval", "authorization"],
+    "parts_warranty": ["parts warranty", "mopar", "mopa", "original ro"],
+}
+
+# Section must contain one of these when the matching checkbox is checked.
+TOPIC_STRONG_PHRASES = {
+    "battery_replacement": ["battery test", "battery replacement", "test slip", "failed battery", "battery code"],
+    "ac_repair": ["a/c", "evac", "recharge", "refrigerant", "air conditioning"],
+    "oil_leak": ["oil leak", "oil leakage", "oil dye", "leak detection", "engine oil"],
+    "sublet_repair": ["sublet", "outside repair", "sublet invoice"],
+    "rental_involved": ["rental", "loaner", "rental vehicle"],
+    "warranty_add_on": ["add-on", "add on", "manager approval", "authorization"],
+    "parts_warranty": ["parts warranty", "mopar", "mopa", "original ro"],
+}
+
+
+def _active_checkbox_topics(job):
+    return [topic for topic in JOB_MANUAL_TRIGGERS if job.get(topic)]
+
+
+def _topic_anchor_phrases(job):
+    """Strong phrases used to locate the right excerpt — not loose narrative words."""
+    anchors = []
+    for topic in _active_checkbox_topics(job):
+        anchors.extend(TOPIC_STRONG_PHRASES.get(topic, JOB_MANUAL_TRIGGERS[topic]))
+    explicit = extract_wam_reference(_job_narrative_text(job))
+    if explicit:
+        anchors.append(explicit.lower())
+    return list(dict.fromkeys(a.lower() for a in anchors if a))
+
+
+def _content_matches_any_phrase(content_low, phrases):
+    return any(phrase.lower() in content_low for phrase in phrases if phrase)
+
+
+def _section_matches_job_topics(job, content_low):
+    active = _active_checkbox_topics(job)
+    if not active:
+        return False
+    for topic in active:
+        topic_phrases = TOPIC_STRONG_PHRASES.get(topic, JOB_MANUAL_TRIGGERS[topic])
+        if _content_matches_any_phrase(content_low, topic_phrases):
+            return True
+    return False
+
+
+def _job_narrative_text(job):
+    return " ".join([
         str(job.get("concern", "")),
         str(job.get("cause", "")),
-        str(job.get("correction", ""))
+        str(job.get("correction", "")),
     ]).lower()
 
-    matches = []
+
+def _significant_terms(text):
+    return {
+        w.strip(".,:;()[]\"'").lower()
+        for w in str(text or "").split()
+        if len(w.strip(".,:;()[]\"'")) > 4
+        and w.strip(".,:;()[]\"'").lower() not in MANUAL_STOP_WORDS
+    }
+
+
+def _job_manual_search_terms(job):
+    text = _job_narrative_text(job)
+    terms = set(_significant_terms(text))
+    for topic in _active_checkbox_topics(job):
+        terms.update(JOB_MANUAL_TRIGGERS[topic])
+    explicit = extract_wam_reference(text)
+    if explicit:
+        terms.add(explicit.lower())
+    return text, terms
+
+
+TOPIC_EXCLUDE_PHRASES = {
+    "oil_leak": ["sheet metal", "transportation damage", "carrier delivery", "drop-ship", "cummins diesel"],
+    "battery_replacement": ["sheet metal", "transportation damage", "oil leak", "a/c"],
+    "ac_repair": ["sheet metal", "transportation damage", "battery test", "oil leak"],
+}
+
+
+def _trim_snippet_at_unrelated_topic(snippet, active_topics):
+    if not snippet or not active_topics:
+        return snippet
+    low = snippet.lower()
+    cut_at = len(snippet)
+    for topic in active_topics:
+        for bad in TOPIC_EXCLUDE_PHRASES.get(topic, []):
+            idx = low.find(bad.lower())
+            if idx > 80:
+                cut_at = min(cut_at, idx)
+    if cut_at < len(snippet):
+        snippet = snippet[:cut_at].rstrip(" ,.;:-") + "…"
+    return snippet
+
+
+def _find_snippet_start(raw, anchor_idx, lookback=520):
+    """Walk backward to a natural section/table row start — not mid-word."""
+    region_start = max(0, anchor_idx - lookback)
+    region = raw[region_start:anchor_idx]
+
+    break_points = [0]
+    patterns = [
+        r"(?i)\btype of reimbursement\b",
+        r"(?i)\bsupporting documents\b",
+        r"(?i)(?:^|[\n\r]|(?:\s{2,}))(?:battery|diagnostic|oil leakage|oil leak|sublet|rental)\b",
+        r"(?m)^\s*\d+\.\d+(?:\.\d+)?(?:\.\d+)?\s+[A-Z]",
+        r"•\s*",
+        r"\.\s+(?=[A-Z0-9•\-])",
+        r";\s+",
+        r":\s+(?=[A-Z])",
+    ]
+    for pat in patterns:
+        for match in re.finditer(pat, region):
+            break_points.append(match.start())
+
+    start_rel = max(break_points)
+    start = region_start + start_rel
+
+    while start < anchor_idx and raw[start:start + 1] in " \t\n\r|":
+        start += 1
+
+    if start > 0 and start < len(raw) and raw[start - 1].isalnum() and raw[start].isalnum():
+        space_idx = raw.rfind(" ", region_start, start)
+        if space_idx != -1:
+            start = space_idx + 1
+
+    return start
+
+
+def _extract_manual_snippet(content, anchor_phrases, max_len=480):
+    """Return a readable excerpt centered on a topic phrase — not mid-sentence."""
+    raw = str(content or "")
+    raw = re.sub(r"[ \t]+", " ", raw)
+    raw = re.sub(r"\n{2,}", "\n", raw).strip()
+    if not raw or not anchor_phrases:
+        return ""
+
+    low = raw.lower()
+    best_idx = -1
+    best_phrase = ""
+    for phrase in sorted(anchor_phrases, key=len, reverse=True):
+        p = phrase.lower().strip()
+        if len(p) < 4:
+            continue
+        idx = low.find(p)
+        if idx != -1 and (best_idx == -1 or len(p) > len(best_phrase)):
+            best_idx = idx
+            best_phrase = p
+
+    if best_idx == -1:
+        return ""
+
+    start = _find_snippet_start(raw, best_idx)
+    end = min(len(raw), best_idx + len(best_phrase) + max_len)
+    snippet = raw[start:end].strip()
+
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(raw):
+        snippet = snippet + "…"
+
+    return snippet
+
+
+def _guess_wam_keywords(text):
+    """Auto-tag uploaded manual chunks so Review can match without manual keyword entry."""
+    text_low = str(text or "").lower()
+    candidates = [
+        "battery", "test slip", "oil leak", "oil dye", "sublet", "rental", "loaner",
+        "a/c", "evac", "recharge", "refrigerant", "mopar", "parts warranty",
+        "manager approval", "add-on", "warranty claim", "narrative", "documentation",
+        "hard stop", "required", "must", "shall",
+    ]
+    return ", ".join(c for c in candidates if c in text_low)
+
+
+def _extract_tsb_number(text):
+    patterns = [
+        r"(?:TSB|Technical Service Bulletin)\s*(?:Number|No\.?|#)?\s*[:\-\s]*(\d{1,3}[-–]\d{2,4}\w?)",
+        r"Bulletin\s*(?:Number|No\.?)\s*[:\-\s]*(\d{1,3}[-–]\d{2,4}\w?)",
+        r"\b(\d{2}[-–]\d{3,4})\b",
+    ]
+    for pat in patterns:
+        match = re.search(pat, text, re.I)
+        if match:
+            return match.group(1).replace("–", "-").strip()
+    return ""
+
+
+def _guess_tsb_keywords(text):
+    """Auto-tag uploaded TSB text from components and common bulletin terms."""
+    text_low = str(text or "").lower()
+    hits = _components_in_claim_text(text_low)
+    extra = [
+        term for term in (
+            "recall", "reprogram", "software update", "flash", "module",
+            "technical service bulletin", "warranty", "campaign",
+        )
+        if term in text_low
+    ]
+    return ", ".join(dict.fromkeys(hits + extra))
+
+
+def _bulletin_preview_label(row) -> str:
+    num = str(row.get("bulletin_number") or "").strip()
+    title = str(row.get("title") or "").strip()
+    if num and title:
+        return f"{num} — {title}"
+    return num or title or "Untitled bulletin"
+
+
+def _extract_tsb_metadata(text, filename):
+    bulletin_number = _extract_tsb_number(text)
+    title = ""
+    for pat in (
+        r"(?:SUBJECT|TOPIC|TITLE|REASON FOR BULLETIN)\s*[:\-\s]+(.{8,140})",
+    ):
+        match = re.search(pat, text, re.I)
+        if match:
+            title = re.sub(r"\s+", " ", match.group(1)).strip()
+            break
+    if not title:
+        title = f"TSB {bulletin_number}" if bulletin_number else Path(filename).stem
+    return bulletin_number, title[:200], _guess_tsb_keywords(text)
+
+
+def find_applicable_tsb_bulletins(job, limit=3):
+    """Match uploaded TSB / bulletin content to this job's repair narrative."""
+    text = _job_narrative_text(job).lower()
+    if not text.strip():
+        return []
 
     try:
-        rows = supabase.table("wam_documents").select("*").execute().data or []
+        bulletin_df = load_bulletins(supabase)
+    except Exception:
+        return []
 
-        for row in rows:
-            keywords = str(row.get("keywords", "")).lower()
-            content = str(row.get("content", "")).lower()
-            section = row.get("section", "WAM Reference")
+    if bulletin_df.empty:
+        return []
+
+    job_components = set(_components_in_claim_text(text))
+    scored = []
+
+    for _, row in bulletin_df.iterrows():
+        title = str(row.get("title", "") or "").strip()
+        content = str(row.get("content") or row.get("notes") or "").strip()
+        if len(content) < 40:
+            continue
+
+        content_low = content.lower()
+        bulletin_num = str(row.get("bulletin_number", "") or "").strip()
+        keyword_hits = [
+            k.strip()
+            for k in str(row.get("keywords", "") or "").split(",")
+            if k.strip() and k.strip().lower() in text
+        ]
+        shared_components = sorted(
+            job_components & set(_components_in_claim_text(content_low))
+        )
+        num_hit = bool(
+            bulletin_num
+            and bulletin_num.lower().replace(" ", "") in text.replace(" ", "")
+        )
+
+        topic_phrases = shared_components + keyword_hits
+        if bulletin_num:
+            topic_phrases.append(bulletin_num)
+        snippet = _extract_manual_snippet(
+            content,
+            topic_phrases or list(job_components)[:5],
+            max_len=280,
+        )
+        if not snippet:
+            continue
+
+        score = len(keyword_hits) * 15 + len(shared_components) * 28 + (30 if num_hit else 0)
+        if score < 25 and not num_hit:
+            continue
+
+        source_file = str(row.get("source_file", "") or "").strip()
+        matched_on = ", ".join(
+            dict.fromkeys(
+                ([bulletin_num] if num_hit else [])
+                + keyword_hits
+                + shared_components
+            )
+        )[:120] or title
+
+        scored.append({
+            "score": score,
+            "section": title or (f"TSB {bulletin_num}" if bulletin_num else "Service Bulletin"),
+            "source": source_file or "TSB Library",
+            "source_type": "TSB",
+            "matched_on": matched_on,
+            "snippet": snippet,
+        })
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    seen = set()
+    results = []
+    for item in scored:
+        key = (item["section"].lower(), item["snippet"][:80].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(item)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def find_applicable_manual_sections(job, limit=3):
+    """Return WAM and TSB excerpts that match this specific job."""
+    text, terms = _job_manual_search_terms(job)
+    active_topics = _active_checkbox_topics(job)
+    anchor_phrases = _topic_anchor_phrases(job)
+    explicit_wam = extract_wam_reference(_job_narrative_text(job))
+
+    scored = []
+
+    if (active_topics or explicit_wam) and (anchor_phrases or terms):
+        try:
+            wam_rows = supabase.table("wam_documents").select("*").execute().data or []
+        except Exception:
+            wam_rows = []
+
+        for row in wam_rows:
+            content = str(row.get("content", "") or "")
+            if not content.strip():
+                continue
+
+            content_low = content.lower()
+            if not _section_matches_job_topics(job, content_low):
+                continue
+
+            section = str(row.get("section", "Warranty Manual") or "Warranty Manual")
+            source = str(row.get("source_file", "manual") or "manual")
+
+            topic_phrases = anchor_phrases or list(terms)
+            snippet = _extract_manual_snippet(content, topic_phrases)
+            if not snippet:
+                continue
+            snippet = _trim_snippet_at_unrelated_topic(snippet, active_topics)
+
+            snippet_low = snippet.lower()
+            if active_topics and not _content_matches_any_phrase(snippet_low, topic_phrases):
+                continue
 
             keyword_hits = [
                 k.strip()
-                for k in keywords.split(",")
-                if k.strip() and k.strip() in text
+                for k in str(row.get("keywords", "") or "").split(",")
+                if k.strip() and k.strip().lower() in text
             ]
 
-            content_hit = any(word in content for word in text.split() if len(word) > 5)
+            trigger_hits = []
+            for topic in active_topics:
+                hits = [
+                    p for p in TOPIC_STRONG_PHRASES.get(topic, [])
+                    if p in content_low
+                ]
+                trigger_hits.extend(hits[:2])
 
-            if keyword_hits or content_hit:
-                matches.append({
-                    "section": section,
-                    "source_file": row.get("source_file", ""),
-                    "content": row.get("content", "")[:700]
-                })
+            score = len(keyword_hits) * 18 + len(trigger_hits) * 30
+            if active_topics:
+                score += 25
+            if score < 25:
+                continue
 
-    except Exception:
-        pass
+            matched_on = ", ".join(
+                dict.fromkeys(keyword_hits + trigger_hits)
+            )[:120] or (active_topics[0].replace("_", " ") if active_topics else explicit_wam)
 
-    return matches[:3]
+            scored.append({
+                "score": score,
+                "section": section,
+                "source": source,
+                "source_type": "WAM",
+                "matched_on": matched_on,
+                "snippet": snippet,
+            })
+
+    scored.extend(find_applicable_tsb_bulletins(job, limit=limit))
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    seen = set()
+    results = []
+    for item in scored:
+        key = (item["section"].lower(), item["snippet"][:80].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(item)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def find_wam_matches(job):
+    """Backward-compatible wrapper."""
+    return find_applicable_manual_sections(job)
+
+
+def render_applicable_manual_sections(sections, key_prefix="manual"):
+    if not sections:
+        return
+
+    st.markdown("### Applicable Manual & TSB Guidance")
+    st.caption(
+        "WAM excerpts require a checked warranty flag or explicit WAM reference. "
+        "TSB / bulletins match automatically when the repair narrative applies."
+    )
+
+    for idx, sec in enumerate(sections):
+        label = sec.get("section", "Warranty Manual")
+        source = sec.get("source", "manual")
+        matched = sec.get("matched_on", "")
+        st.markdown(f"**{label}**")
+        st.caption(f"Source: {source} · Matched on: {matched}")
+        st.info(sec.get("snippet", ""))
+        if idx < len(sections) - 1:
+            st.markdown("")
+CLAIM_COMPONENT_TERMS = [
+    "lower control arm", "control arm", "upper control arm", "bushing",
+    "ball joint", "tie rod", "sway bar", "strut", "wheel bearing",
+    "squeak", "squeaking", "clunk", "rattle", "alignment",
+    "spark plug", "misfire", "camshaft", "lifter",
+    "water pump", "coolant leak", "thermostat", "radiator",
+    "evap", "purge", "canister", "fuel pump", "injector",
+    "compressor", "evaporator", "blend door", "blower motor",
+    "battery", "alternator", "starter motor", "backup camera",
+    "axle shaft", "cv axle", "transmission", "torque converter",
+    "brake", "rotor", "caliper", "short to ground", "open circuit",
+    "start/stop switch", "start stop switch", "stop switch", "start button",
+    "push start", "push button", "ignition switch", "steering column",
+    "oil filter adapter", "engine front cover", "oil leak",
+]
+
+CLAIM_MATCH_STOP_WORDS = {
+    "the", "and", "for", "with", "that", "this", "from", "was", "were",
+    "are", "has", "have", "had", "customer", "states", "vehicle",
+    "performed", "removed", "replaced", "checked", "found", "warranty",
+    "claim", "number", "date", "line", "part", "parts", "verified",
+    "inspection", "operating", "accessed", "visual", "examination",
+    "designed", "system", "internal", "malfunction", "binding", "jammed",
+    "switch", "button", "further", "concern", "complaint", "diagnostic",
+    "proper", "working", "operates", "start", "stop", "repair", "technician",
+    "cause", "correction", "road", "test", "drove", "tested",
+}
+
+
+def _components_in_claim_text(text, terms=None):
+    text = str(text or "").lower()
+    terms = terms or CLAIM_COMPONENT_TERMS
+    return [term for term in terms if term in text]
+
+
 def find_similar_paid_claims(current_job, limit=5):
     try:
         current_text = " ".join([
@@ -903,18 +1578,7 @@ def find_similar_paid_claims(current_job, limit=5):
 
         dtcs = re.findall(r"\b[A-Z][0-9A-Z]{4}(?:-[0-9A-Z]{2})?\b", current_text.upper())
 
-        component_terms = [
-            "lower control arm", "control arm", "upper control arm", "bushing",
-            "ball joint", "tie rod", "sway bar", "strut", "wheel bearing",
-            "squeak", "squeaking", "clunk", "rattle", "alignment",
-            "coil", "spark plug", "misfire", "camshaft", "lifter",
-            "water pump", "coolant leak", "thermostat", "radiator",
-            "evap", "purge", "canister", "fuel pump", "injector",
-            "compressor", "evaporator", "blend door", "blower motor",
-            "battery", "alternator", "starter", "backup camera",
-            "axle shaft", "cv axle", "transmission", "torque converter",
-            "brake", "rotor", "caliper", "short to ground", "open circuit",
-        ]
+        component_terms = CLAIM_COMPONENT_TERMS
 
         bad_terms = [
             "acknowledgement", "servlet", "policy", "privacy", "terms",
@@ -932,17 +1596,14 @@ def find_similar_paid_claims(current_job, limit=5):
             "vehicle description",
         ]
 
-        stop_words = {
-            "the", "and", "for", "with", "that", "this", "from", "was", "were",
-            "are", "has", "have", "had", "customer", "states", "vehicle",
-            "performed", "removed", "replaced", "checked", "found", "warranty",
-            "claim", "number", "date", "line", "part", "parts", "verified",
-        }
+        stop_words = CLAIM_MATCH_STOP_WORDS
+
+        current_components = _components_in_claim_text(current_text, component_terms)
 
         current_words = {
             w.strip(".,:;()[]").lower()
             for w in current_text.split()
-            if len(w.strip(".,:;()[]")) > 3 and w.strip(".,:;()[]").lower() not in stop_words
+            if len(w.strip(".,:;()[]")) > 4 and w.strip(".,:;()[]").lower() not in stop_words
         }
 
         current_lops = set(re.findall(r"\b\d{7,8}\b", current_text))
@@ -974,18 +1635,25 @@ def find_similar_paid_claims(current_job, limit=5):
             claim_words = {
                 w.strip(".,:;()[]").lower()
                 for w in claim_text.split()
-                if len(w.strip(".,:;()[]")) > 3 and w.strip(".,:;()[]").lower() not in stop_words
+                if len(w.strip(".,:;()[]")) > 4 and w.strip(".,:;()[]").lower() not in stop_words
             }
 
-            overlap = current_words.intersection(claim_words)
-            score = int((len(overlap) / max(len(current_words), 1)) * 70)
+            claim_components = _components_in_claim_text(claim_text, component_terms)
 
-            matched_components = [
-                term for term in component_terms
-                if term in current_text and term in claim_text
-            ]
+            # Different repair family — e.g. control arms vs start/stop switch.
+            if current_components or claim_components:
+                shared_components = set(current_components) & set(claim_components)
+                if not shared_components:
+                    continue
+            elif len(current_words.intersection(claim_words)) < 3:
+                continue
+
+            overlap = current_words.intersection(claim_words)
+            score = int((len(overlap) / max(len(current_words), 1)) * 50)
+
+            matched_components = sorted(set(current_components) & set(claim_components))
             if matched_components:
-                score += min(20, 8 * len(matched_components[:3]))
+                score += min(35, 12 * len(matched_components[:3]))
 
             claim_lops = set(re.findall(r"\b\d{7,8}\b", claim_text))
             if current_lops and claim_lops:
@@ -1005,7 +1673,7 @@ def find_similar_paid_claims(current_job, limit=5):
 
             score = min(score, 100)
 
-            if score < 25:
+            if score < 40:
                 continue
 
             matches.append(enrich_paid_claim_match({
@@ -1032,25 +1700,54 @@ def find_similar_paid_claims(current_job, limit=5):
         st.warning(f"Claim Intelligence could not load: {e}")
         return []
 
-def audit_job(job, time_bypass):
+def _audit_rule_severity(audit_rules, rule_key):
+    rule = audit_rules.get("rules", {}).get(rule_key, {})
+    if not rule.get("enabled", True):
+        return None
+    severity = str(rule.get("severity", "hard") or "hard").lower()
+    return severity if severity in ("hard", "warn") else "hard"
+
+
+def _add_audit_finding(hard, warn, audit_rules, rule_key, message):
+    severity = _audit_rule_severity(audit_rules, rule_key)
+    if severity is None:
+        return
+    if severity == "warn":
+        warn.append(message)
+    else:
+        hard.append(message)
+
+
+def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules=None):
+    audit_rules = normalize_audit_rules(audit_rules)
+    thresholds = audit_rules["thresholds"]
+    tech_min = float(thresholds.get("tech_time_min_pct", 0.70))
+    tech_max = float(thresholds.get("tech_time_max_pct", 2.00))
+    rental_warn_days = int(thresholds.get("rental_days_warn", 15))
+
     hard = []
     warn = []
     text = f"{job['concern']} {job['cause']} {job['correction']}".lower()
 
     if not job["concern"].strip():
-        hard.append("Missing concern.")
+        _add_audit_finding(hard, warn, audit_rules, "narrative_required", "Missing concern.")
     if not job["cause"].strip():
-        hard.append("Missing cause.")
+        _add_audit_finding(hard, warn, audit_rules, "narrative_required", "Missing cause.")
     if not job["correction"].strip():
-        hard.append("Missing correction.")
+        _add_audit_finding(hard, warn, audit_rules, "narrative_required", "Missing correction.")
 
-    # Pencil Wrench cause grading
     cause_text = job["cause"].lower()
     if job["cause"].strip():
         if not any(x in cause_text for x in ["found", "tested", "verified", "diagnosed", "inspected", "scanned"]):
-            warn.append("Pencil Wrench Cause: missing diagnostic steps used to get to the failure.")
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_cause",
+                "Pencil Wrench Cause: missing diagnostic steps used to get to the failure.",
+            )
         if not any(x in cause_text for x in ["dtc", "code", "inspection", "measured", "scan", "test", "voltage", "pressure", "leak test"]):
-            warn.append("Pencil Wrench Cause: missing supporting evidence such as DTC, test result, inspection, or measurement.")
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_cause",
+                "Pencil Wrench Cause: missing supporting evidence such as DTC, test result, inspection, or measurement.",
+            )
         if not any(x in cause_text for x in [
             "failed", "failure", "internal failure", "inoperative",
             "not working", "leak", "leaking internally",
@@ -1058,16 +1755,20 @@ def audit_job(job, time_bypass):
             "intermittent open circuit", "broken", "faulty",
             "collapsed lifter", "damaged camshaft lobe",
             "damaged cam shaft lobe", "warped",
-            "mechanical failure", "electrical failure"
-]):
+            "mechanical failure", "electrical failure",
+        ]):
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_cause",
+                "Pencil Wrench Cause: failure is not clearly identified.",
+            )
 
-             warn.append("Pencil Wrench Cause: failure is not clearly identified.")
-    
-    # Pencil Wrench correction grading
-    correction_text = job["correction"].lower() 
+    correction_text = job["correction"].lower()
     if job["correction"].strip():
         if not any(x in correction_text for x in ["replaced", "repaired", "installed", "removed", "programmed", "performed"]):
-            warn.append("Pencil Wrench Correction: repair action is not clearly identified.")
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_correction",
+                "Pencil Wrench Correction: repair action is not clearly identified.",
+            )
         if not any(x in correction_text for x in [
             "due to", "because", "failed", "failure",
             "leaking", "shorted", "open", "damaged",
@@ -1075,95 +1776,116 @@ def audit_job(job, time_bypass):
             "repaired", "reprogrammed", "updated",
             "sealed", "resealed", "adjusted",
             "verified proper operation",
-            "test drove", "road tested"
-]):
-            warn.append("Pencil Wrench Correction: parts replaced are not clearly justified.")
+            "test drove", "road tested",
+        ]):
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_correction",
+                "Pencil Wrench Correction: parts replaced are not clearly justified.",
+            )
         if not any(x in correction_text for x in ["verified", "operates", "working", "proper operation", "no further issues", "test drove"]):
-            warn.append("Pencil Wrench Correction: proper operation was not verified after repair.")
+            _add_audit_finding(
+                hard, warn, audit_rules, "pencil_wrench_correction",
+                "Pencil Wrench Correction: proper operation was not verified after repair.",
+            )
 
-    if job["oil_leak"]:
-        warn.append("Oil leak selected: confirm oil dye is billed and narrative states dye was used.")
-        if not job["dye_billed"]:
-            hard.append("Oil leak repair requires oil dye billed.")
+    if job.get("oil_leak"):
+        _add_audit_finding(
+            hard, warn, audit_rules, "oil_leak",
+            "Oil leak selected: confirm oil dye is billed and narrative states dye was used.",
+        )
+        if not job.get("oil_dye_billed"):
+            _add_audit_finding(hard, warn, audit_rules, "oil_leak", "Oil leak repair requires oil dye billed.")
         if "dye" not in text:
-            hard.append("Oil leak narrative must state dye was used to locate the leak.")
+            _add_audit_finding(
+                hard, warn, audit_rules, "oil_leak",
+                "Oil leak narrative must state dye was used to locate the leak.",
+            )
 
     if job.get("sublet_repair"):
-        warn.append("Sublet selected: invoice must include VIN, mileage, and detailed repair notes.")
-        if not job["sublet_vin"]:
-            hard.append("Sublet invoice must show VIN.")
-        if not job["sublet_mileage"]:
-            hard.append("Sublet invoice must show mileage.")
-        if not job["sublet_repair_notes"]:
-            hard.append("Sublet invoice must include detailed repair notes.")
+        _add_audit_finding(
+            hard, warn, audit_rules, "sublet",
+            "Sublet selected: invoice must include VIN, mileage, and detailed repair notes.",
+        )
+        if not job.get("sublet_vin"):
+            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must show VIN.")
+        if not job.get("sublet_mileage"):
+            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must show mileage.")
+        if not job.get("sublet_notes"):
+            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must include detailed repair notes.")
 
     if job.get("rental_involved"):
-        if job["rental_days"] <= 0:
-            hard.append("Rental involved but rental days are not billed.")
-        if not job["rental_signed"]:
-            hard.append("Rental involved but manager sign-off is missing.")
-        if job["rental_days"] >= 15:
-            warn.append("15 or more rental days billed: make sure all documentation to support rental days is submitted to Stellantis with the claim.")
+        if job.get("rental_days", 0) <= 0:
+            _add_audit_finding(hard, warn, audit_rules, "rental", "Rental involved but rental days are not billed.")
+        if not job.get("manager_signed_rental"):
+            _add_audit_finding(hard, warn, audit_rules, "rental", "Rental involved but manager sign-off is missing.")
+        if job.get("rental_days", 0) >= rental_warn_days:
+            _add_audit_finding(
+                hard, warn, audit_rules, "rental_high_days",
+                f"{rental_warn_days} or more rental days billed: make sure all documentation to support "
+                "rental days is submitted to Stellantis with the claim.",
+            )
 
     if job.get("warranty_add_on") and not job.get("manager_approval"):
-        hard.append("Warranty add-on requires service manager approval.")
+        _add_audit_finding(
+            hard, warn, audit_rules, "warranty_add_on",
+            "Warranty add-on (W+) requires Service Manager sign-off.",
+        )
 
     tech_flagged_time = float(job.get("tech_flagged_time") or 0)
     time_allotted = float(job.get("time_allotted") or 0)
 
-    if time_bypass:
-        warn.append("Tech Flagged Time / Time Allotted validation was bypassed for this review.")
-    else:
+    if smart_warranty_time_exempt:
+        pass
+    elif time_bypass:
+        _add_audit_finding(
+            hard, warn, audit_rules, "tech_time",
+            "Tech Flagged Time / Time Allotted validation was bypassed for this review.",
+        )
+    elif _audit_rule_severity(audit_rules, "tech_time") is not None:
         if time_allotted > 0 and tech_flagged_time > 0:
             pct = tech_flagged_time / time_allotted
-            if pct < 0.70:
-                hard.append(f"Tech Flagged Time is below 70% of Time Allotted ({pct:.0%}).")
-            if pct > 2.00:
-                hard.append(f"Tech Flagged Time exceeds 200% of Time Allotted ({pct:.0%}).")
+            if pct < tech_min:
+                _add_audit_finding(
+                    hard, warn, audit_rules, "tech_time",
+                    f"Tech Flagged Time is below {tech_min:.0%} of Time Allotted ({pct:.0%}).",
+                )
+            if pct > tech_max:
+                _add_audit_finding(
+                    hard, warn, audit_rules, "tech_time",
+                    f"Tech Flagged Time exceeds {tech_max:.0%} of Time Allotted ({pct:.0%}).",
+                )
         elif time_allotted > 0 and tech_flagged_time <= 0:
-            hard.append("Tech Flagged Time is missing.")
+            _add_audit_finding(hard, warn, audit_rules, "tech_time", "Tech Flagged Time is missing.")
         elif tech_flagged_time > 0 and time_allotted <= 0:
-            hard.append("Time Allotted for the job is missing.")
+            _add_audit_finding(hard, warn, audit_rules, "tech_time", "Time Allotted for the job is missing.")
 
-        if job.get("battery_replacement") and not job.get("battery_test_slip"):
-             hard.append("Battery replacement requires failed battery test slip/code.")
-        if job.get("ac_repair") and not job.get("ac_evac_slip"):
-            hard.append("A/C repair requires EVAC/recharge slip.")
-        if job["parts_warranty"] and not job["mopa"]:
-            hard.append("Parts warranty requires MOPA and original RO support.")
+    if job.get("battery_replacement") and not job.get("battery_test_slip"):
+        _add_audit_finding(
+            hard, warn, audit_rules, "battery_test_slip",
+            "Battery replacement requires failed battery test slip/code.",
+        )
+    if job.get("ac_repair") and not job.get("ac_evac_slip"):
+        _add_audit_finding(
+            hard, warn, audit_rules, "ac_evac_slip",
+            "A/C repair requires EVAC/recharge slip.",
+        )
+    if job.get("parts_warranty") and not job.get("mopa_original_ro"):
+        _add_audit_finding(
+            hard, warn, audit_rules, "parts_warranty_mopa",
+            "Parts warranty requires MOPAR and original RO support.",
+        )
 
-        score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
-        wam_matches = find_wam_matches(job)
+    manual_sections = find_applicable_manual_sections(job)
+    job["manual_sections"] = manual_sections
 
-        if wam_matches:
-            warn.append("WAM reference found. Review related warranty manual guidance before submission.")
-            job["wam_matches"] = wam_matches
+    if manual_sections:
+        _add_audit_finding(
+            hard, warn, audit_rules, "manual_guidance",
+            "Applicable warranty manual guidance is shown below — confirm compliance before submission.",
+        )
 
-            for match in wam_matches:
-                section = str(match.get("section", "WAM Reference"))
-                content = str(match.get("content", ""))
-
-        if "battery" in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() and not job.get("battery_test_slip"):
-            warn.append(f"WAM Suggestion - {section}: Battery claim may require battery test slip/code.")
-
-        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["a/c", "evac", "recharge"]):
-            if job.get("ac_repair") and not job.get("ac_evac_slip"):
-                warn.append(f"WAM Suggestion - {section}: A/C claim may require EVAC/recharge documentation.")
-
-        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["oil dye", "dye"]):
-            if job.get("oil_leak") and not job.get("oil_dye_billed"):
-                warn.append(f"WAM Suggestion - {section}: Oil leak documentation should mention dye usage and dye billing.")
-
-        if any(x in str(job.get("concern", "") + job.get("cause", "") + job.get("correction", "")).lower() for x in ["manager approval", "authorization"]):
-            if job.get("add_on") and not job.get("manager_signed"):
-                hard.append(f"WAM Hard Stop - {section}: Add-on repair may require manager authorization.")
-
-        else:
-         job["wam_matches"] = []
-
-        return hard, warn, score
-    
-        return hard, warn, score
+    score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
+    return hard, warn, score
 
 def result_banner(status):
     if "DO NOT" in status:
@@ -1175,11 +1897,553 @@ def result_banner(status):
     st.markdown(f'<div class="{cls}"><h2>{status}</h2></div>', unsafe_allow_html=True)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_vin_recall_lookup(vin: str) -> dict:
+    return lookup_vin_recalls(vin)
+
+
+def _vin_recall_ack_key(form_version: int, vin_clean: str) -> str:
+    return f"vin_recall_ack_{form_version}_{vin_clean}"
+
+
+def _is_vin_recall_acknowledged(form_version: int, vin_clean: str) -> bool:
+    ack = st.session_state.get(_vin_recall_ack_key(form_version, vin_clean)) or {}
+    return bool(ack.get("acknowledged"))
+
+
+def _ensure_vin_recall_lookup(vin: str, form_version: int) -> dict | None:
+    """Auto-fetch NHTSA recalls when the VIN is long enough."""
+    vin_clean = normalize_vin(vin)
+    recall_key = f"vin_recall_result_{form_version}"
+    tracked_vin_key = f"vin_recall_tracked_vin_{form_version}"
+
+    if len(vin_clean) < 11:
+        return None
+
+    if st.session_state.get(tracked_vin_key) != vin_clean:
+        st.session_state[recall_key] = _cached_vin_recall_lookup(vin_clean)
+        st.session_state[tracked_vin_key] = vin_clean
+
+    result = st.session_state.get(recall_key)
+    if result and result.get("vin") != vin_clean:
+        st.session_state[recall_key] = _cached_vin_recall_lookup(vin_clean)
+        st.session_state[tracked_vin_key] = vin_clean
+        result = st.session_state.get(recall_key)
+
+    return result
+
+
+def _vin_recall_save_fields(form_version: int, vin: str) -> dict:
+    vin_clean = normalize_vin(vin)
+    result = st.session_state.get(f"vin_recall_result_{form_version}") or {}
+    count = int(result.get("recall_count") or 0) if result.get("ok") else 0
+    campaigns = [
+        str(item.get("campaign", "")).strip()
+        for item in (result.get("recalls") or [])
+        if item.get("campaign")
+    ]
+    return {
+        "vin_recall_identified": 1 if count > 0 else 0,
+        "vin_recall_count": count,
+        "vin_recall_campaigns": ", ".join(campaigns),
+        "vin_recall_acknowledged": 1 if _is_vin_recall_acknowledged(form_version, vin_clean) else 0,
+    }
+
+
+def _review_job_text_from_session(form_version: int, job_count: int) -> str:
+    parts = []
+    for job_no in range(1, int(job_count) + 1):
+        for field in ("concern", "cause", "correction"):
+            parts.append(str(st.session_state.get(f"{field}_{job_no}_{form_version}", "") or ""))
+    return " ".join(parts)
+
+
+@st.dialog("VIN Recall & Campaign Notice", width="large")
+def _recall_acknowledgment_dialog(recall_result: dict, form_version: int):
+    vehicle = recall_result.get("vehicle") or {}
+    recalls = list(recall_result.get("recalls") or [])[:10]
+    vin_clean = recall_result.get("vin") or ""
+
+    vehicle_label = " ".join(
+        p for p in (
+            vehicle.get("model_year"),
+            vehicle.get("make"),
+            vehicle.get("model"),
+            vehicle.get("trim"),
+        )
+        if p
+    )
+
+    st.warning(
+        f"**{vehicle_label}** has **{recall_result.get('recall_count', 0)}** NHTSA recall campaign(s) on file "
+        "for this vehicle configuration."
+    )
+    st.markdown(
+        "This is **not a hard stop** — many campaigns may not have parts available yet. "
+        "You must acknowledge this notice to continue with the claim, then verify completion status in "
+        "**OASIS / wiTECH / DealerCONNECT**."
+    )
+    st.caption(recall_result.get("disclaimer", ""))
+
+    for recall in recalls:
+        flags = []
+        if recall.get("park_it"):
+            flags.append("Park It")
+        if recall.get("park_outside"):
+            flags.append("Park Outside")
+        if recall.get("ota"):
+            flags.append("OTA")
+        flag_text = f" · {' / '.join(flags)}" if flags else ""
+        st.markdown(f"**{recall.get('campaign', 'Campaign')}** — {recall.get('component', '')}{flag_text}")
+        if recall.get("summary"):
+            st.caption(recall.get("summary")[:280] + ("…" if len(recall.get("summary", "")) > 280 else ""))
+
+    remaining = int(recall_result.get("recall_count") or 0) - len(recalls)
+    if remaining > 0:
+        st.caption(f"+ {remaining} additional campaign(s) listed in the recall panel below.")
+
+    if st.button("I acknowledge — continue with this claim", type="primary", use_container_width=True):
+        st.session_state[_vin_recall_ack_key(form_version, vin_clean)] = {
+            "acknowledged": True,
+            "acknowledged_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        st.rerun()
+
+
+def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
+    recall_key = f"vin_recall_result_{form_version}"
+    vin_clean = normalize_vin(vin)
+
+    st.markdown("### VIN Recall & Campaign Check")
+    st.caption(
+        "Recalls are checked automatically when a VIN is entered or scanned. "
+        "Verify open/completed status in **OASIS / wiTECH / DealerCONNECT** before submit."
+    )
+
+    if len(vin_clean) < 11:
+        st.info("Enter or scan the full VIN — recall lookup runs automatically.")
+        return
+
+    tracked_vin_key = f"vin_recall_tracked_vin_{form_version}"
+    needs_fetch = st.session_state.get(tracked_vin_key) != vin_clean
+    if needs_fetch:
+        with st.spinner("Checking NHTSA recalls for this VIN…"):
+            result = _ensure_vin_recall_lookup(vin, form_version)
+    else:
+        result = _ensure_vin_recall_lookup(vin, form_version)
+
+    if not result:
+        return
+
+    if not result.get("ok"):
+        st.error(result.get("error") or "Recall lookup failed.")
+        return
+
+    if result.get("recall_count", 0) > 0 and not _is_vin_recall_acknowledged(form_version, vin_clean):
+        _recall_acknowledgment_dialog(result, form_version)
+
+    vehicle = result.get("vehicle") or {}
+    recalls = list(result.get("recalls") or [])
+    job_text = _review_job_text_from_session(form_version, job_count)
+    if job_text.strip() and recalls:
+        recalls = apply_job_relevance(recalls, job_text)
+
+    vehicle_label = " ".join(
+        p for p in (
+            vehicle.get("model_year"),
+            vehicle.get("make"),
+            vehicle.get("model"),
+            vehicle.get("trim"),
+        )
+        if p
+    )
+
+    if result.get("recall_count", 0) > 0:
+        if _is_vin_recall_acknowledged(form_version, vin_clean):
+            st.success(
+                f"**{vehicle_label}** · {result.get('recall_count', 0)} recall campaign(s) on file · "
+                "**Acknowledged**"
+            )
+        else:
+            st.warning(
+                f"**{vehicle_label}** · {result.get('recall_count', 0)} recall campaign(s) on file · "
+                "**Acknowledgment required** (see popup)"
+            )
+    else:
+        st.success(f"**{vehicle_label}** · No NHTSA recalls returned for this configuration.")
+
+    if result.get("critical_count"):
+        st.error(
+            f"{result.get('critical_count')} campaign(s) flagged **Park It / Park Outside** — "
+            "verify immediately in OASIS."
+        )
+
+    related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
+    if related:
+        st.warning(
+            f"**{len(related)} recall(s) may relate to this repair** based on the job narrative — "
+            "confirm whether the campaign applies and is complete."
+        )
+    elif job_text.strip() and result.get("recall_count", 0) > 0:
+        st.caption("No strong narrative match to a listed recall — still verify VIN status in OASIS.")
+
+    st.caption(result.get("disclaimer", ""))
+
+    if result.get("recall_count", 0) <= 0:
+        return
+
+    show_recalls = related[:5] if related else recalls[:8]
+    for idx, recall in enumerate(show_recalls):
+        campaign = recall.get("campaign") or "Campaign"
+        component = recall.get("component") or "Component not listed"
+        flags = []
+        if recall.get("park_it"):
+            flags.append("Park It")
+        if recall.get("park_outside"):
+            flags.append("Park Outside")
+        if recall.get("ota"):
+            flags.append("OTA")
+        flag_text = f" · **{' / '.join(flags)}**" if flags else ""
+
+        rel_score = recall.get("relevance_score", 0)
+        rel_note = ""
+        if rel_score >= 12:
+            hits = ", ".join(recall.get("relevance_hits") or [])
+            rel_note = f" · Possible repair match ({hits})" if hits else " · Possible repair match"
+
+        with st.expander(f"{campaign} — {component}{flag_text}", expanded=idx == 0 and rel_score >= 12):
+            if recall.get("report_date"):
+                st.caption(f"Report date: {recall['report_date']}{rel_note}")
+            if recall.get("summary"):
+                st.markdown(f"**Summary:** {recall['summary']}")
+            if recall.get("consequence"):
+                st.markdown(f"**Risk:** {recall['consequence']}")
+            if recall.get("remedy"):
+                st.markdown(f"**Remedy:** {recall['remedy']}")
+
+    remaining = len(recalls) - len(show_recalls)
+    if remaining > 0:
+        st.caption(f"+ {remaining} additional recall(s) on file for this vehicle configuration.")
+
+
+def _vin_recall_blocks_audit(form_version: int, vin: str) -> bool:
+    vin_clean = normalize_vin(vin)
+    result = st.session_state.get(f"vin_recall_result_{form_version}") or {}
+    if not result.get("ok"):
+        return False
+    if int(result.get("recall_count") or 0) <= 0:
+        return False
+    return not _is_vin_recall_acknowledged(form_version, vin_clean)
+
+
+def _build_job_from_session(form_version: int, job_no: int) -> dict:
+    fv = form_version
+    j = job_no
+    return {
+        "job_no": str(j),
+        "concern": str(st.session_state.get(f"concern_{j}_{fv}", "") or ""),
+        "cause": str(st.session_state.get(f"cause_{j}_{fv}", "") or ""),
+        "correction": str(st.session_state.get(f"correction_{j}_{fv}", "") or ""),
+        "tech_flagged_time": float(st.session_state.get(f"tech_time_{j}", 0) or 0),
+        "time_allotted": float(st.session_state.get(f"allotted_{j}", 0) or 0),
+        "claim_value": float(st.session_state.get(f"claim_value_{j}", 0) or 0),
+        "oil_leak": bool(st.session_state.get(f"oil_leak_{j}", False)),
+        "oil_dye_billed": bool(st.session_state.get(f"oil_dye_{j}", False)),
+        "battery_replacement": bool(st.session_state.get(f"battery_{j}", False)),
+        "battery_test_slip": bool(st.session_state.get(f"battery_slip_{j}", False)),
+        "sublet_repair": bool(st.session_state.get(f"sublet_{j}", False)),
+        "sublet_vin": bool(st.session_state.get(f"sublet_vin_{j}", False)),
+        "sublet_mileage": bool(st.session_state.get(f"sublet_mileage_{j}", False)),
+        "sublet_notes": bool(st.session_state.get(f"sublet_notes_{j}", False)),
+        "rental_involved": bool(st.session_state.get(f"rental_{j}", False)),
+        "rental_days": int(st.session_state.get(f"rental_days_{j}", 0) or 0),
+        "manager_signed_rental": bool(st.session_state.get(f"rental_signed_{j}", False)),
+        "warranty_add_on": bool(st.session_state.get(f"addon_{j}", False)),
+        "manager_approval": bool(st.session_state.get(f"manager_approval_{j}", False)),
+        "ac_repair": bool(st.session_state.get(f"ac_{j}", False)),
+        "ac_evac_slip": bool(st.session_state.get(f"ac_slip_{j}", False)),
+        "parts_warranty": bool(st.session_state.get(f"parts_warranty_{j}", False)),
+        "mopa_original_ro": bool(st.session_state.get(f"mopa_{j}", False)),
+    }
+
+
+def compute_live_audit_summary(
+    form_version: int,
+    job_count: int,
+    vin: str,
+    *,
+    smart_warranty_time_exempt: bool,
+    audit_rules: dict,
+) -> dict:
+    time_bypass = bool(st.session_state.get("time_bypass", False))
+    all_hard = []
+    all_warn = []
+    scores = []
+    total_value = 0.0
+    hard_value = 0.0
+
+    for i in range(1, int(job_count) + 1):
+        job = _build_job_from_session(form_version, i)
+        hard, warn, score = audit_job(
+            job,
+            time_bypass,
+            smart_warranty_time_exempt=smart_warranty_time_exempt,
+            audit_rules=audit_rules,
+        )
+        claim_val = float(job.get("claim_value") or 0)
+        total_value += claim_val
+        if hard:
+            hard_value += claim_val
+        all_hard.extend(hard)
+        all_warn.extend(warn)
+        scores.append(score)
+
+    recall_block = _vin_recall_blocks_audit(form_version, vin)
+
+    if recall_block:
+        status = "🔴 DO NOT SUBMIT"
+        status_reason = "Open recall(s) must be acknowledged before submission."
+    elif all_hard:
+        status = "🔴 DO NOT SUBMIT"
+        status_reason = f"{len(all_hard)} hard stop(s) across {int(job_count)} job(s)."
+    elif all_warn:
+        status = "🟡 NEEDS REVIEW"
+        status_reason = f"{len(all_warn)} warning(s) — review before submitting."
+    else:
+        status = "🟢 READY"
+        status_reason = "No hard stops or warnings detected."
+
+    final_score = int(sum(scores) / len(scores)) if scores else 100
+
+    return {
+        "status": status,
+        "status_reason": status_reason,
+        "score": final_score,
+        "total_value": total_value,
+        "hard_value": hard_value,
+        "hard_stop_count": len(all_hard),
+        "warning_count": len(all_warn),
+        "recall_block": recall_block,
+        "job_count": int(job_count),
+    }
+
+
+def render_live_submit_status_bar(summary: dict):
+    status = summary["status"]
+    if "DO NOT" in status:
+        cls = "status-stop"
+    elif "NEEDS" in status:
+        cls = "status-review"
+    else:
+        cls = "status-ready"
+
+    recall_note = ""
+    if summary.get("recall_block"):
+        recall_note = (
+            '<div class="live-submit-note">'
+            "⚠️ Open VIN recall — acknowledge before Run Audit + Save."
+            "</div>"
+        )
+
+    st.markdown(
+        f"""
+        <div class="live-submit-bar {cls}">
+            <div class="live-submit-main">
+                <span class="live-submit-status">{html.escape(status)}</span>
+                <span class="live-submit-reason">{html.escape(summary.get("status_reason", ""))}</span>
+            </div>
+            <div class="live-submit-metrics">
+                <span><strong>Score</strong> {summary["score"]}</span>
+                <span><strong>Total claim</strong> ${summary["total_value"]:,.2f}</span>
+                <span><strong>Hard-stop value</strong> ${summary["hard_value"]:,.2f}</span>
+                <span><strong>Hard stops</strong> {summary["hard_stop_count"]}</span>
+            </div>
+            {recall_note}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================
+# RO OCR
+# =========================
+def _match_personnel_name(name: str, options: list) -> str:
+    if not name or not options:
+        return None
+    target = name.strip().upper()
+    for opt in options:
+        if opt.strip().upper() == target:
+            return opt
+    for opt in options:
+        opt_u = opt.strip().upper()
+        if target in opt_u or opt_u in target:
+            return opt
+    last = target.split()[-1]
+    for opt in options:
+        if last and last in opt.upper():
+            return opt
+    return None
+
+
+def _apply_ro_scan_to_form(import_data: dict):
+    fv = st.session_state.form_version
+    jobs = import_data.get("jobs") or []
+
+    if jobs:
+        st.session_state.job_count = len(jobs)
+
+    if import_data.get("ro_number"):
+        st.session_state[f"ro_number_{fv}"] = import_data["ro_number"]
+    if import_data.get("vin"):
+        st.session_state[f"vin_{fv}"] = import_data["vin"]
+    if import_data.get("ro_invoiced"):
+        st.session_state[f"ro_invoiced_{fv}"] = import_data["ro_invoiced"]
+    if import_data.get("day_submitted"):
+        st.session_state[f"day_submitted_{fv}"] = import_data["day_submitted"]
+
+    if import_data.get("advisor"):
+        st.session_state["_ro_scan_advisor"] = import_data["advisor"]
+    if import_data.get("technician"):
+        st.session_state["_ro_scan_technician"] = import_data["technician"]
+
+    checkbox_map = {
+        "oil_leak": "oil_leak",
+        "battery_replacement": "battery",
+        "sublet_repair": "sublet",
+        "rental_involved": "rental",
+        "warranty_add_on": "addon",
+        "ac_repair": "ac",
+        "parts_warranty": "parts_warranty",
+    }
+
+    for idx, job in enumerate(jobs, start=1):
+        if job.get("concern"):
+            st.session_state[f"concern_{idx}_{fv}"] = job["concern"]
+        if job.get("cause"):
+            st.session_state[f"cause_{idx}_{fv}"] = job["cause"]
+        if job.get("correction"):
+            st.session_state[f"correction_{idx}_{fv}"] = job["correction"]
+        if job.get("tech_flagged_time"):
+            st.session_state[f"tech_time_{idx}"] = float(job["tech_flagged_time"])
+        if job.get("time_allotted"):
+            st.session_state[f"allotted_{idx}"] = float(job["time_allotted"])
+        if job.get("claim_value"):
+            st.session_state[f"claim_value_{idx}"] = float(job["claim_value"])
+        for src, dest in checkbox_map.items():
+            if job.get(src):
+                st.session_state[f"{dest}_{idx}"] = True
+
+
+def _render_ro_scanner():
+    st.markdown(
+        """
+        <div class="reporting-hero">
+            <h2>Scan Repair Order &amp; Invoice</h2>
+            <p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately. 
+            RO Shield reads warranty jobs by pay type <strong>W</strong> / <strong>Warranty</strong> on the repair order 
+            (no claim number needed) and pulls cause/correction narratives from the invoice.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not ocr_available():
+        st.warning(
+            "OCR is not set up yet. Run: `python3 -m pip install -r requirements.txt` "
+            "and install Tesseract on your Mac (`brew install tesseract poppler`)."
+        )
+        return
+
+    ro_tab, inv_tab = st.tabs(["Final Repair Order", "Final Invoice"])
+
+    with ro_tab:
+        st.caption(
+            "Customer copy repair order — identifies warranty jobs by pay type **W**, **W+** (add-on), or **Warranty**."
+        )
+        repair_order_upload = st.file_uploader(
+            "Upload Final Repair Order PDF",
+            type=["pdf"],
+            key="ro_scan_repair_order_upload",
+        )
+
+    with inv_tab:
+        st.caption(
+            "Reynolds/DMS invoice (service file copy or customer invoice) — supplies concern/cause/correction narratives."
+        )
+        invoice_upload = st.file_uploader(
+            "Upload Final Invoice PDF",
+            type=["pdf"],
+            key="ro_scan_invoice_upload",
+        )
+
+    scan_clicked = st.button(
+        "Scan & Fill Form",
+        key="scan_ro_btn",
+        type="primary",
+        use_container_width=True,
+        disabled=repair_order_upload is None and invoice_upload is None,
+    )
+
+    if scan_clicked and (repair_order_upload or invoice_upload):
+        try:
+            with st.spinner("Scanning documents… this may take 30–60 seconds for multi-page scans."):
+                ro_import = None
+                invoice_import = None
+                if repair_order_upload:
+                    ro_parsed = scan_repair_order_pdf(
+                        repair_order_upload.getvalue(),
+                        document_kind="repair_order",
+                    )
+                    ro_import = parsed_to_form_import(ro_parsed)
+                if invoice_upload:
+                    inv_parsed = scan_repair_order_pdf(
+                        invoice_upload.getvalue(),
+                        document_kind="invoice",
+                    )
+                    invoice_import = parsed_to_form_import(inv_parsed)
+
+                if ro_import and invoice_import:
+                    import_data = merge_form_imports(ro_import, invoice_import)
+                else:
+                    import_data = ro_import or invoice_import
+
+                _apply_ro_scan_to_form(import_data)
+                st.session_state.ro_scan_summary = import_data
+            st.rerun()
+        except Exception as e:
+            st.error(f"Scan failed: {e}")
+
+    summary = st.session_state.get("ro_scan_summary")
+    if summary:
+        filled = []
+        if summary.get("ro_number"):
+            filled.append(f"RO {summary['ro_number']}")
+        if summary.get("vin"):
+            filled.append(f"VIN {summary['vin']}")
+        if summary.get("advisor"):
+            filled.append(f"Advisor {summary['advisor']}")
+        doc = summary.get("document_type", "")
+        if doc == "merged":
+            filled.append("repair order + invoice merged")
+        elif doc == "repair_order":
+            filled.append("repair order (add invoice tab for narratives)")
+        job_n = len(summary.get("jobs") or [])
+        if job_n:
+            filled.append(f"{job_n} warranty job(s)")
+        if filled:
+            st.success("Auto-filled: " + ", ".join(filled) + ". Please verify everything below.")
+        for msg in summary.get("warnings", []):
+            st.warning(msg)
+
+
 # =========================
 # SCREENS
 # =========================
 
 def render_review():
+    _render_ro_scanner()
+
     col_a, col_b = st.columns([8, 2])
 
     with col_a:
@@ -1188,11 +2452,33 @@ def render_review():
 
     with col_b:
         if st.button("Next Claim"):
+            fv = st.session_state.form_version
+            st.session_state.pop(f"vin_recall_result_{fv}", None)
+            st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
             st.session_state.form_version += 1
+            st.session_state.pop("_ro_scan_advisor", None)
+            st.session_state.pop("_ro_scan_technician", None)
+            st.session_state.pop("ro_scan_summary", None)
             st.rerun()
 
     if "job_count" not in st.session_state:
         st.session_state.job_count = 1
+
+    sw_settings = load_smart_warranty_settings(supabase)
+    sw_level = sw_settings.get("smart_warranty_level", "base")
+    smart_warranty_time_exempt = smart_warranty_punch_exempt(sw_level)
+    audit_rules = load_audit_rules(supabase)
+    rejection_library = load_rejection_reason_library(supabase)
+
+    if smart_warranty_time_exempt:
+        st.success(
+            f"Smart Warranty **{sw_level.title()}** — time punch validation is not required for this dealership "
+            "(Plus/Premium benefit). No bypass will be recorded on saved reviews."
+        )
+    else:
+        st.caption(
+            f"Smart Warranty level: **Base** — tech flagged time vs. time allotted validation applies."
+        )
 
     job_count = st.number_input(
         "How many warranty jobs are on this RO?",
@@ -1202,6 +2488,7 @@ def render_review():
         step=1,
         key="job_count"
     )
+
     ro_number = st.text_input("RO Number", key=f"ro_number_{st.session_state.form_version}")
     vin = st.text_input("VIN", key=f"vin_{st.session_state.form_version}")
     ro_invoiced = st.date_input(
@@ -1213,6 +2500,17 @@ def render_review():
         key=f"day_submitted_{st.session_state.form_version}"
     )
 
+    render_vin_recall_panel(vin, st.session_state.form_version, job_count)
+
+    live_summary = compute_live_audit_summary(
+        st.session_state.form_version,
+        int(job_count),
+        vin,
+        smart_warranty_time_exempt=smart_warranty_time_exempt,
+        audit_rules=audit_rules,
+    )
+    render_live_submit_status_bar(live_summary)
+
     first_pass_paid = st.checkbox(
         "Paid on First Submission",
         key=f"first_pass_paid_{st.session_state.form_version}"
@@ -1223,11 +2521,31 @@ def render_review():
         key=f"rejected_{st.session_state.form_version}"
     )
 
-    rejection_reason = st.text_area(
-        "Rejection Reason",
-        height=100,
-        key="rejection_reason"
-    ) if rejected else ""
+    rejection_reason = ""
+    if rejected:
+        reason_labels = active_rejection_reason_labels(rejection_library)
+        if not reason_labels:
+            reason_labels = active_rejection_reason_labels({})
+
+        fv = st.session_state.form_version
+        selected_reason = st.selectbox(
+            "Rejection Reason",
+            options=[""] + reason_labels,
+            key=f"rejection_reason_select_{fv}",
+            help="Standard reasons are managed under Admin → Rejection Reason Library.",
+        )
+        rejection_notes = st.text_input(
+            "Additional rejection notes (optional)",
+            key=f"rejection_reason_notes_{fv}",
+            placeholder="Required for 'Other' — optional detail for any reason.",
+        )
+        if selected_reason:
+            if selected_reason.lower().startswith("other") and not rejection_notes.strip():
+                st.warning("Add notes when selecting **Other**.")
+            elif rejection_notes.strip():
+                rejection_reason = f"{selected_reason} — {rejection_notes.strip()}"
+            else:
+                rejection_reason = selected_reason
 
     days_to_submit = (day_submitted - ro_invoiced).days
     st.metric("Days to Submit", days_to_submit)
@@ -1238,9 +2556,19 @@ def render_review():
         personnel_df["role"] == "Advisor"
     ]["name"].tolist()
 
+    scan_advisor = st.session_state.pop("_ro_scan_advisor", None)
+    matched_advisor = _match_personnel_name(scan_advisor, advisor_list) if scan_advisor else None
+    if matched_advisor:
+        st.session_state[f"advisor_{st.session_state.form_version}"] = matched_advisor
+
     tech_list = personnel_df[
         personnel_df["role"] == "Technician"
     ]["name"].tolist()
+
+    scan_technician = st.session_state.pop("_ro_scan_technician", None)
+    matched_technician = _match_personnel_name(scan_technician, tech_list) if scan_technician else None
+    if matched_technician:
+        st.session_state[f"technician_{st.session_state.form_version}"] = matched_technician
 
     warranty_list = personnel_df[
         personnel_df["role"] == "Warranty Admin"
@@ -1268,6 +2596,8 @@ def render_review():
     st.subheader("Warranty Job Documentation")
 
     jobs = []
+    time_bypass = False
+    time_bypass_user = ""
 
     for i in range(int(job_count)):
         job_no = i + 1
@@ -1296,6 +2626,28 @@ def render_review():
                 f"Use Suggested Narrative - Job {job_no}",
                 key=f"use_suggested_{job_no}"
             )
+
+            if job_no == 1:
+                if smart_warranty_time_exempt:
+                    st.caption(
+                        "Time punch validation waived — Smart Warranty Plus/Premium (no manual bypass needed)."
+                    )
+                elif user_can_admin_write():
+                    time_bypass = st.checkbox(
+                        "Bypass Tech Flagged Time / Time Allotted Validation",
+                        key="time_bypass",
+                    )
+                    if time_bypass:
+                        time_bypass_user = current_person_name()
+                        st.caption(f"Bypass will be recorded under **{time_bypass_user}**.")
+                    else:
+                        time_bypass_user = ""
+                else:
+                    st.caption(
+                        "Time punch bypass requires a linked **Manager** or **Warranty Admin** account."
+                    )
+                    time_bypass = False
+                    time_bypass_user = ""
 
             c1, c2, c3 = st.columns(3)
 
@@ -1358,13 +2710,15 @@ def render_review():
 
             with c4:
                 warranty_add_on = st.checkbox(
-                    "Warranty Add-On (+)",
+                    "Warranty Add-On (W+)",
                     key=f"addon_{job_no}"
                 )
                 manager_approval = st.checkbox(
-                    "Manager Approval",
+                    "Service Manager Signed Off",
                     key=f"manager_approval_{job_no}"
                 )
+                if warranty_add_on and not manager_approval:
+                    st.error("Hard stop: W+ add-on requires Service Manager sign-off before submission.")
                 ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
                 ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
                 parts_warranty = st.checkbox(
@@ -1372,98 +2726,39 @@ def render_review():
                     key=f"parts_warranty_{job_no}"
                 )
                 mopa_original_ro = st.checkbox(
-                    "MOPA + Original RO",
+                    "MOPAR + Original RO",
                     key=f"mopa_{job_no}"
                 )
-            st.markdown("### Claim Intelligence AI Recommendations")
+
+            preview_job = {
+                "concern": concern,
+                "cause": cause,
+                "correction": correction,
+                "oil_leak": oil_leak,
+                "oil_dye_billed": oil_dye_billed,
+                "battery_replacement": battery_replacement,
+                "battery_test_slip": battery_test_slip,
+                "sublet_repair": sublet_repair,
+                "rental_involved": rental_involved,
+                "warranty_add_on": warranty_add_on,
+                "ac_repair": ac_repair,
+                "ac_evac_slip": ac_evac_slip,
+                "parts_warranty": parts_warranty,
+            }
+            applicable_manual = find_applicable_manual_sections(preview_job)
+            render_applicable_manual_sections(
+                applicable_manual,
+                key_prefix=f"live_manual_{job_no}_{st.session_state.form_version}",
+            )
 
             current_job_preview = {
                 "concern": concern,
                 "cause": cause,
-                "correction": correction
+                "correction": correction,
             }
-
             similar_claims = find_similar_paid_claims(current_job_preview)
+            render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
 
-            if similar_claims:
-                best_match = enrich_paid_claim_match(similar_claims[0])
-
-                st.success(f"Similar Paid Claim Match: {best_match['score']}%")
-
-                narrative = (
-                    best_match.get("correction", "")
-                    or best_match.get("cause", "")
-                    or best_match.get("concern", "")
-                    or str(best_match.get("story", ""))[:800]
-                    or "Review similar claim details below."
-                )
-                labor_list = format_recommendation_list(
-                    best_match.get("labor_ops"),
-                    "No labor operations found in this paid claim.",
-                )
-                parts_list = format_recommendation_list(
-                    best_match.get("parts"),
-                    "No parts list found in this paid claim.",
-                )
-                wam_ref = (best_match.get("wam_reference") or "").strip()
-                wam_display = wam_ref if wam_ref else "No WAM reference found in this paid claim."
-
-                st.info(
-                    f"""
-**Recommended Direction Based on Paid Claims**
-
-**Matched Claim:** {best_match.get("ro_number", "")}
-
-**Suggested Narrative Source:**
-{narrative}
-
-**Common Labor Ops:**
-{labor_list}
-
-**Common Parts:**
-{parts_list}
-
-**WAM Reference:**
-{wam_display}
-"""
-                )
-
-                with st.expander("View Similar Paid Claims"):
-                    for raw_match in similar_claims:
-                        match = enrich_paid_claim_match(raw_match)
-                        st.markdown(f"**Match Score:** {match['score']}%")
-                        st.markdown(f"**Matched File:** {match.get('ro_number', '')}")
-                        if match.get("match_reasons"):
-                            st.markdown(f"**Matched Components:** {', '.join(match['match_reasons'][:5])}")
-                        st.markdown("**Labor Ops:**")
-                        st.markdown(
-                            format_recommendation_list(
-                                match.get("labor_ops"),
-                                "—",
-                            )
-                        )
-                        st.markdown("**Parts:**")
-                        st.markdown(
-                            format_recommendation_list(
-                                match.get("parts"),
-                                "—",
-                            )
-                        )
-                        st.markdown(
-                            f"**WAM Reference:** {(match.get('wam_reference') or '—')}"
-                        )
-                        preview_text = (
-                            str(match.get("correction", ""))
-                            or str(match.get("cause", ""))
-                            or str(match.get("concern", ""))
-                            or str(match.get("story", ""))
-                            or str(match.get("content", ""))
-                        )
-                        st.markdown("**Stored Claim Text Preview:**")
-                        st.write(preview_text[:1500] if preview_text.strip() else "No stored claim text found.")
-                        st.markdown("---")
-            else:
-                st.warning("No similar paid claims found yet. Upload more paid claims in Claim Learning.")
             jobs.append({
                 "job_no": str(job_no),
                 "concern": concern,
@@ -1493,20 +2788,22 @@ def render_review():
 
     st.markdown("---")
 
-    st.markdown("---")
+    recall_audit_block = _vin_recall_blocks_audit(st.session_state.form_version, vin)
+    if recall_audit_block:
+        st.warning(
+            "This VIN has recall campaign(s) on file. Acknowledge the recall notice in the popup "
+            "before running the audit."
+        )
 
-    time_bypass = st.checkbox(
-        "Bypass Tech Flagged Time / Time Allotted Validation"
-    )
-
-    time_bypass_user = st.text_input(
-        "Bypass Approved By"
-    ) if time_bypass else ""
+    sign_in_required = not is_signed_in()
+    if sign_in_required:
+        st.warning("Sign in with your dealership account before running the audit.")
 
     if st.button(
         "Run Audit + Save Review",
         type="primary",
-        use_container_width=True
+        use_container_width=True,
+        disabled=recall_audit_block or sign_in_required,
     ):
 
         all_hard = []
@@ -1521,7 +2818,12 @@ def render_review():
         hard_value = 0.0
 
         for job in jobs:
-            hard, warn, score = audit_job(job, time_bypass)
+            hard, warn, score = audit_job(
+                job,
+                time_bypass,
+                smart_warranty_time_exempt=smart_warranty_time_exempt,
+                audit_rules=audit_rules,
+            )
 
             job["hard_stops"] = hard
             job["warnings"] = warn
@@ -1548,6 +2850,25 @@ def render_review():
 
         result_banner(status)
 
+        recall_result = st.session_state.get(f"vin_recall_result_{st.session_state.form_version}")
+        if recall_result and recall_result.get("ok"):
+            job_text = _review_job_text_from_session(st.session_state.form_version, job_count)
+            recalls = apply_job_relevance(list(recall_result.get("recalls") or []), job_text)
+            related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
+            if related:
+                st.markdown("### VIN Recall Alert")
+                for recall in related[:3]:
+                    st.warning(
+                        f"NHTSA recall **{recall.get('campaign', '—')}** "
+                        f"({recall.get('component', '')}) may relate to this repair. "
+                        "Verify campaign status in OASIS / wiTECH before warranty submit."
+                    )
+            elif recall_result.get("recall_count"):
+                st.info(
+                    f"This vehicle configuration has {recall_result['recall_count']} NHTSA recall(s) on file — "
+                    "confirm VIN-specific completion status before submit."
+                )
+
         x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
 
         x1.metric("Audit Score", final_score)
@@ -1568,28 +2889,57 @@ def render_review():
                 for w in job.get("warnings", []):
                     st.warning(w)
 
+                render_applicable_manual_sections(
+                    job.get("manual_sections", []),
+                    key_prefix=f"audit_manual_{job['job_no']}",
+                )
+
                 if not job.get("hard_stops") and not job.get("warnings"):
                     st.success("No audit issues found.")
 
-        save_review({
+        report_payload = {
             "ro_number": ro_number,
             "vin": vin,
             "ro_invoiced": str(ro_invoiced),
             "day_submitted": str(day_submitted),
             "days_to_submit": days_to_submit,
-            "first_pass_paid": 1 if first_pass_paid else 0,
-            "rejected": 1 if rejected else 0,
+            "first_pass_paid": first_pass_paid,
+            "rejected": rejected,
             "rejection_reason": rejection_reason,
             "advisor": advisor,
             "technician": technician,
             "warranty_admin": warranty_admin,
             "score": final_score,
-            "time_bypass": 1 if time_bypass else 0,
-            "time_bypass_user": time_bypass_user,
+            "status": status,
+            "total_claim_value": total_value,
+            "hard_stop_value": hard_value,
+            "hard_stop_count": len(all_hard),
+            "warning_count": len(all_warn),
+            "time_bypass": False if smart_warranty_time_exempt else time_bypass,
+            "time_bypass_user": "" if smart_warranty_time_exempt else time_bypass_user,
+            "entered_by": current_person_name(),
             "jobs": jobs,
-        })
+            **_vin_recall_save_fields(st.session_state.form_version, vin),
+        }
 
-        st.success("Review saved to Reporting.")
+        if save_review(report_payload):
+            st.success("Review saved to Reporting (Supabase).")
+
+        try:
+            audit_pdf = build_audit_report_pdf(report_payload)
+            safe_ro = re.sub(r"[^\w\-]+", "_", str(ro_number or "audit")).strip("_") or "audit"
+            st.download_button(
+                "Download Audit PDF",
+                data=audit_pdf,
+                file_name=f"RO_Shield_Audit_{safe_ro}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key=f"audit_pdf_{st.session_state.form_version}",
+            )
+        except ImportError:
+            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
+        except Exception as e:
+            st.warning(f"Audit PDF could not be generated: {e}")
 
    
 
@@ -1662,248 +3012,1057 @@ def render_claims():
     if not df.empty:
         st.dataframe(df, use_container_width=True)
 
-def render_reporting():
-        df =load_reviews()
-        if st.button("Refresh Reporting"):
-            st.rerun()  
-        if not df.empty and "created_at" in df.columns:
-            df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+def _filter_reviews_by_date(df, key_prefix="report"):
+    if df.empty or "created_at" not in df.columns:
+        return df
+    df = normalize_reviews_dataframe(df)
+    min_d = df["created_at"].min().date()
+    max_d = df["created_at"].max().date()
+    date_range = st.date_input(
+        "Report Date Range",
+        value=(min_d, max_d),
+        key=f"{key_prefix}_date_range",
+    )
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date = end_date = date_range
+    return df[
+        (df["created_at"].dt.date >= start_date) &
+        (df["created_at"].dt.date <= end_date)
+    ]
 
-            start_date, end_date = st.date_input(
-                "Report Date Range",
-                 value=(
-                      df["created_at"].min().date(),
-                      df["created_at"].max().date()
-                )
+
+def render_roi_dashboard():
+    st.header("ROI Dashboard")
+    st.caption("Show the business value of RO Shield — dollars protected, quality trends, and team performance.")
+
+    col_refresh, col_migrate = st.columns([1, 2])
+    with col_refresh:
+        if st.button("Refresh ROI Dashboard", key="refresh_roi"):
+            st.rerun()
+    with col_migrate:
+        if st.button("Import old local reviews (SQLite → Supabase)", key="migrate_roi"):
+            migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
+            st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
+            st.rerun()
+
+    df = load_reviews()
+    if df.empty:
+        st.info("No reviews saved yet. Complete audits on the Review tab to populate ROI metrics.")
+        return
+
+    df = _filter_reviews_by_date(df, key_prefix="roi")
+    if df.empty:
+        st.warning("No reviews in the selected date range.")
+        return
+
+    with st.expander("ROI assumptions (adjust for your store)", expanded=False):
+        st.caption("These settings estimate dollars saved — they do not change your saved review data.")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            rejection_rework_pct = st.slider(
+                "Est. rework cost if a hard-stop RO had been submitted (%)",
+                min_value=10,
+                max_value=100,
+                value=40,
+                step=5,
+                key="roi_rework_pct",
+            ) / 100.0
+        with c2:
+            minutes_saved = st.slider(
+                "Minutes saved per review vs manual audit",
+                min_value=5,
+                max_value=45,
+                value=15,
+                step=1,
+                key="roi_minutes_saved",
+            )
+        with c3:
+            hourly_rate = st.number_input(
+                "Warranty admin loaded hourly cost ($)",
+                min_value=20.0,
+                max_value=100.0,
+                value=38.0,
+                step=1.0,
+                key="roi_hourly_rate",
             )
 
-            df = df[
-                (df["created_at"].dt.date >= start_date) &
-                (df["created_at"].dt.date <= end_date)
-        ]
-                
-        a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
-
-        a.metric("Reviews", len(df))
-    
-        avg_score = pd.to_numeric(df.get("score", pd.Series([0])), errors="coerce").fillna(0).mean()
-        b.metric("Avg Score", f"{avg_score:.1f}")
-
-        avg_days_to_submit = pd.to_numeric(df.get("days_to_submit", pd.Series([0])), errors="coerce").fillna(0).mean()
-        b.metric("Avg Days to Submit", f"{avg_days_to_submit:.1f}")
-    
-        total_claim_value = pd.to_numeric(df.get("total_claim_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-        c.metric("Total Claim Value", f"${total_claim_value:,.2f}")
-    
-        hard_stop_value = pd.to_numeric(df.get("hard_stop_value", pd.Series([0])), errors="coerce").fillna(0).sum()
-        d.metric("Hard Stop Value", f"${hard_stop_value:,.2f}")
-    
-        hard_stop_count = pd.to_numeric(df.get("hard_stop_count", pd.Series([0])), errors="coerce").fillna(0).sum()
-        e.metric("Hard Stops", int(hard_stop_count))
-    
-        time_bypass = pd.to_numeric(df.get("time_bypass", pd.Series([0])), errors="coerce").fillna(0).sum()
-        f.metric("Time Bypasses", int(time_bypass))
-        st.subheader("First-Pass Approval Tracking")
-        st.subheader("First-Pass Approval Tracking")
-
-        if not df.empty:
-            fp_df = df.copy()
-            fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
-            fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
-            fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
-
-            total_reviews = len(fp_df)
-            first_pass_count = int(fp_df["first_pass_paid"].sum())
-            rejected_count = int(fp_df["rejected"].sum())
-
-            first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
-            rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
-            rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
-
-            fp1, fp2, fp3, fp4 = st.columns(4)
-            fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
-            fp2.metric("First-Pass Paid Count", first_pass_count)
-            fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
-            fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
-
-        if "rejection_reason" in fp_df.columns:
-            reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""]
-        if not reasons.empty:
-            st.markdown("### Rejection Reasons")
-            reason_summary = reasons.groupby("rejection_reason").agg(
-                count=("ro_number", "count"),
-                total_value=("total_claim_value", "sum")
-            ).reset_index().sort_values("count", ascending=False)
-
-            st.dataframe(reason_summary, use_container_width=True)
-        st.subheader("Top Offenders / Best Performers")
-
-        if not df.empty:
-            perf_df = df.copy()
-            perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
-            perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
-            perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
-
-            rank_col = st.selectbox(
-                "Rank By",
-                ["advisor", "technician", "warranty_admin"],
-                key="rank_by_employee"
+    metrics = compute_roi_metrics(
+        df,
+        rejection_rework_pct=rejection_rework_pct,
+        minutes_saved_per_review=float(minutes_saved),
+        admin_hourly_rate=float(hourly_rate),
     )
 
-        if rank_col in perf_df.columns:
-            ranking = perf_df.groupby(rank_col).agg(
+    st.markdown(
+        f"""
+        <div class="hero">
+            <h1>${metrics["total_estimated_value"]:,.0f}</h1>
+            <p>Estimated value captured in this period from RO Shield reviews</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Value at a Glance")
+    v1, v2, v3, v4 = st.columns(4)
+    v1.metric(
+        "Claims Protected",
+        f"${metrics['protected_value']:,.0f}",
+        help="Total claim dollars flagged with hard stops before submission",
+    )
+    v2.metric(
+        "Est. Rework Avoided",
+        f"${metrics['rework_savings']:,.0f}",
+        help="Protected claim value × your rework cost assumption",
+    )
+    v3.metric(
+        "Est. Labor Saved",
+        f"${metrics['time_savings']:,.0f}",
+        help="Reviews × minutes saved × admin hourly cost",
+    )
+    v4.metric("Reviews Audited", metrics["review_count"])
+
+    st.markdown("### Quality & Approval")
+    q1, q2, q3, q4, q5 = st.columns(5)
+    q1.metric("Avg Audit Score", f"{metrics['avg_score']:.1f}")
+    q2.metric("First-Pass Approval", f"{metrics['first_pass_pct']:.1f}%")
+    q3.metric("Rejected Claim Value", f"${metrics['rejected_value']:,.0f}")
+    q4.metric("Hard Stops Caught", metrics["hard_stop_count"])
+    q5.metric("Warnings Flagged", metrics["warning_count"])
+
+    st.markdown("### Audit Outcomes")
+    o1, o2, o3 = st.columns(3)
+    o1.metric("🔴 Do Not Submit", metrics["do_not_submit_count"])
+    o2.metric("🟡 Needs Review", metrics["needs_review_count"])
+    o3.metric("🟢 Ready", metrics["ready_count"])
+
+    if metrics["review_count"] > 0:
+        st.markdown("### Visual Summary")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.image(audit_outcomes_pie(metrics), use_container_width=True, caption="Audit Outcomes")
+        with c2:
+            st.image(first_pass_pie(metrics), use_container_width=True, caption="Submission Results")
+        with c3:
+            st.image(issue_breakdown_pie(metrics), use_container_width=True, caption="Issues Found")
+
+    weekly = metrics["weekly_trend"]
+    if not weekly.empty:
+        st.markdown("### Trend Over Time")
+        t1, t2 = st.columns(2)
+        with t1:
+            weekly_png = weekly_activity_chart(weekly)
+            if weekly_png:
+                st.image(weekly_png, use_container_width=True, caption="Reviews & Hard Stops by Week")
+        with t2:
+            st.line_chart(weekly.set_index("week")[["protected_value"]])
+
+    advisor_df = metrics["advisor_summary"]
+    advisor_png = advisor_hard_stops_chart(advisor_df)
+    if advisor_png:
+        st.image(advisor_png, use_container_width=True, caption="Hard Stops by Advisor")
+
+    st.markdown("### Where to Focus Coaching")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Advisors — Most Protected Claim Value**")
+        advisor_df = metrics["advisor_summary"]
+        if not advisor_df.empty:
+            st.dataframe(
+                advisor_df.head(8).rename(columns={
+                    "advisor": "Advisor",
+                    "reviews": "Reviews",
+                    "avg_score": "Avg Score",
+                    "hard_stops": "Hard Stops",
+                    "protected_value": "Protected $",
+                    "rejected": "Rejected",
+                }),
+                use_container_width=True,
+            )
+        else:
+            st.caption("Advisor data will appear once reviews include advisor names.")
+
+    with c2:
+        st.markdown("**Top Rejection Reasons**")
+        reasons = metrics["rejection_reasons"]
+        if not reasons.empty:
+            st.dataframe(
+                reasons.head(8).rename(columns={
+                    "rejection_reason": "Reason",
+                    "count": "Count",
+                    "total_value": "Claim Value",
+                }),
+                use_container_width=True,
+            )
+        else:
+            st.caption("Mark rejections on the Review tab to track reasons and cost here.")
+
+    st.markdown("### How We Calculate ROI")
+    st.info(
+        f"**Claims Protected** is the actual hard-stop claim dollars RO Shield flagged before submission. "
+        f"**Est. Rework Avoided** applies your {rejection_rework_pct:.0%} rework assumption to that protected value. "
+        f"**Est. Labor Saved** assumes {minutes_saved:.0f} minutes saved per review at ${hourly_rate:,.0f}/hr. "
+        f"Together, these give managers a clear story for adoption and investment."
+    )
+
+    if "created_at" in df.columns and df["created_at"].notna().any():
+        period_label = (
+            f"{df['created_at'].min().date()} to {df['created_at'].max().date()}"
+        )
+    else:
+        period_label = "Selected period"
+
+    try:
+        roi_pdf = build_roi_report_pdf(
+            metrics,
+            period_label=period_label,
+            rejection_rework_pct=rejection_rework_pct,
+            minutes_saved=float(minutes_saved),
+            hourly_rate=float(hourly_rate),
+        )
+        st.download_button(
+            "Download ROI Summary PDF",
+            data=roi_pdf,
+            file_name="RO_Shield_ROI_Summary.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="roi_summary_pdf",
+        )
+    except ImportError:
+        st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
+    except Exception as e:
+        st.warning(f"ROI PDF could not be generated: {e}")
+
+
+def render_reporting():
+    st.markdown(
+        """
+        <div class="reporting-hero">
+            <h2>Reporting</h2>
+            <p>Team-wide review history stored in Supabase.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_refresh, col_migrate = st.columns([1, 2])
+    with col_refresh:
+        if st.button("Refresh Reporting"):
+            st.rerun()
+    with col_migrate:
+        if st.button("Import old local reviews (SQLite → Supabase)"):
+            migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
+            st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
+            st.rerun()
+
+    df = load_reviews()
+    if df.empty:
+        st.info("No reviews saved yet. Complete a review on the Review tab and click Run Audit + Save Review.")
+        return
+
+    df = _filter_reviews_by_date(df, key_prefix="report")
+    if df.empty:
+        st.warning("No reviews in the selected date range.")
+        return
+
+    df = normalize_reviews_dataframe(df)
+
+    a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
+    a.metric("Reviews", len(df))
+    b.metric("Avg Score", f"{pd.to_numeric(df.get('score', 0), errors='coerce').fillna(0).mean():.1f}")
+    b.metric("Avg Days to Submit", f"{pd.to_numeric(df.get('days_to_submit', 0), errors='coerce').fillna(0).mean():.1f}")
+    c.metric("Total Claim Value", f"${pd.to_numeric(df.get('total_claim_value', 0), errors='coerce').fillna(0).sum():,.2f}")
+    d.metric("Hard Stop Value", f"${pd.to_numeric(df.get('hard_stop_value', 0), errors='coerce').fillna(0).sum():,.2f}")
+    e.metric("Hard Stops", int(pd.to_numeric(df.get("hard_stop_count", 0), errors="coerce").fillna(0).sum()))
+    f.metric("Time Bypasses", int(pd.to_numeric(df.get("time_bypass", 0), errors="coerce").fillna(0).sum()))
+
+    if len(df) > 0:
+        with st.container(border=True):
+            st.markdown("### Visual Summary")
+            r1, r2 = st.columns(2)
+            with r1:
+                status_png = review_status_pie(df)
+                if status_png:
+                    st.image(status_png, use_container_width=True, caption="Review Status Mix")
+            with r2:
+                score_png = score_distribution_chart(df)
+                if score_png:
+                    st.image(score_png, use_container_width=True, caption="Audit Score Distribution")
+
+    st.subheader("First-Pass Approval Tracking")
+    fp_df = df.copy()
+    fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
+    fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
+    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
+
+    total_reviews = len(fp_df)
+    first_pass_count = int(fp_df["first_pass_paid"].sum())
+    rejected_count = int(fp_df["rejected"].sum())
+    first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
+    rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
+    rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
+
+    fp1, fp2, fp3, fp4 = st.columns(4)
+    fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
+    fp2.metric("First-Pass Paid Count", first_pass_count)
+    fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
+    fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
+
+    st.subheader("VIN Recall Tracking")
+    if "vin_recall_identified" in df.columns:
+        recall_flag = pd.to_numeric(df["vin_recall_identified"], errors="coerce").fillna(0).astype(int)
+        recall_df = df[recall_flag == 1].copy()
+        all_time_df = load_reviews()
+        all_time_total = 0
+        if not all_time_df.empty and "vin_recall_identified" in all_time_df.columns:
+            all_time_total = int(
+                pd.to_numeric(all_time_df["vin_recall_identified"], errors="coerce").fillna(0).astype(int).sum()
+            )
+
+        r1, r2, r3 = st.columns(3)
+        r1.metric("VINs With Recalls (this period)", len(recall_df))
+        r2.metric("VINs With Recalls (all time)", all_time_total)
+        r3.metric(
+            "Recall Acknowledgments (this period)",
+            int(pd.to_numeric(recall_df.get("vin_recall_acknowledged", 0), errors="coerce").fillna(0).sum())
+            if not recall_df.empty else 0,
+        )
+
+        if recall_df.empty:
+            st.info("No VINs with identified recalls in the selected reporting period.")
+        else:
+            recall_display = recall_df.copy()
+            if "created_at" in recall_display.columns:
+                recall_display["created_at"] = pd.to_datetime(
+                    recall_display["created_at"], errors="coerce"
+                ).dt.strftime("%Y-%m-%d %H:%M")
+            show_cols = [
+                c for c in (
+                    "created_at", "ro_number", "vin", "vin_recall_count",
+                    "vin_recall_campaigns", "vin_recall_acknowledged", "advisor",
+                )
+                if c in recall_display.columns
+            ]
+            st.dataframe(recall_display[show_cols], use_container_width=True)
+    else:
+        st.info(
+            "VIN recall columns are not in Supabase yet. Run the migration in "
+            "`docs/SUPABASE_SCHEMA.sql`, then save new reviews to populate this report."
+        )
+
+    if "rejection_reason" in fp_df.columns:
+        reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""].copy()
+        if not reasons.empty:
+            st.markdown("### Rejection Reasons")
+            st.caption("Grouped by standard library reason (text before optional notes).")
+            reasons["rejection_reason_primary"] = (
+                reasons["rejection_reason"].astype(str).str.split(" — ").str[0].str.strip()
+            )
+            reason_summary = reasons.groupby("rejection_reason_primary").agg(
+                count=("ro_number", "count"),
+                total_value=("total_claim_value", "sum"),
+            ).reset_index().sort_values("count", ascending=False)
+            reason_summary = reason_summary.rename(columns={"rejection_reason_primary": "rejection_reason"})
+            st.dataframe(reason_summary, use_container_width=True)
+
+            with st.expander("All rejection detail (including notes)"):
+                detail = reasons.copy()
+                if "created_at" in detail.columns:
+                    detail["created_at"] = pd.to_datetime(
+                        detail["created_at"], errors="coerce"
+                    ).dt.strftime("%Y-%m-%d %H:%M")
+                detail_cols = [
+                    c for c in ("created_at", "ro_number", "rejection_reason", "total_claim_value", "advisor")
+                    if c in detail.columns
+                ]
+                st.dataframe(detail[detail_cols], use_container_width=True)
+
+    st.subheader("Top Offenders / Best Performers")
+    perf_df = df.copy()
+    perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
+    perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+    perf_df["warning_count"] = pd.to_numeric(perf_df.get("warning_count", 0), errors="coerce").fillna(0)
+
+    rank_col = st.selectbox(
+        "Rank By",
+        ["advisor", "technician", "warranty_admin"],
+        key="rank_by_employee",
+    )
+
+    if rank_col in perf_df.columns and not perf_df.empty:
+        ranking = perf_df.groupby(rank_col).agg(
             reviews=("ro_number", "count"),
             avg_score=("score", "mean"),
             hard_stops=("hard_stop_count", "sum"),
-            warnings=("warning_count", "sum")
+            warnings=("warning_count", "sum"),
         ).reset_index()
-
         worst = ranking.sort_values(["hard_stops", "warnings"], ascending=[False, False]).head(5)
         best = ranking.sort_values(["avg_score", "hard_stops"], ascending=[False, True]).head(5)
-
         c1, c2 = st.columns(2)
-
         with c1:
             st.markdown("### Top Offenders")
             st.dataframe(worst, use_container_width=True)
-
         with c2:
             st.markdown("### Best Performers")
             st.dataframe(best, use_container_width=True)
-        st.subheader("Employee Scorecards")
-    
-        if not df.empty:
-            scorecard_role = st.selectbox(
-            "Scorecard Type",
-            ["Advisor", "Technician", "Warranty Admin"]
-    )
 
-        employee_col = {
+    st.subheader("Employee Scorecards")
+    scorecard_role = st.selectbox(
+        "Scorecard Type",
+        ["Advisor", "Technician", "Warranty Admin"],
+    )
+    employee_col = {
         "Advisor": "advisor",
         "Technician": "technician",
-        "Warranty Admin": "warranty_admin"
+        "Warranty Admin": "warranty_admin",
     }[scorecard_role]
 
-        if employee_col in df.columns:
-            score_df = df.copy()
-            score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
-            score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
-            score_df["warning_count"] = pd.to_numeric(score_df.get("warning_count", 0), errors="coerce").fillna(0)
-            score_df["days_to_submit"] = pd.to_numeric(score_df.get("days_to_submit", 0), errors="coerce").fillna(0)
-
+    if employee_col in df.columns and not df.empty:
+        score_df = df.copy()
+        score_df["score"] = pd.to_numeric(score_df.get("score", 0), errors="coerce").fillna(0)
+        score_df["hard_stop_count"] = pd.to_numeric(score_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
+        score_df["warning_count"] = pd.to_numeric(score_df.get("warning_count", 0), errors="coerce").fillna(0)
+        score_df["days_to_submit"] = pd.to_numeric(score_df.get("days_to_submit", 0), errors="coerce").fillna(0)
         scorecard = score_df.groupby(employee_col).agg(
             reviews=("ro_number", "count"),
             avg_score=("score", "mean"),
             hard_stops=("hard_stop_count", "sum"),
             warnings=("warning_count", "sum"),
-            avg_days_to_submit=("days_to_submit", "mean")
-        ).reset_index()
-
-        scorecard = scorecard.sort_values(
-            by=["hard_stops", "avg_score"],
-            ascending=[False, True]
-        )
-
+            avg_days_to_submit=("days_to_submit", "mean"),
+        ).reset_index().sort_values(["hard_stops", "avg_score"], ascending=[False, True])
         st.dataframe(scorecard, use_container_width=True)
-        st.subheader("Review Log")
-        st.dataframe(df, use_container_width=True)
-        st.download_button("Download Review Report CSV", df.to_csv(index=False), "ro_shield_review_report.csv", "text/csv")
+
+    st.subheader("Review Log")
+    display_df = df.drop(columns=["jobs"], errors="ignore")
+    st.dataframe(display_df, use_container_width=True)
+
+    if "created_at" in df.columns and df["created_at"].notna().any():
+        report_period = f"{df['created_at'].min().date()} to {df['created_at'].max().date()}"
+    else:
+        report_period = "Selected period"
+
+    dl1, dl2 = st.columns(2)
+    with dl1:
+        st.download_button(
+            "Download Review Report CSV",
+            display_df.to_csv(index=False),
+            "ro_shield_review_report.csv",
+            "text/csv",
+            use_container_width=True,
+            key="review_report_csv",
+        )
+    with dl2:
+        try:
+            review_pdf = build_review_report_pdf(display_df, period_label=report_period)
+            st.download_button(
+                "Download Review Report PDF",
+                data=review_pdf,
+                file_name="RO_Shield_Review_Report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="review_report_pdf",
+            )
+        except ImportError:
+            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
+        except Exception as e:
+            st.error(f"Review PDF could not be generated: {e}")
 
 
-def render_admin():
-    st.header("Admin")
+def render_personnel_admin():
+    st.header("Personnel")
+    st.caption(
+        "Manage advisors, technicians, warranty admins, and managers. "
+        "The **Email** must match each person's Supabase login so roles apply after sign-in."
+    )
+
+    df = load_personnel()
+    if not user_can_manage_personnel():
+        render_role_gate_message(PERSONNEL_ADMIN_ROLES, "manage personnel")
+        if df.empty:
+            st.info("No personnel added yet.")
+        else:
+            display_cols = [
+                c for c in ("name", "role", "email", "employee_number", "id")
+                if c in df.columns
+            ]
+            st.dataframe(df[display_cols] if display_cols else df, use_container_width=True)
+        return
+
     with st.form("add_person"):
         name = st.text_input("Name")
+        email = st.text_input("Email (login)", placeholder="you@dealership.com")
         employee_number = st.text_input("Employee Number")
         role = st.selectbox("Role", ["Advisor", "Technician", "Warranty Admin", "Manager"])
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
-            add_person_shared(name.strip(), role, employee_number)
-            st.success("Person added.")
+            if email.strip() and not is_valid_email(email):
+                st.error("Enter a valid email address, or leave email blank.")
+            else:
+                add_person_shared(name.strip(), role, employee_number, email)
+                st.success("Person added.")
 
     df = load_personnel()
     st.subheader("Edit Existing Employee")
 
-    if not df.empty:
-            employee_names = df["name"].tolist()
-    selected_employee = st.selectbox("Select Employee to Edit", employee_names)
+    if df.empty:
+        st.info("No personnel added yet.")
+        return
 
+    employee_names = df["name"].tolist()
+    selected_employee = st.selectbox("Select Employee to Edit", employee_names)
     selected_row = df[df["name"] == selected_employee].iloc[0]
 
     edit_name = st.text_input("Edit Name", value=selected_row.get("name", ""))
-    edit_employee_number = st.text_input("Edit Employee Number", value=str(selected_row.get("employee_number", "")))
+    edit_email = st.text_input(
+        "Edit Email (login)",
+        value=str(selected_row.get("email", "") or ""),
+        placeholder="you@dealership.com",
+    )
+    edit_employee_number = st.text_input(
+        "Edit Employee Number",
+        value=str(selected_row.get("employee_number", "")),
+    )
 
     edit_role = st.selectbox(
         "Edit Role",
         ["Advisor", "Technician", "Warranty Admin", "Manager"],
-        index=["Advisor", "Technician", "Warranty Admin", "Manager"].index(selected_row.get("role", "Advisor"))
+        index=["Advisor", "Technician", "Warranty Admin", "Manager"].index(
+            selected_row.get("role", "Advisor")
+        ),
     )
 
     if st.button("Save Employee Changes"):
-        supabase.table("personnel").update({
-            "name": edit_name,
-            "employee_number": edit_employee_number,
-            "role": edit_role
-        }).eq("id", selected_row["id"]).execute()
+        if edit_email.strip() and not is_valid_email(edit_email):
+            st.error("Enter a valid email address, or clear the email field.")
+        else:
+            update_payload = {
+                "name": edit_name,
+                "employee_number": edit_employee_number,
+                "role": edit_role,
+                "email": normalize_email(edit_email) or None,
+            }
+            supabase.table("personnel").update(update_payload).eq("id", selected_row["id"]).execute()
 
-        st.success("Employee updated.")
-        st.rerun()
-    if df.empty:
-        st.info("No personnel added yet.")
+            st.success("Employee updated.")
+            st.rerun()
+
+    display_cols = [
+        c for c in ("name", "role", "email", "employee_number", "id")
+        if c in df.columns
+    ]
+    st.dataframe(df[display_cols] if display_cols else df, use_container_width=True)
+    remove_id = st.number_input("Deactivate personnel ID", min_value=0, value=0, step=1)
+    if st.button("Deactivate") and remove_id:
+        deactivate_person(remove_id)
+        st.success("Personnel deactivated.")
+
+
+def render_admin():
+    st.header("Admin")
+    st.caption(
+        "Dealership settings, audit rules, rejection reasons, and personnel. "
+        "Admin saves require a linked Manager or Warranty Admin account."
+    )
+
+    admin_tabs = st.tabs([
+        "Smart Warranty",
+        "Audit Rules",
+        "Rejection Reasons",
+        "Personnel",
+    ])
+    with admin_tabs[0]:
+        render_smart_warranty_admin()
+    with admin_tabs[1]:
+        render_audit_rules_admin()
+    with admin_tabs[2]:
+        render_rejection_reason_library_admin()
+    with admin_tabs[3]:
+        render_personnel_admin()
+
+
+def render_tsb_bulletins():
+    st.header("TSB / Service Bulletins")
+    st.caption(
+        "Upload Stellantis Technical Service Bulletins (PDF) or add manual rules. "
+        "During Review, matching bulletins appear when the repair applies to the job."
+    )
+
+    can_upload = user_can_upload_library()
+    if not can_upload:
+        render_role_gate_message(CONTENT_ADMIN_ROLES, "upload or add bulletins")
+
+    upload_tab, manual_tab = st.tabs(["Upload TSB (PDF)", "Manual entry"])
+
+    with upload_tab:
+        if not can_upload:
+            st.info("PDF upload is available to Manager and Warranty Admin only.")
+        else:
+            uploaded_files = st.file_uploader(
+                "Upload TSB PDF",
+                type=["pdf"],
+                accept_multiple_files=True,
+                key="tsb_upload",
+            )
+            if uploaded_files:
+                for file in uploaded_files:
+                    try:
+                        text, ocr_used = extract_ro_text(file.getvalue())
+                        if len(text.strip()) < 40:
+                            st.warning(f"{file.name}: little or no text could be extracted.")
+                            continue
+
+                        bulletin_number, title, auto_keywords = _extract_tsb_metadata(text, file.name)
+                        save_bulletin(
+                            title,
+                            auto_keywords,
+                            text[:4000],
+                            source_file=file.name,
+                            bulletin_number=bulletin_number,
+                            content=text,
+                        )
+                        ocr_note = " (scanned — OCR used)" if ocr_used else ""
+                        label = f"TSB {bulletin_number}" if bulletin_number else title
+                        st.success(f"{file.name} saved{ocr_note} — {label}")
+                    except Exception as e:
+                        st.error(f"TSB upload failed for {file.name}: {e}")
+
+            if not ocr_available():
+                st.caption(
+                    "Scanned TSB PDFs need OCR. Install Tesseract and `pdf2image` for image-only bulletins."
+                )
+
+    with manual_tab:
+        if not can_upload:
+            st.info("Manual bulletin entry is available to Manager and Warranty Admin only.")
+        else:
+            with st.form("add_bulletin"):
+                title = st.text_input("Bulletin / Rule Title")
+                keywords = st.text_input("Keywords (comma-separated)")
+                notes = st.text_area("Notes / rule text")
+                bulletin_number = st.text_input("TSB number (optional)", placeholder="e.g. 23-045")
+                if st.form_submit_button("Add Bulletin / Rule") and title.strip():
+                    save_bulletin(
+                        title,
+                        keywords,
+                        notes,
+                        bulletin_number=bulletin_number,
+                        content=notes,
+                    )
+                    st.success("Bulletin/rule added.")
+
+    st.subheader("Saved bulletins")
+    bdf = load_bulletins(supabase)
+    if bdf.empty:
+        st.info("No bulletins saved yet.")
+        return
+
+    search_col, filter_col, sort_col = st.columns([3, 1.2, 1.2])
+    with search_col:
+        tsb_search = st.text_input(
+            "Search bulletins",
+            placeholder="TSB number, title, keyword, component, source file…",
+            key="tsb_search_query",
+        )
+    with filter_col:
+        tsb_entry_filter = st.selectbox(
+            "Entry type",
+            ["All", "PDF upload", "Manual entry"],
+            key="tsb_entry_filter",
+        )
+    with sort_col:
+        tsb_sort = st.selectbox(
+            "Sort by",
+            ["Newest first", "Oldest first", "TSB number", "Title"],
+            key="tsb_sort_by",
+        )
+
+    filtered = sort_bulletins_df(
+        filter_bulletins_df(
+            bdf,
+            query=tsb_search,
+            entry_type=tsb_entry_filter,
+        ),
+        sort_by=tsb_sort,
+    )
+    st.caption(f"Showing **{len(filtered)}** of **{len(bdf)}** bulletin(s).")
+
+    if filtered.empty:
+        st.warning("No bulletins match your search or filters.")
+        return
+
+    display_cols = [
+        c for c in ("created_at", "bulletin_number", "title", "source_file", "keywords")
+        if c in filtered.columns
+    ]
+    st.dataframe(filtered[display_cols] if display_cols else filtered, use_container_width=True)
+
+    st.markdown("#### Bulletin preview")
+    preview_idx = st.selectbox(
+        "Select a bulletin to preview",
+        options=list(filtered.index),
+        format_func=lambda idx: _bulletin_preview_label(filtered.loc[idx]),
+        key="tsb_preview_select",
+    )
+    preview_row = filtered.loc[preview_idx]
+    preview_title = str(preview_row.get("title") or "").strip() or "Untitled bulletin"
+    st.markdown(f"**{preview_title}**")
+
+    meta_bits = []
+    bulletin_num = str(preview_row.get("bulletin_number") or "").strip()
+    if bulletin_num:
+        meta_bits.append(f"TSB **{bulletin_num}**")
+    source_file = str(preview_row.get("source_file") or "").strip()
+    if source_file:
+        meta_bits.append(f"PDF: `{source_file}`")
     else:
-        st.dataframe(df, use_container_width=True)
-        remove_id = st.number_input("Deactivate personnel ID", min_value=0, value=0, step=1)
-        if st.button("Deactivate") and remove_id:
-            deactivate_person(remove_id)
-            st.success("Personnel deactivated.")
+        meta_bits.append("Manual entry")
+    created_at = str(preview_row.get("created_at") or "").strip()
+    if created_at:
+        meta_bits.append(f"Added {created_at[:10]}")
+    if meta_bits:
+        st.caption(" · ".join(meta_bits))
 
-    st.header("Service Bulletins / Rules")
-    with st.form("add_bulletin"):
-        title = st.text_input("Bulletin / Rule Title")
-        keywords = st.text_input("Keywords")
-        notes = st.text_area("Notes")
-        if st.form_submit_button("Add Bulletin / Rule") and title.strip():
-            save_bulletin(title, keywords, notes)
-            st.success("Bulletin/rule added.")
+    keywords = str(preview_row.get("keywords") or "").strip()
+    if keywords:
+        st.markdown(f"**Keywords:** {keywords}")
 
-    bdf = read_df("bulletins")
-    if not bdf.empty:
-        st.dataframe(bdf, use_container_width=True)
+    preview_content = str(
+        preview_row.get("content") or preview_row.get("notes") or ""
+    ).strip()
+    if preview_content:
+        st.text_area(
+            "Bulletin text",
+            preview_content[:12000],
+            height=320,
+            disabled=True,
+            label_visibility="collapsed",
+            key=f"tsb_preview_text_{preview_idx}",
+        )
+        if len(preview_content) > 12000:
+            st.caption("Preview truncated — full text is stored in Supabase.")
+    else:
+        st.caption("No bulletin text stored for this entry.")
+
+
+def render_smart_warranty_admin():
+    st.header("Smart Warranty Program")
+    st.caption(
+        "Set your Stellantis Smart Warranty level here. "
+        "**Manager or Warranty Admin only** — this controls time-punch rules for the entire dealership."
+    )
+
+    settings = load_smart_warranty_settings(supabase)
+    current_level = settings.get("smart_warranty_level", "base")
+    updated_by = settings.get("updated_by") or "—"
+    updated_at = settings.get("updated_at") or "—"
+
+    with st.expander("Smart Warranty level benefits (reference)"):
+        st.markdown(
+            """
+| Policy | Base | Plus | Premium |
+|--------|------|------|---------|
+| **Time punching** | Required for everything | Not required* | Not required* |
+| Actual Time (A/T) review threshold | 0.5 hrs | 1.5 hrs | 2.5 hrs |
+| Diagnostic / NTF review threshold | 0.5–1.0 hrs | 1.5 hrs | 4.0 hrs |
+
+*Except Actual Time and Diagnostic Time — those still apply per Stellantis policy.
+            """
+        )
+
+    authorized_names = admin_write_names()
+
+    if not authorized_names:
+        st.warning(
+            "Add at least one **Manager** or **Warranty Admin** under Personnel before saving Smart Warranty level."
+        )
+    if not user_can_admin_write():
+        render_role_gate_message(ADMIN_WRITE_ROLES, "save Smart Warranty settings")
+
+    st.info(f"**Current level:** {current_level.title()} · Last saved by: {updated_by} · {updated_at}")
+
+    with st.form("smart_warranty_level_form"):
+        st.markdown("**Select dealer Smart Warranty level** (check one only):")
+        c1, c2, c3 = st.columns(3)
+        sw_base = c1.checkbox(
+            "Base",
+            value=current_level == "base",
+            help="Time punch validation required on all jobs.",
+        )
+        sw_plus = c2.checkbox(
+            "Plus",
+            value=current_level == "plus",
+            help="Time punch validation waived (except A/T and diagnostic time).",
+        )
+        sw_premium = c3.checkbox(
+            "Premium",
+            value=current_level == "premium",
+            help="Time punch validation waived (except A/T and diagnostic time).",
+        )
+
+        author = render_admin_author_field(authorized_names, key="sw_author")
+
+        if st.form_submit_button("Save Smart Warranty Level", type="primary"):
+            selected = sum([sw_base, sw_plus, sw_premium])
+            if not user_can_admin_write():
+                st.error("Sign in as Manager or Warranty Admin to save Smart Warranty settings.")
+            elif selected != 1:
+                st.error("Check exactly one Smart Warranty level: Base, Plus, or Premium.")
+            elif not author:
+                st.error("Select an authorized Manager or Warranty Admin.")
+            else:
+                new_level = "base"
+                if sw_plus:
+                    new_level = "plus"
+                elif sw_premium:
+                    new_level = "premium"
+                try:
+                    save_smart_warranty_settings(supabase, new_level, author)
+                    st.success(f"Smart Warranty level saved: **{new_level.title()}**")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not save Smart Warranty level: {e}")
+
+
+def render_audit_rules_admin():
+    st.header("Audit Rules & Thresholds")
+    st.caption(
+        "Configure dealership-wide warranty audit rules. "
+        "**Hard Stop** blocks submission; **Warning** flags the job for review. "
+        "**Manager or Warranty Admin only**."
+    )
+
+    settings = load_audit_rules(supabase)
+    thresholds = settings["thresholds"]
+    rules = settings["rules"]
+    updated_by = settings.get("updated_by") or "—"
+    updated_at = settings.get("updated_at") or "—"
+
+    authorized_names = admin_write_names()
+
+    if not authorized_names:
+        st.warning(
+            "Add at least one **Manager** or **Warranty Admin** under Personnel before saving audit rules."
+        )
+    if not user_can_admin_write():
+        render_role_gate_message(ADMIN_WRITE_ROLES, "save audit rules")
+
+    st.info(f"**Last saved by:** {updated_by} · {updated_at}")
+
+    with st.form("audit_rules_form"):
+        st.subheader("Thresholds")
+        t1, t2, t3 = st.columns(3)
+        tech_min_pct = t1.number_input(
+            "Tech time minimum (% of allotted)",
+            min_value=0,
+            max_value=100,
+            value=int(round(float(thresholds["tech_time_min_pct"]) * 100)),
+            help="Flag when flagged time is below this percentage of time allotted.",
+        )
+        tech_max_pct = t2.number_input(
+            "Tech time maximum (% of allotted)",
+            min_value=100,
+            max_value=500,
+            value=int(round(float(thresholds["tech_time_max_pct"]) * 100)),
+            help="Flag when flagged time exceeds this percentage of time allotted.",
+        )
+        rental_days_warn = t3.number_input(
+            "Rental high-day warning (days)",
+            min_value=1,
+            max_value=90,
+            value=int(thresholds["rental_days_warn"]),
+            help="Warn when billed rental days reach this count.",
+        )
+
+        st.subheader("Rule packs")
+        st.caption("Turn rules off entirely with the checkbox, or change whether they hard-stop or warn.")
+
+        new_rules = {}
+        for rule_key, label in AUDIT_RULE_LABELS.items():
+            current = rules[rule_key]
+            c1, c2, c3 = st.columns([0.55, 0.25, 0.20])
+            enabled = c1.checkbox(label, value=current["enabled"], key=f"audit_en_{rule_key}")
+            severity_label = c2.selectbox(
+                "Severity",
+                ["Hard Stop", "Warning"],
+                index=0 if current["severity"] == "hard" else 1,
+                key=f"audit_sev_{rule_key}",
+                disabled=not enabled,
+                label_visibility="collapsed",
+            )
+            c3.caption("Off" if not enabled else severity_label)
+            new_rules[rule_key] = {
+                "enabled": enabled,
+                "severity": "hard" if severity_label == "Hard Stop" else "warn",
+            }
+
+        author = render_admin_author_field(authorized_names, key="audit_rules_author")
+
+        if st.form_submit_button("Save Audit Rules", type="primary"):
+            if not user_can_admin_write():
+                st.error("Sign in as Manager or Warranty Admin to save audit rules.")
+            elif not author:
+                st.error("Select an authorized Manager or Warranty Admin.")
+            else:
+                payload = {
+                    "thresholds": {
+                        "tech_time_min_pct": tech_min_pct / 100.0,
+                        "tech_time_max_pct": tech_max_pct / 100.0,
+                        "rental_days_warn": int(rental_days_warn),
+                    },
+                    "rules": new_rules,
+                }
+                try:
+                    save_audit_rules(supabase, payload, author)
+                    st.success("Audit rules saved for this dealership.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not save audit rules: {e}")
+                    st.caption(
+                        "If the column is missing, run in Supabase SQL Editor: "
+                        "`ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS audit_rules JSONB DEFAULT '{}'::jsonb;`"
+                    )
+
+
+def render_rejection_reason_library_admin():
+    st.header("Rejection Reason Library")
+    st.caption(
+        "Standardize why warranty claims were rejected or returned. "
+        "These options appear on the Review tab when **Rejected / Returned** is checked. "
+        "**Manager or Warranty Admin only**."
+    )
+
+    library = load_rejection_reason_library(supabase)
+    reasons = library.get("reasons", [])
+    updated_by = library.get("updated_by") or "—"
+    updated_at = library.get("updated_at") or "—"
+
+    authorized_names = admin_write_names()
+
+    if not authorized_names:
+        st.warning(
+            "Add at least one **Manager** or **Warranty Admin** under Personnel before saving rejection reasons."
+        )
+    if not user_can_admin_write():
+        render_role_gate_message(ADMIN_WRITE_ROLES, "save rejection reasons")
+
+    st.info(f"**Last saved by:** {updated_by} · {updated_at}")
+
+    with st.form("rejection_reason_library_form"):
+        st.subheader("Active rejection reasons")
+        st.caption("Uncheck a reason to hide it from the Review dropdown.")
+
+        updated_reasons = []
+        for item in reasons:
+            reason_id = item.get("id", "")
+            label = item.get("label", "")
+            active = st.checkbox(
+                label,
+                value=bool(item.get("active", True)),
+                key=f"rej_reason_active_{reason_id}",
+            )
+            updated_reasons.append({
+                "id": reason_id,
+                "label": label,
+                "active": active,
+            })
+
+        st.subheader("Add custom reason")
+        new_reason = st.text_input(
+            "New rejection reason",
+            placeholder="e.g. Missing star case / photos",
+        )
+
+        author = render_admin_author_field(authorized_names, key="rejection_author")
+
+        save_clicked = st.form_submit_button("Save Rejection Library", type="primary")
+        if save_clicked:
+            if not user_can_admin_write():
+                st.error("Sign in as Manager or Warranty Admin to save rejection reasons.")
+            elif not author:
+                st.error("Select an authorized Manager or Warranty Admin.")
+            else:
+                final_reasons = list(updated_reasons)
+                if new_reason.strip():
+                    final_reasons.append({
+                        "id": "",
+                        "label": new_reason.strip(),
+                        "active": True,
+                    })
+                try:
+                    save_rejection_reason_library(supabase, final_reasons, author)
+                    st.success("Rejection reason library saved.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not save rejection reason library: {e}")
+                    st.caption(
+                        "If the column is missing, run in Supabase SQL Editor: "
+                        "`ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS rejection_reasons JSONB DEFAULT '{}'::jsonb;`"
+                    )
+
+    if st.button("Restore default rejection reasons", key="restore_rejection_defaults"):
+        author = resolve_admin_author(authorized_names)
+        if not author:
+            if not user_can_admin_write():
+                st.error("Sign in as Manager or Warranty Admin to restore defaults.")
+            elif not authorized_names:
+                st.error("Add a Manager or Warranty Admin under Personnel first.")
+            else:
+                st.error("Select an authorized Manager or Warranty Admin.")
+        else:
+            try:
+                save_rejection_reason_library(
+                    supabase,
+                    normalize_rejection_reason_library({})["reasons"],
+                    author,
+                )
+                st.success("Default rejection reasons restored.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not restore defaults: {e}")
+
+
 def render_wam():
     st.header("WAM / Warranty Manual Learning")
     st.caption("Upload WAM PDFs or warranty policy documents. RO Shield will store the text and use it for audit reference.")
 
-    uploaded_files = st.file_uploader(
-        "Upload WAM / Warranty Manual PDFs",
-        type=["pdf"],
-        accept_multiple_files=True,
-        key="wam_upload"
-    )
+    can_upload = user_can_upload_library()
+    if not can_upload:
+        render_role_gate_message(CONTENT_ADMIN_ROLES, "upload WAM documents")
+        st.info("WAM upload is available to Manager and Warranty Admin only.")
+    else:
+        uploaded_files = st.file_uploader(
+            "Upload WAM / Warranty Manual PDFs",
+            type=["pdf"],
+            accept_multiple_files=True,
+            key="wam_upload"
+        )
 
-    if uploaded_files:
-        for file in uploaded_files:
-            try:
-                reader = PdfReader(file)
-                text = ""
+        if uploaded_files:
+            for file in uploaded_files:
+                try:
+                    reader = PdfReader(file)
+                    text = ""
 
-                for page in reader.pages:
-                    page_text = page.extract_text() or ""
-                    text += page_text + "\n"
+                    for page in reader.pages:
+                        page_text = page.extract_text() or ""
+                        text += page_text + "\n"
 
-                chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+                    chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
 
-                for idx, chunk in enumerate(chunks):
-                    supabase.table("wam_documents").insert({
-                        "source_file": file.name,
-                        "section": f"{file.name} - Section {idx + 1}",
-                        "keywords": "",
-                        "content": chunk
-                    }).execute()
+                    for idx, chunk in enumerate(chunks):
+                        supabase.table("wam_documents").insert({
+                            "source_file": file.name,
+                            "section": f"{file.name} — Part {idx + 1}",
+                            "keywords": _guess_wam_keywords(chunk),
+                            "content": chunk
+                        }).execute()
 
-                st.success(f"{file.name} uploaded and learned.")
+                    st.success(f"{file.name} uploaded and learned.")
 
-            except Exception as e:
-                st.error(f"WAM upload failed for {file.name}: {e}")
+                except Exception as e:
+                    st.error(f"WAM upload failed for {file.name}: {e}")
 
     st.subheader("Saved WAM Entries")
 
@@ -1916,29 +4075,62 @@ def render_wam():
    
 def main():
     init_db()
-    apply_style()
 
     if supabase is None:
+        apply_style("Dark")
         st.error(
             "Supabase is not configured. Copy `.env.example` to `.env`, "
             "set `SUPABASE_URL` and `SUPABASE_KEY`, then restart the app."
         )
         st.stop()
 
+    inject_auth_hash_bridge()
+
+    if is_password_recovery_mode():
+        bootstrap_recovery_session(supabase)
+        render_password_reset_page(supabase, apply_style=apply_style)
+        st.stop()
+
+    if not is_authenticated():
+        restore_client_session(supabase)
+
+    if not is_authenticated():
+        render_login_page(supabase, apply_style=apply_style)
+        st.stop()
+
+    sync_personnel_identity(supabase)
+
     st.sidebar.markdown("## 🛡️ RO Shield")
     st.sidebar.caption("Final Production Polish • Patent Pending")
-    st.sidebar.selectbox("Appearance", ["Dark"], index=0)
 
-    tabs = st.tabs(["Review", "Claim Learning", "Reporting", "Admin", "WAM"])
+    render_authenticated_sidebar(supabase)
+
+    if "appearance" not in st.session_state:
+        st.session_state.appearance = "Dark"
+
+    appearance = st.sidebar.selectbox(
+        "Appearance",
+        ["Dark", "Light"],
+        index=0 if st.session_state.appearance == "Dark" else 1,
+        key="appearance_select",
+    )
+    st.session_state.appearance = appearance
+    apply_style(appearance)
+
+    tabs = st.tabs(["Review", "ROI Dashboard", "Claim Learning", "Reporting", "Admin", "TSB / Bulletins", "WAM"])
     with tabs[0]:
         render_review()
     with tabs[1]:
-        render_claims()
+        render_roi_dashboard()
     with tabs[2]:
-        render_reporting()
+        render_claims()
     with tabs[3]:
-        render_admin()
+        render_reporting()
     with tabs[4]:
+        render_admin()
+    with tabs[5]:
+        render_tsb_bulletins()
+    with tabs[6]:
         render_wam()
 
 if __name__ == "__main__":
