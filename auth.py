@@ -9,8 +9,6 @@ from typing import Callable
 import streamlit as st
 import streamlit.components.v1 as components
 
-from theme_styles import LOGIN_PAGE_CSS
-
 AUTH_SESSION_KEY = "supabase_auth_session"
 AUTH_USER_KEY = "supabase_auth_user"
 PASSWORD_RECOVERY_KEY = "password_recovery_pending"
@@ -385,11 +383,8 @@ def sync_personnel_identity(supabase) -> None:
     st.session_state.current_person_role = ""
 
 
-def _inject_login_page_style() -> None:
-    st.markdown(
-        f'<div class="ro-login-active"></div><style>{LOGIN_PAGE_CSS}</style>',
-        unsafe_allow_html=True,
-    )
+def _mark_login_page() -> None:
+    st.markdown('<div class="ro-login-active"></div>', unsafe_allow_html=True)
 
 
 def _render_login_hero(*, title: str, tagline: str) -> None:
@@ -413,7 +408,7 @@ def _render_login_hero(*, title: str, tagline: str) -> None:
 
 def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
     apply_style("Dark")
-    _inject_login_page_style()
+    _mark_login_page()
     inject_auth_hash_bridge()
 
     if recovery_tokens_from_query():
@@ -476,7 +471,7 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
 
 def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) -> None:
     apply_style("Dark")
-    _inject_login_page_style()
+    _mark_login_page()
     inject_auth_hash_bridge()
     bootstrap_recovery_session(supabase)
 

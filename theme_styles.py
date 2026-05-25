@@ -326,6 +326,149 @@ THEME_CSS = {
         color: #ffffff !important;
         border: 1px solid rgba(140, 200, 255, .70) !important;
     }
+    .ro-login-active { display: none !important; }
+    .stApp:has(.ro-login-active) section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    .stApp:has(.ro-login-active) section.main .block-container {
+        max-width: 520px;
+        padding-top: 2.5rem;
+        padding-bottom: 3rem;
+    }
+    .stApp:has(.ro-login-active) header[data-testid="stHeader"] {
+        background: transparent !important;
+    }
+    .stApp:has(.ro-login-active) .login-hero {
+        text-align: center;
+        padding: 36px 28px 28px;
+        margin-bottom: 8px;
+        border-radius: 24px;
+        background:
+            linear-gradient(145deg, rgba(15, 40, 78, 0.55), rgba(4, 12, 24, 0.82));
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        box-shadow:
+            0 28px 70px rgba(0, 0, 0, 0.42),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .stApp:has(.ro-login-active) .login-hero::before {
+        content: "";
+        position: absolute;
+        inset: -40% -20% auto -20%;
+        height: 180px;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 68%);
+        pointer-events: none;
+    }
+    .stApp:has(.ro-login-active) .login-hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -30% -50% -30%;
+        height: 160px;
+        background: radial-gradient(circle, rgba(37, 99, 235, 0.18), transparent 70%);
+        pointer-events: none;
+    }
+    .stApp:has(.ro-login-active) .login-badge {
+        display: inline-block;
+        position: relative;
+        z-index: 1;
+        margin-bottom: 14px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #bfdbfe !important;
+        background: rgba(29, 78, 216, 0.22);
+        border: 1px solid rgba(147, 197, 253, 0.35);
+    }
+    .stApp:has(.ro-login-active) .login-shield-wrap {
+        position: relative;
+        z-index: 1;
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 16px;
+        display: grid;
+        place-items: center;
+        border-radius: 22px;
+        background: linear-gradient(145deg, rgba(37, 99, 235, 0.35), rgba(15, 23, 42, 0.85));
+        border: 1px solid rgba(147, 197, 253, 0.45);
+        box-shadow: 0 12px 32px rgba(37, 99, 235, 0.28);
+        font-size: 42px;
+        line-height: 1;
+    }
+    .stApp:has(.ro-login-active) .login-hero h1 {
+        position: relative;
+        z-index: 1;
+        margin: 0 0 8px 0;
+        font-size: 42px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        color: #f8fbff !important;
+        text-shadow: 0 4px 24px rgba(59, 130, 246, 0.35);
+    }
+    .stApp:has(.ro-login-active) .login-tagline {
+        position: relative;
+        z-index: 1;
+        margin: 0 0 18px 0;
+        color: #c7ddff !important;
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    .stApp:has(.ro-login-active) .login-pills {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+    .stApp:has(.ro-login-active) .login-pills span {
+        padding: 7px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #e0efff !important;
+        background: rgba(8, 22, 42, 0.72);
+        border: 1px solid rgba(96, 165, 250, 0.22);
+    }
+    .stApp:has(.ro-login-active) section[data-testid="stForm"] {
+        background: linear-gradient(160deg, rgba(10, 26, 48, 0.92), rgba(5, 14, 28, 0.96));
+        border: 1px solid rgba(96, 165, 250, 0.32);
+        border-radius: 20px;
+        padding: 26px 28px 18px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+    }
+    .stApp:has(.ro-login-active) section[data-testid="stForm"] + div {
+        margin-top: 8px;
+    }
+    .stApp:has(.ro-login-active) details[data-testid="stExpander"] {
+        margin-top: 14px;
+        background: rgba(8, 20, 38, 0.72);
+        border: 1px solid rgba(96, 165, 250, 0.22);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .stApp:has(.ro-login-active) details[data-testid="stExpander"] summary {
+        color: #dbeafe !important;
+        font-weight: 600;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="stCaptionContainer"] p {
+        text-align: center;
+        color: #94a3b8 !important;
+        font-size: 13px;
+        line-height: 1.55;
+        max-width: 420px;
+        margin: 18px auto 0;
+    }
+    .stApp:has(.ro-login-active) .login-footer-note {
+        text-align: center;
+        margin-top: 18px;
+        color: #94a3b8 !important;
+        font-size: 13px;
+        line-height: 1.55;
+    }
     """,
     "Light": """
     .stApp {
@@ -602,152 +745,3 @@ THEME_CSS = {
     }
     """,
 }
-
-LOGIN_PAGE_CSS = """
-.ro-login-active { display: none !important; }
-
-.stApp:has(.ro-login-active) section[data-testid="stSidebar"] {
-    display: none !important;
-}
-.stApp:has(.ro-login-active) section.main .block-container {
-    max-width: 520px;
-    padding-top: 2.5rem;
-    padding-bottom: 3rem;
-}
-.stApp:has(.ro-login-active) header[data-testid="stHeader"] {
-    background: transparent !important;
-}
-
-.stApp:has(.ro-login-active) .login-hero {
-    text-align: center;
-    padding: 36px 28px 28px;
-    margin-bottom: 8px;
-    border-radius: 24px;
-    background:
-        linear-gradient(145deg, rgba(15, 40, 78, 0.55), rgba(4, 12, 24, 0.82));
-    border: 1px solid rgba(96, 165, 250, 0.28);
-    box-shadow:
-        0 28px 70px rgba(0, 0, 0, 0.42),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    position: relative;
-    overflow: hidden;
-}
-.stApp:has(.ro-login-active) .login-hero::before {
-    content: "";
-    position: absolute;
-    inset: -40% -20% auto -20%;
-    height: 180px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 68%);
-    pointer-events: none;
-}
-.stApp:has(.ro-login-active) .login-hero::after {
-    content: "";
-    position: absolute;
-    inset: auto -30% -50% -30%;
-    height: 160px;
-    background: radial-gradient(circle, rgba(37, 99, 235, 0.18), transparent 70%);
-    pointer-events: none;
-}
-.stApp:has(.ro-login-active) .login-badge {
-    display: inline-block;
-    position: relative;
-    z-index: 1;
-    margin-bottom: 14px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #bfdbfe !important;
-    background: rgba(29, 78, 216, 0.22);
-    border: 1px solid rgba(147, 197, 253, 0.35);
-}
-.stApp:has(.ro-login-active) .login-shield-wrap {
-    position: relative;
-    z-index: 1;
-    width: 84px;
-    height: 84px;
-    margin: 0 auto 16px;
-    display: grid;
-    place-items: center;
-    border-radius: 22px;
-    background: linear-gradient(145deg, rgba(37, 99, 235, 0.35), rgba(15, 23, 42, 0.85));
-    border: 1px solid rgba(147, 197, 253, 0.45);
-    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.28);
-    font-size: 42px;
-    line-height: 1;
-}
-.stApp:has(.ro-login-active) .login-hero h1 {
-    position: relative;
-    z-index: 1;
-    margin: 0 0 8px 0;
-    font-size: 42px;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    color: #f8fbff !important;
-    text-shadow: 0 4px 24px rgba(59, 130, 246, 0.35);
-}
-.stApp:has(.ro-login-active) .login-tagline {
-    position: relative;
-    z-index: 1;
-    margin: 0 0 18px 0;
-    color: #c7ddff !important;
-    font-size: 16px;
-    line-height: 1.5;
-}
-.stApp:has(.ro-login-active) .login-pills {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-}
-.stApp:has(.ro-login-active) .login-pills span {
-    padding: 7px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #e0efff !important;
-    background: rgba(8, 22, 42, 0.72);
-    border: 1px solid rgba(96, 165, 250, 0.22);
-}
-
-.stApp:has(.ro-login-active) section[data-testid="stForm"] {
-    background: linear-gradient(160deg, rgba(10, 26, 48, 0.92), rgba(5, 14, 28, 0.96));
-    border: 1px solid rgba(96, 165, 250, 0.32);
-    border-radius: 20px;
-    padding: 26px 28px 18px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
-}
-.stApp:has(.ro-login-active) section[data-testid="stForm"] + div {
-    margin-top: 8px;
-}
-.stApp:has(.ro-login-active) details[data-testid="stExpander"] {
-    margin-top: 14px;
-    background: rgba(8, 20, 38, 0.72);
-    border: 1px solid rgba(96, 165, 250, 0.22);
-    border-radius: 14px;
-    overflow: hidden;
-}
-.stApp:has(.ro-login-active) details[data-testid="stExpander"] summary {
-    color: #dbeafe !important;
-    font-weight: 600;
-}
-.stApp:has(.ro-login-active) div[data-testid="stCaptionContainer"] p {
-    text-align: center;
-    color: #94a3b8 !important;
-    font-size: 13px;
-    line-height: 1.55;
-    max-width: 420px;
-    margin: 18px auto 0;
-}
-.stApp:has(.ro-login-active) .login-footer-note {
-    text-align: center;
-    margin-top: 18px;
-    color: #94a3b8 !important;
-    font-size: 13px;
-    line-height: 1.55;
-}
-"""
