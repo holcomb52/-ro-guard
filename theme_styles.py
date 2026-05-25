@@ -327,140 +327,223 @@ THEME_CSS = {
         border: 1px solid rgba(140, 200, 255, .70) !important;
     }
     .ro-login-active { display: none !important; }
+    .stApp:has(.ro-login-active) {
+        background:
+            linear-gradient(rgba(4, 10, 20, 0.94), rgba(4, 10, 20, 0.98)),
+            radial-gradient(circle at 85% 20%, rgba(37, 99, 235, 0.16), transparent 42%),
+            linear-gradient(160deg, #060d18 0%, #0b1424 45%, #050a12 100%) !important;
+    }
     .stApp:has(.ro-login-active) section[data-testid="stSidebar"] {
         display: none !important;
     }
     .stApp:has(.ro-login-active) section.main .block-container {
-        max-width: 520px;
-        padding-top: 2.5rem;
-        padding-bottom: 3rem;
+        max-width: 1080px;
+        padding-top: 2rem;
+        padding-bottom: 2.5rem;
     }
     .stApp:has(.ro-login-active) header[data-testid="stHeader"] {
         background: transparent !important;
     }
-    .stApp:has(.ro-login-active) .login-hero {
-        text-align: center;
-        padding: 36px 28px 28px;
-        margin-bottom: 8px;
-        border-radius: 24px;
-        background:
-            linear-gradient(145deg, rgba(15, 40, 78, 0.55), rgba(4, 12, 24, 0.82));
-        border: 1px solid rgba(96, 165, 250, 0.28);
-        box-shadow:
-            0 28px 70px rgba(0, 0, 0, 0.42),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    .stApp:has(.ro-login-active) .login-brand-panel {
         position: relative;
+        min-height: 100%;
+        padding: 28px 26px 22px;
+        border-radius: 18px;
         overflow: hidden;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 52%, rgba(11, 20, 36, 0.98) 52%, rgba(8, 14, 26, 1) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     }
-    .stApp:has(.ro-login-active) .login-hero::before {
-        content: "";
-        position: absolute;
-        inset: -40% -20% auto -20%;
-        height: 180px;
-        background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 68%);
-        pointer-events: none;
+    .stApp:has(.ro-login-active) .login-brand-panel-compact {
+        min-height: auto;
     }
-    .stApp:has(.ro-login-active) .login-hero::after {
-        content: "";
-        position: absolute;
-        inset: auto -30% -50% -30%;
-        height: 160px;
-        background: radial-gradient(circle, rgba(37, 99, 235, 0.18), transparent 70%);
-        pointer-events: none;
+    .stApp:has(.ro-login-active) .login-brand-top {
+        position: relative;
+        z-index: 1;
+    }
+    .stApp:has(.ro-login-active) .login-brand-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+    .stApp:has(.ro-login-active) .login-logo-shield {
+        width: 72px;
+        height: 82px;
+        flex: 0 0 72px;
+    }
+    .stApp:has(.ro-login-active) .login-logo-shield svg {
+        width: 72px;
+        height: 82px;
+        display: block;
+        filter: drop-shadow(0 8px 18px rgba(37, 99, 235, 0.35));
+    }
+    .stApp:has(.ro-login-active) .login-brand-name {
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        color: #0f172a !important;
+        line-height: 1;
+    }
+    .stApp:has(.ro-login-active) .login-brand-sub {
+        margin-top: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: #475569 !important;
     }
     .stApp:has(.ro-login-active) .login-badge {
         display: inline-block;
-        position: relative;
-        z-index: 1;
-        margin-bottom: 14px;
-        padding: 6px 14px;
+        margin-bottom: 18px;
+        padding: 5px 12px;
         border-radius: 999px;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: #bfdbfe !important;
-        background: rgba(29, 78, 216, 0.22);
-        border: 1px solid rgba(147, 197, 253, 0.35);
+        color: #1d4ed8 !important;
+        background: rgba(37, 99, 235, 0.10);
+        border: 1px solid rgba(37, 99, 235, 0.22);
     }
-    .stApp:has(.ro-login-active) .login-shield-wrap {
+    .stApp:has(.ro-login-active) .login-headline {
         position: relative;
         z-index: 1;
-        width: 84px;
-        height: 84px;
-        margin: 0 auto 16px;
-        display: grid;
-        place-items: center;
-        border-radius: 22px;
-        background: linear-gradient(145deg, rgba(37, 99, 235, 0.35), rgba(15, 23, 42, 0.85));
-        border: 1px solid rgba(147, 197, 253, 0.45);
-        box-shadow: 0 12px 32px rgba(37, 99, 235, 0.28);
-        font-size: 42px;
-        line-height: 1;
-    }
-    .stApp:has(.ro-login-active) .login-hero h1 {
-        position: relative;
-        z-index: 1;
-        margin: 0 0 8px 0;
-        font-size: 42px;
+        margin: 0 0 12px 0;
+        font-size: 30px;
         font-weight: 800;
-        letter-spacing: 0.03em;
-        color: #f8fbff !important;
-        text-shadow: 0 4px 24px rgba(59, 130, 246, 0.35);
+        line-height: 1.15;
+        color: #f8fafc !important;
     }
-    .stApp:has(.ro-login-active) .login-tagline {
+    .stApp:has(.ro-login-active) .login-headline span {
+        color: #3b82f6 !important;
+    }
+    .stApp:has(.ro-login-active) .login-lede {
         position: relative;
         z-index: 1;
         margin: 0 0 18px 0;
-        color: #c7ddff !important;
-        font-size: 16px;
-        line-height: 1.5;
+        color: #cbd5e1 !important;
+        font-size: 15px;
+        line-height: 1.55;
+        max-width: 36rem;
     }
-    .stApp:has(.ro-login-active) .login-pills {
+    .stApp:has(.ro-login-active) .login-features {
         position: relative;
         z-index: 1;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px;
+        display: grid;
+        gap: 12px;
+        margin-bottom: 18px;
     }
-    .stApp:has(.ro-login-active) .login-pills span {
-        padding: 7px 12px;
-        border-radius: 999px;
+    .stApp:has(.ro-login-active) .login-feature {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(96, 165, 250, 0.18);
+    }
+    .stApp:has(.ro-login-active) .login-feature-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-size: 16px;
+        background: rgba(37, 99, 235, 0.18);
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        flex: 0 0 34px;
+    }
+    .stApp:has(.ro-login-active) .login-feature strong {
+        display: block;
+        color: #eff6ff !important;
+        font-size: 14px;
+        margin-bottom: 2px;
+    }
+    .stApp:has(.ro-login-active) .login-feature span {
+        display: block;
+        color: #94a3b8 !important;
         font-size: 12px;
-        font-weight: 600;
-        color: #e0efff !important;
-        background: rgba(8, 22, 42, 0.72);
-        border: 1px solid rgba(96, 165, 250, 0.22);
+        line-height: 1.4;
+    }
+    .stApp:has(.ro-login-active) .login-strapline {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .stApp:has(.ro-login-active) .login-strapline span {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #dbeafe !important;
+    }
+    .stApp:has(.ro-login-active) .login-bottom-bar {
+        position: relative;
+        z-index: 1;
+        margin-top: 8px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #ffffff !important;
+        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) {
+        background: rgba(255, 255, 255, 0.98);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 18px;
+        padding: 24px 22px 18px !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) h4,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) label,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) p {
+        color: #0f172a !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-testid="stCaptionContainer"] p {
+        color: #475569 !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) input,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="input"],
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="input"] > div,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="base-input"] > div {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        -webkit-text-fill-color: #0f172a !important;
+        border-color: #94a3b8 !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) input::placeholder {
+        color: #64748b !important;
+        -webkit-text-fill-color: #64748b !important;
     }
     .stApp:has(.ro-login-active) section[data-testid="stForm"] {
-        background: linear-gradient(160deg, rgba(10, 26, 48, 0.92), rgba(5, 14, 28, 0.96));
-        border: 1px solid rgba(96, 165, 250, 0.32);
-        border-radius: 20px;
-        padding: 26px 28px 18px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
-    }
-    .stApp:has(.ro-login-active) section[data-testid="stForm"] + div {
-        margin-top: 8px;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }
     .stApp:has(.ro-login-active) details[data-testid="stExpander"] {
-        margin-top: 14px;
-        background: rgba(8, 20, 38, 0.72);
-        border: 1px solid rgba(96, 165, 250, 0.22);
-        border-radius: 14px;
+        margin-top: 12px;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
         overflow: hidden;
     }
     .stApp:has(.ro-login-active) details[data-testid="stExpander"] summary {
-        color: #dbeafe !important;
+        color: #1d4ed8 !important;
         font-weight: 600;
     }
     .stApp:has(.ro-login-active) div[data-testid="stCaptionContainer"] p {
-        text-align: center;
-        color: #94a3b8 !important;
-        font-size: 13px;
-        line-height: 1.55;
-        max-width: 420px;
-        margin: 18px auto 0;
+        color: #64748b !important;
     }
     .stApp:has(.ro-login-active) .login-footer-note {
         text-align: center;

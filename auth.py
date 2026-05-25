@@ -387,19 +387,65 @@ def _mark_login_page() -> None:
     st.markdown('<div class="ro-login-active"></div>', unsafe_allow_html=True)
 
 
-def _render_login_hero(*, title: str, tagline: str) -> None:
+def _render_login_brand_panel(*, headline: str, lede: str, compact: bool = False) -> None:
+    features_html = ""
+    if not compact:
+        features_html = """
+            <div class="login-features">
+                <div class="login-feature">
+                    <div class="login-feature-icon">🛡</div>
+                    <div>
+                        <strong>Prevent Claim Rejections</strong>
+                        <span>Catch hard stops before submission</span>
+                    </div>
+                </div>
+                <div class="login-feature">
+                    <div class="login-feature-icon">📋</div>
+                    <div>
+                        <strong>Audit-Ready Every Time</strong>
+                        <span>Guided review with manual intelligence</span>
+                    </div>
+                </div>
+                <div class="login-feature">
+                    <div class="login-feature-icon">📈</div>
+                    <div>
+                        <strong>Maximize Warranty Recovery</strong>
+                        <span>Protect profits and prove ROI</span>
+                    </div>
+                </div>
+            </div>
+            <div class="login-strapline">
+                <span>Audit Protection · Claim Approval</span>
+                <span>Protect Profits · Drive Performance</span>
+            </div>
+        """
+
     st.markdown(
         f"""
-        <div class="login-hero">
-            <div class="login-badge">Patent Pending</div>
-            <div class="login-shield-wrap">🛡️</div>
-            <h1>{title}</h1>
-            <p class="login-tagline">{tagline}</p>
-            <div class="login-pills">
-                <span>Audit ROs</span>
-                <span>Protect Claims</span>
-                <span>Prove ROI</span>
+        <div class="login-brand-panel{' login-brand-panel-compact' if compact else ''}">
+            <div class="login-brand-top">
+                <div class="login-brand-row">
+                    <div class="login-logo-shield" aria-hidden="true">
+                        <svg viewBox="0 0 72 82" role="img" aria-label="RO Guard">
+                            <path d="M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z"
+                                  fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
+                            <text x="36" y="46" text-anchor="middle" fill="#ffffff"
+                                  font-size="20" font-weight="800" font-family="Arial, sans-serif">RO</text>
+                            <path d="M28 52 L34 58 L46 44" fill="none" stroke="#ffffff"
+                                  stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="login-brand-text">
+                        <div class="login-brand-name">RO GUARD</div>
+                        <div class="login-brand-sub">Warranty Software</div>
+                    </div>
+                </div>
+                <div class="login-badge">Patent Pending</div>
             </div>
+            <h2 class="login-headline">{headline}</h2>
+            <p class="login-lede">{lede}</p>
+            {features_html}
+            <div class="login-bottom-bar">Control the Claim · Protect the Profit</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -417,13 +463,17 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
             st.rerun()
         return
 
-    _render_login_hero(
-        title="RO Shield",
-        tagline="Sign in to audit warranty ROs, catch hard stops, and protect claim dollars.",
-    )
+    brand_col, form_col = st.columns([1.05, 0.95], gap="large")
+    with brand_col:
+        _render_login_brand_panel(
+            headline='Smarter Claims. <span>Stronger Profits.</span>',
+            lede="Sign in to audit warranty ROs, catch compliance gaps, and protect claim dollars before they leave your store.",
+        )
 
-    left, center, right = st.columns([0.15, 1, 0.15])
-    with center:
+    with form_col:
+        st.markdown("#### Sign In")
+        st.caption("Use your dealership account to access review, reporting, and admin tools.")
+
         with st.form("ro_shield_login_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="you@dealership.com")
             password = st.text_input("Password", type="password")
@@ -476,23 +526,27 @@ def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) 
     bootstrap_recovery_session(supabase)
 
     if not ensure_auth_client_ready(supabase):
-        left, center, right = st.columns([0.15, 1, 0.15])
-        with center:
+        brand_col, form_col = st.columns([1.05, 0.95], gap="large")
+        with form_col:
             _render_recovery_expired_help(supabase)
         return
 
-    _render_login_hero(
-        title="New Password",
-        tagline="Choose a secure password for your RO Shield account.",
-    )
+    brand_col, form_col = st.columns([1.05, 0.95], gap="large")
+    with brand_col:
+        _render_login_brand_panel(
+            headline='Set a <span>New Password</span>',
+            lede="Choose a secure password for your RO Guard account.",
+            compact=True,
+        )
 
-    st.info(
-        "Stay on this page until your password is saved. "
-        "If you refresh before finishing, you may need to request a new reset link."
-    )
+    with form_col:
+        st.markdown("#### Update Password")
 
-    left, center, right = st.columns([0.15, 1, 0.15])
-    with center:
+        st.info(
+            "Stay on this page until your password is saved. "
+            "If you refresh before finishing, you may need to request a new reset link."
+        )
+
         with st.form("ro_shield_new_password_form"):
             new_password = st.text_input("New password", type="password")
             confirm_password = st.text_input("Confirm new password", type="password")
