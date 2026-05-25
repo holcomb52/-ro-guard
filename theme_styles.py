@@ -39,6 +39,33 @@ THEME_CSS = {
         background-color: rgba(13, 30, 55, .96) !important;
         border: 1px solid rgba(140, 200, 255, .70) !important;
     }
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] textarea,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stTextInput"] div[data-baseweb="input"],
+    div[data-testid="stTextInput"] div[data-baseweb="base-input"],
+    div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+    div[data-testid="stTextInput"] div[data-baseweb="base-input"] > div,
+    section[data-testid="stForm"] div[data-baseweb="input"],
+    section[data-testid="stForm"] div[data-baseweb="base-input"],
+    section[data-testid="stForm"] div[data-baseweb="input"] > div,
+    section[data-testid="stForm"] div[data-baseweb="base-input"] > div {
+        background-color: rgba(13, 30, 55, .96) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border-color: rgba(140, 200, 255, .70) !important;
+    }
+    div[data-testid="stTextInput"] label,
+    section[data-testid="stForm"] label {
+        color: #f8fbff !important;
+    }
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+        -webkit-box-shadow: 0 0 0 1000px rgba(13, 30, 55, .96) inset !important;
+        -webkit-text-fill-color: #ffffff !important;
+        caret-color: #ffffff !important;
+    }
     textarea::placeholder, input::placeholder { color: #d8eaff !important; opacity: 1 !important; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
     div[data-baseweb="select"] > div {
