@@ -98,7 +98,7 @@ if create_client and SUPABASE_URL and SUPABASE_KEY:
 else:
     supabase = None
 
-st.set_page_config(page_title="RO Shield Final Production", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="RO Shield", layout="wide", initial_sidebar_state="expanded")
 if "form_version" not in st.session_state:
     st.session_state.form_version = 0
 

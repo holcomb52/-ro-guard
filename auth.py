@@ -9,6 +9,8 @@ from typing import Callable
 import streamlit as st
 import streamlit.components.v1 as components
 
+from theme_styles import LOGIN_PAGE_CSS
+
 AUTH_SESSION_KEY = "supabase_auth_session"
 AUTH_USER_KEY = "supabase_auth_user"
 PASSWORD_RECOVERY_KEY = "password_recovery_pending"
@@ -383,8 +385,35 @@ def sync_personnel_identity(supabase) -> None:
     st.session_state.current_person_role = ""
 
 
+def _inject_login_page_style() -> None:
+    st.markdown(
+        f'<div class="ro-login-active"></div><style>{LOGIN_PAGE_CSS}</style>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_login_hero(*, title: str, tagline: str) -> None:
+    st.markdown(
+        f"""
+        <div class="login-hero">
+            <div class="login-badge">Patent Pending</div>
+            <div class="login-shield-wrap">🛡️</div>
+            <h1>{title}</h1>
+            <p class="login-tagline">{tagline}</p>
+            <div class="login-pills">
+                <span>Audit ROs</span>
+                <span>Protect Claims</span>
+                <span>Prove ROI</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
     apply_style("Dark")
+    _inject_login_page_style()
     inject_auth_hash_bridge()
 
     if recovery_tokens_from_query():
@@ -393,17 +422,12 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
             st.rerun()
         return
 
-    st.markdown(
-        """
-        <div class="reporting-hero">
-            <h2>RO Shield Sign In</h2>
-            <p>Use your dealership account to access warranty review, reporting, and admin tools.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    _render_login_hero(
+        title="RO Shield",
+        tagline="Sign in to audit warranty ROs, catch hard stops, and protect claim dollars.",
     )
 
-    left, center, right = st.columns([1, 1.2, 1])
+    left, center, right = st.columns([0.15, 1, 0.15])
     with center:
         with st.form("ro_shield_login_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="you@dealership.com")
@@ -439,31 +463,32 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
                 else:
                     st.error(message)
 
-    st.caption(
-        "Accounts are created by your administrator in Supabase Auth. "
-        "The login email must match the **Email** field on your Personnel record."
+    st.markdown(
+        """
+        <p class="login-footer-note">
+            Accounts are created by your administrator. Your login email must match
+            the <strong>Email</strong> field on your Personnel record in Admin.
+        </p>
+        """,
+        unsafe_allow_html=True,
     )
 
 
 def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) -> None:
     apply_style("Dark")
+    _inject_login_page_style()
     inject_auth_hash_bridge()
     bootstrap_recovery_session(supabase)
 
     if not ensure_auth_client_ready(supabase):
-        left, center, right = st.columns([1, 1.2, 1])
+        left, center, right = st.columns([0.15, 1, 0.15])
         with center:
             _render_recovery_expired_help(supabase)
         return
 
-    st.markdown(
-        """
-        <div class="reporting-hero">
-            <h2>Set a new password</h2>
-            <p>Choose a new password for your RO Shield account.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    _render_login_hero(
+        title="New Password",
+        tagline="Choose a secure password for your RO Shield account.",
     )
 
     st.info(
@@ -471,7 +496,7 @@ def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) 
         "If you refresh before finishing, you may need to request a new reset link."
     )
 
-    left, center, right = st.columns([1, 1.2, 1])
+    left, center, right = st.columns([0.15, 1, 0.15])
     with center:
         with st.form("ro_shield_new_password_form"):
             new_password = st.text_input("New password", type="password")
