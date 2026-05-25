@@ -25,8 +25,8 @@ Supported in this guide:
 
 | Setting | Local dev | Production (Streamlit Cloud) |
 |---------|-----------|----------------------------|
-| **Site URL** | `http://localhost:8531` | `https://YOUR-APP.streamlit.app` |
-| **Redirect URLs** | `http://localhost:8531/**` | `https://YOUR-APP.streamlit.app/**` |
+| **Site URL** | `http://localhost:8531` | `https://ro-guard.streamlit.app` |
+| **Redirect URLs** | `http://localhost:8531/**` | `https://ro-guard.streamlit.app/**` |
 
 Add **both** if you develop locally and deploy to Streamlit.
 
@@ -43,7 +43,7 @@ RO_SHIELD_APP_URL=http://localhost:8531
 ```toml
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "your_publishable_key_here"
-RO_SHIELD_APP_URL = "https://YOUR-APP.streamlit.app"
+RO_SHIELD_APP_URL = "https://ro-guard.streamlit.app"
 ```
 
 ### Email template (optional)
@@ -146,7 +146,7 @@ Use port **587** (STARTTLS). Avoid port 465 unless Supabase only offers SSL and 
 
 ## Option C — Yahoo Mail
 
-Works with `@yahoo.com`, `@yahoo.ca`, etc. (e.g. `holcomb52@yahoo.com`). Fine for testing or very small teams; Yahoo may rate-limit and is easier to flag as spam than a dealership domain.
+Works with `@yahoo.com`, `@yahoo.ca`, etc. Fine for testing or very small teams; Yahoo may rate-limit and is easier to flag as spam than a dealership domain.
 
 ### App password (required)
 
@@ -165,7 +165,7 @@ Yahoo requires an **app password** for third-party SMTP — your normal Yahoo lo
 |----------------|--------|
 | **Host** | `smtp.mail.yahoo.com` |
 | **Port** | `587` |
-| **Username** | Full Yahoo address, e.g. `holcomb52@yahoo.com` |
+| **Username** | Full Yahoo address, e.g. `user@yahoo.com` |
 | **Password** | Yahoo **app password** (not your Yahoo login password) |
 | **Sender email** | Same as username |
 | **Sender name** | `RO Shield` |

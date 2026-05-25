@@ -4079,8 +4079,9 @@ def main():
     if supabase is None:
         apply_style("Dark")
         st.error(
-            "Supabase is not configured. Copy `.env.example` to `.env`, "
-            "set `SUPABASE_URL` and `SUPABASE_KEY`, then restart the app."
+            "Supabase is not configured. "
+            "**Local:** copy `.env.example` to `.env` and set `SUPABASE_URL` + `SUPABASE_KEY`. "
+            "**Streamlit Cloud:** open **Manage app** → **Settings** → **Secrets** and paste the same values (see `docs/DEPLOY_STREAMLIT.md`)."
         )
         st.stop()
 

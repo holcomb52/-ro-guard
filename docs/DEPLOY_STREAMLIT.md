@@ -10,10 +10,10 @@ git add app.py requirements.txt README.md .gitignore .env.example docs/
 git commit -m "RO Shield: claim matching, labor/parts/WAM display, Supabase secrets"
 ```
 
-Create a new repo on https://github.com/new (name example: `ro-shield`), then:
+Create a new repo on https://github.com/new (name: `ro-guard`), then:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/ro-shield.git
+git remote add origin https://github.com/YOUR_USERNAME/ro-guard.git
 git branch -M main
 git push -u origin main
 ```
@@ -22,9 +22,9 @@ git push -u origin main
 
 1. Open https://share.streamlit.io/
 2. Sign in with GitHub.
-3. Open your existing **ro-guard** app (or **Create app** if new).
+3. Open your existing **ro-guard** app at `https://ro-guard.streamlit.app` (or **Create app** if new — use app name **ro-guard**, not a personal prefix).
 4. Set:
-   - **Repository:** your `ro-shield` repo
+   - **Repository:** `ro-guard`
    - **Branch:** `main`
    - **Main file path:** `app.py`
 
@@ -35,7 +35,7 @@ In the app → **Settings** → **Secrets**, paste:
 ```toml
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "your_publishable_key_here"
-RO_SHIELD_APP_URL = "https://YOUR-APP.streamlit.app"
+RO_SHIELD_APP_URL = "https://YOUR-LIVE-APP.streamlit.app"
 ```
 
 Use the same Supabase values as your local `.env`. Set `RO_SHIELD_APP_URL` to your **live Streamlit URL** so password reset emails return to the deployed app. Save — the app will reboot.
