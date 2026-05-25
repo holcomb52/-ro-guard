@@ -4102,7 +4102,7 @@ def main():
     sync_personnel_identity(supabase)
 
     st.sidebar.markdown("## 🛡️ RO Shield")
-    st.sidebar.caption("Final Production Polish • Patent Pending")
+    st.sidebar.caption("Patent Pending")
 
     render_authenticated_sidebar(supabase)
 
