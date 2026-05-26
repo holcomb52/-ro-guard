@@ -1362,6 +1362,7 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_te
                 or wam_ref
             )
             wam_summary = summarize_wam_reference(wam_ref) if wam_ref else doc_meta.get("wam_summary", "")
+        claim_ro = extract_claim_ro_number(claim) or extract_claim_ro_number(document_text)
 
         if (
             len(claim_body) < 40
@@ -1375,7 +1376,7 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_te
 
         data = {
             "ro_number": file_name,
-            "vin": "",
+            "vin": claim_ro if outcome == "declined" and claim_ro else "",
             "concern": fields.get("concern", ""),
             "cause": fields.get("cause", ""),
             "correction": fields.get("correction", ""),
@@ -1799,6 +1800,19 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
 # =========================
 # CLAIM LEARNING
 # =========================
+def extract_claim_ro_number(text: str) -> str:
+    """Pull repair order number from Dealer Connect claim PDF text."""
+    for pat in (
+        r"repair order(?:\s+number)?\s*[#:\-]?\s*(\d{5,10})",
+        r"\bro(?:\s+number)?\s*[#:\-]?\s*(\d{5,10})",
+        r"claim(?:\s+number)?\s*[#:\-]?\s*(\d{5,10})",
+    ):
+        match = re.search(pat, str(text or ""), re.I)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
 def extract_pages(file):
     if PdfReader is None:
         return []
@@ -1825,6 +1839,96 @@ def split_claims_from_pages(pages):
         parts = [p.strip() for p in parts if len(p.strip()) > 180]
         claims.extend(parts if len(parts) > 1 else [page])
     return [c for c in claims if len(c.strip()) > 180]
+
+
+def split_declined_claims_from_pages(pages):
+    """Keep message-code pages paired with the narrative on the same or next segment."""
+    claims: list[str] = []
+    pending_codes = ""
+
+    for page in pages:
+        text = str(page or "").strip()
+        if not text:
+            continue
+
+        page_codes = extract_decline_reason(text) or ""
+        if page_codes:
+            pending_codes = page_codes
+
+        has_narrative = bool(re.search(r"customer states|verified the customer", text, re.I))
+        if has_narrative:
+            blob = text
+            if pending_codes and pending_codes not in blob:
+                blob = f"Message Code Information\n{pending_codes}\n\n{blob}"
+            claims.append(blob)
+            pending_codes = ""
+            continue
+
+        parts = re.split(
+            r"(?=advisor:\s*process date:|process date:|claim type:|submission type:|date received:)",
+            text,
+            flags=re.I,
+        )
+        parts = [p.strip() for p in parts if len(p.strip()) > 120]
+        if parts:
+            for part in parts:
+                if pending_codes and pending_codes not in part:
+                    part = f"{pending_codes}\n{part}"
+                if re.search(r"customer states|verified", part, re.I):
+                    claims.append(part)
+            pending_codes = ""
+        elif page_codes and len(text) > 80:
+            claims.append(text)
+
+    if claims:
+        return [c for c in claims if len(c.strip()) > 80]
+    return split_claims_from_pages(pages)
+
+
+def prepare_declined_pdf_claims(file) -> tuple[list[str], str, dict]:
+    """Extract declined PDF text; OCR when message codes are missing from the text layer."""
+    import io
+
+    pdf_bytes = file.getvalue() if hasattr(file, "getvalue") else file.read()
+    if hasattr(file, "seek"):
+        file.seek(0)
+
+    pages: list[str] = []
+    if PdfReader is not None:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        for page in reader.pages:
+            try:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    pages.append(txt)
+            except Exception:
+                pass
+
+    document_text = "\n\n".join(pages)
+    ocr_used = False
+    has_codes = bool(extract_decline_reason("", document_text=document_text))
+
+    if not has_codes:
+        try:
+            ocr_text, ocr_used = extract_ro_text(io.BytesIO(pdf_bytes), force_ocr=ocr_available())
+            if ocr_text.strip():
+                document_text = ocr_text
+                if not pages:
+                    pages = [ocr_text]
+                has_codes = bool(extract_decline_reason("", document_text=document_text))
+        except Exception:
+            pass
+
+    claims = split_declined_claims_from_pages(pages if pages else ([document_text] if document_text else []))
+    if not claims and document_text:
+        claims = split_claims_from_pages([document_text])
+
+    return claims, document_text, {
+        "has_message_codes": has_codes,
+        "ocr_used": ocr_used,
+        "page_count": len(pages),
+        "claim_segments": len(claims),
+    }
 
 
 def words(text):
@@ -3818,12 +3922,28 @@ def render_review():
    
 
 def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_key: str) -> None:
-    totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+    totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0, "updated": 0}
     per_file = []
+    pdf_diagnostics: list[str] = []
     for f in files:
-        pages = extract_pages(f)
-        document_text = "\n\n".join(pages)
-        claims = split_claims_from_pages(pages)
+        if outcome == "declined":
+            claims, document_text, pdf_info = prepare_declined_pdf_claims(f)
+            if not pdf_info.get("has_message_codes"):
+                pdf_diagnostics.append(
+                    f"**{f.name}:** No Message Code Information found in PDF text. "
+                    "AcknowledgementServlet batch exports often include **narratives only**. "
+                    "In Dealer Connect, open each **declined claim → Claim Inquiry → Print/Save** "
+                    "so the PDF includes the Message Code Information page."
+                )
+            elif pdf_info.get("ocr_used"):
+                pdf_diagnostics.append(
+                    f"**{f.name}:** Message codes found using OCR ({pdf_info.get('claim_segments', 0)} segments)."
+                )
+        else:
+            pages = extract_pages(f)
+            document_text = "\n\n".join(pages)
+            claims = split_claims_from_pages(pages)
+            pdf_info = {}
         stats = save_learned_claims(f.name, claims, outcome=outcome, document_text=document_text)
         for key in totals:
             totals[key] += stats.get(key, 0)
@@ -3837,6 +3957,7 @@ def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_ke
         "totals": totals,
         "per_file": per_file,
         "outcome": outcome,
+        "diagnostics": pdf_diagnostics,
     }
     st.session_state[nonce_key] = int(st.session_state.get(nonce_key, 0)) + 1
     st.rerun()
@@ -3848,6 +3969,8 @@ def _render_claim_upload_summary(summary_key: str, clear_button_key: str) -> Non
         return
     for line in last_summary.get("per_file", []):
         st.success(line)
+    for line in last_summary.get("diagnostics", []):
+        st.warning(line)
     totals = last_summary.get("totals") or {}
     st.info(
         f"Upload summary: **{totals.get('saved', 0)} new records saved** to your library "
@@ -3931,11 +4054,14 @@ def _render_claim_library_table(
         table_df["wam_issue"] = table_df.apply(
             lambda row: _declined_issue_summary(row.to_dict()), axis=1
         )
+        if "vin" in table_df.columns:
+            table_df["claim_ro"] = table_df["vin"].fillna("").astype(str)
         if "wam_reference" in table_df.columns:
             table_df["wam_reference"] = table_df["wam_reference"].fillna("").astype(str)
         display_cols = [
             c
             for c in [
+                "claim_ro",
                 "ro_number",
                 "wam_reference",
                 "wam_issue",
@@ -4015,9 +4141,27 @@ def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
         "**message codes**, and a short **WAM issue** summary (from your WAM library) — then warns on "
         "**Review** when a job looks similar to a past rejection."
     )
+    with st.expander("Which Dealer Connect PDF should I upload?", expanded=False):
+        st.markdown(
+            """
+            Use the **individual declined claim printout** that includes the **Message Code Information**
+            section (RE5, LG4, etc.) — not the bulk **AcknowledgementServlet** narrative batch if that
+            export omits message codes.
+
+            **Recommended path:** Dealer Connect → Warranty → Claim Inquiry → open the declined claim →
+            Print/Save PDF (confirm Message Code Information appears in the preview) → upload here.
+            """
+        )
 
     if "declined_claim_upload_nonce" not in st.session_state:
         st.session_state.declined_claim_upload_nonce = 0
+    if ocr_available():
+        st.caption("OCR is available — scanned PDFs can be read when message codes are not in the text layer.")
+    else:
+        st.caption(
+            "OCR is not available on this server. PDFs must have selectable text (not scanned images) "
+            "for message codes to import."
+        )
 
     files = st.file_uploader(
         "Upload declined claim PDFs",
