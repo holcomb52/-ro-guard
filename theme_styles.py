@@ -295,6 +295,111 @@ THEME_CSS = {
     }
     .reporting-hero h2 { margin: 0 0 6px 0; font-size: 28px; color: #f8fbff !important; }
     .reporting-hero p { margin: 0; color: #d6e8ff !important; font-size: 15px; }
+    .app-sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 4px 12px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(96, 165, 250, 0.22);
+    }
+    .app-sidebar-logo svg {
+        width: 46px;
+        height: 52px;
+        display: block;
+        filter: drop-shadow(0 6px 14px rgba(37, 99, 235, 0.28));
+    }
+    .app-sidebar-name {
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0.05em;
+        color: #f8fbff !important;
+        line-height: 1.1;
+    }
+    .app-sidebar-sub {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #94a3b8 !important;
+        margin-top: 3px;
+    }
+    .app-sidebar-badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #bfdbfe !important;
+        background: rgba(37, 99, 235, 0.18);
+        border: 1px solid rgba(96, 165, 250, 0.28);
+    }
+    .review-scan-panel {
+        margin-bottom: 10px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    }
+    .review-scan-top {
+        background: #ffffff;
+        padding: 16px 20px 12px;
+    }
+    .review-scan-top h2 {
+        margin: 0 0 6px 0;
+        color: #0f172a !important;
+        font-size: 24px;
+        font-weight: 800;
+        line-height: 1.15;
+    }
+    .review-scan-top p {
+        margin: 0;
+        color: #475569 !important;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .review-scan-top strong {
+        color: #1d4ed8 !important;
+    }
+    .review-scan-accent {
+        padding: 9px 12px;
+        text-align: center;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #ffffff !important;
+        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+    }
+    .review-section-header {
+        margin: 2px 0 8px 0;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(96, 165, 250, 0.18);
+    }
+    .review-section-title {
+        font-size: 22px;
+        font-weight: 800;
+        color: #f8fbff !important;
+        line-height: 1.15;
+    }
+    .review-section-sub {
+        margin-top: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        color: #94a3b8 !important;
+    }
+    .stApp:has(.review-scan-panel) div[data-testid="stTabs"] {
+        margin-top: 0 !important;
+    }
+    .stApp:has(.review-scan-panel) section[data-testid="stFileUploaderDropzone"] {
+        background-color: rgba(13, 30, 55, .92) !important;
+        border: 1px dashed rgba(96, 165, 250, 0.45) !important;
+        border-radius: 14px !important;
+    }
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background: rgba(7, 19, 34, .58) !important;
         border-color: rgba(62,150,255,.28) !important;

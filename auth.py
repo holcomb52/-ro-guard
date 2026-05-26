@@ -15,6 +15,14 @@ PASSWORD_RECOVERY_KEY = "password_recovery_pending"
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+RO_GUARD_LOGO_SVG = """
+<svg viewBox="0 0 72 82" role="img" aria-label="RO Guard">
+<path d="M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
+<text x="36" y="46" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800" font-family="Arial, sans-serif">RO</text>
+<path d="M28 52 L34 58 L46 44" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+""".strip()
+
 
 def normalize_email(email: str) -> str:
     return str(email or "").strip().lower()
@@ -389,15 +397,11 @@ def _mark_login_page() -> None:
 
 def _render_login_brand_panel(*, headline: str, lede: str, compact: bool = False) -> None:
     panel_class = "login-brand-panel login-brand-panel-compact" if compact else "login-brand-panel"
-    logo_block = """
+    logo_block = f"""
 <div class="login-brand-top">
 <div class="login-brand-row">
 <div class="login-logo-shield" aria-hidden="true">
-<svg viewBox="0 0 72 82" role="img" aria-label="RO Guard">
-<path d="M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
-<text x="36" y="46" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800" font-family="Arial, sans-serif">RO</text>
-<path d="M28 52 L34 58 L46 44" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+{RO_GUARD_LOGO_SVG}
 </div>
 <div class="login-brand-text">
 <div class="login-brand-name">RO GUARD</div>
@@ -542,6 +546,22 @@ def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) 
                     st.rerun()
                 else:
                     st.error(error)
+
+
+def render_sidebar_brand() -> None:
+    st.sidebar.markdown(
+        f"""
+<div class="app-sidebar-brand">
+<div class="app-sidebar-logo">{RO_GUARD_LOGO_SVG}</div>
+<div class="app-sidebar-text">
+<div class="app-sidebar-name">RO GUARD</div>
+<div class="app-sidebar-sub">Warranty Software</div>
+<div class="app-sidebar-badge">Patent Pending</div>
+</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_authenticated_sidebar(supabase) -> None:

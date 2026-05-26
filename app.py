@@ -30,6 +30,7 @@ from auth import (
     render_authenticated_sidebar,
     render_login_page,
     render_password_reset_page,
+    render_sidebar_brand,
     restore_client_session,
     sync_personnel_identity,
 )
@@ -2338,12 +2339,13 @@ def _apply_ro_scan_to_form(import_data: dict):
 def _render_ro_scanner():
     st.markdown(
         """
-        <div class="reporting-hero">
-            <h2>Scan Repair Order &amp; Invoice</h2>
-            <p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately. 
-            RO Shield reads warranty jobs by pay type <strong>W</strong> / <strong>Warranty</strong> on the repair order 
-            (no claim number needed) and pulls cause/correction narratives from the invoice.</p>
-        </div>
+<div class="review-scan-panel">
+<div class="review-scan-top">
+<h2>Scan Repair Order &amp; Invoice</h2>
+<p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately. RO Shield reads warranty jobs by pay type <strong>W</strong> / <strong>Warranty</strong> and pulls cause/correction narratives from the invoice.</p>
+</div>
+<div class="review-scan-accent">Control the Claim · Protect the Profit</div>
+</div>
         """,
         unsafe_allow_html=True,
     )
@@ -2447,8 +2449,15 @@ def render_review():
     col_a, col_b = st.columns([8, 2])
 
     with col_a:
-        st.header("RO Warranty Review™")
-        st.caption("Patent Pending Technology")
+        st.markdown(
+            """
+<div class="review-section-header">
+<div class="review-section-title">RO Warranty Review</div>
+<div class="review-section-sub">Audit-ready warranty review · Patent Pending</div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     with col_b:
         if st.button("Next Claim"):
@@ -4101,8 +4110,7 @@ def main():
 
     sync_personnel_identity(supabase)
 
-    st.sidebar.markdown("## 🛡️ RO Shield")
-    st.sidebar.caption("Patent Pending")
+    render_sidebar_brand()
 
     render_authenticated_sidebar(supabase)
 
