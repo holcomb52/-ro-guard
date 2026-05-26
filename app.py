@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from charts import (
     advisor_hard_stops_chart,
@@ -21,6 +22,7 @@ from charts import (
 )
 from pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
 from auth import (
+    auth_user_email,
     capture_recovery_from_query,
     inject_auth_hash_bridge,
     is_authenticated,
@@ -998,8 +1000,85 @@ def save_learned_claims(file_name, claims):
 # =========================
 # STYLE
 # =========================
+STREAMLIT_CHROME_HIDE_CSS = """
+[data-testid="stHeaderActionElements"],
+[data-testid="stToolbar"],
+[data-testid="stToolbarActions"],
+.stAppDeployButton,
+.stDeployButton {
+    display: none !important;
+}
+"""
+
+
+def _owner_emails() -> set[str]:
+    raw = os.getenv("RO_SHIELD_OWNER_EMAIL", "").strip()
+    if not raw:
+        try:
+            raw = str(st.secrets.get("RO_SHIELD_OWNER_EMAIL", "")).strip()
+        except Exception:
+            raw = ""
+    return {normalize_email(part) for part in raw.replace(";", ",").split(",") if part.strip()}
+
+
+def streamlit_cloud_chrome_allowed() -> bool:
+    """Streamlit Share / Manage app chrome only for configured owner login(s)."""
+    if not is_authenticated():
+        return False
+    owners = _owner_emails()
+    if not owners:
+        return False
+    return normalize_email(auth_user_email()) in owners
+
+
+def _inject_streamlit_cloud_chrome_hide() -> None:
+    """Hide Streamlit Cloud Share/Manage chrome for non-owner sessions."""
+    components.html(
+        """
+        <script>
+        (function () {
+          function hideChrome(doc) {
+            if (!doc || !doc.body) return;
+            doc.querySelectorAll(
+              '[data-testid="stHeaderActionElements"], [data-testid="stToolbar"], [data-testid="stToolbarActions"], .stAppDeployButton, .stDeployButton'
+            ).forEach(function (el) {
+              el.style.setProperty("display", "none", "important");
+            });
+            doc.querySelectorAll("a, button, span, p, div").forEach(function (el) {
+              var text = (el.textContent || "").trim();
+              if (text === "Share" || text === "Manage app") {
+                var target = el.closest("a, button, [role='button']") || el;
+                target.style.setProperty("display", "none", "important");
+                if (target.parentElement && target.parentElement.childElementCount === 1) {
+                  target.parentElement.style.setProperty("display", "none", "important");
+                }
+              }
+            });
+          }
+          function sweep() {
+            try { hideChrome(document); } catch (e) {}
+            try { hideChrome(window.parent.document); } catch (e) {}
+          }
+          sweep();
+          try {
+            new MutationObserver(sweep).observe(document.documentElement, { childList: true, subtree: true });
+          } catch (e) {}
+          try {
+            new MutationObserver(sweep).observe(window.parent.document.documentElement, { childList: true, subtree: true });
+          } catch (e) {}
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 def apply_style(theme="Dark"):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
+    if not streamlit_cloud_chrome_allowed():
+        css = STREAMLIT_CHROME_HIDE_CSS + css
+        _inject_streamlit_cloud_chrome_hide()
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 

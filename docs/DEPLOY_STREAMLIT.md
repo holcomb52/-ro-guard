@@ -22,9 +22,23 @@ git push -u origin main
 
 1. Open https://share.streamlit.io/
 2. Sign in with GitHub.
-3. Open your existing **ro-guard** app at `https://ro-guard.streamlit.app` (or **Create app** if new — use app name **ro-guard**, not a personal prefix).
-4. Set:
-   - **Repository:** `ro-guard`
+3. Open your **ro-guard** app (repo: `holcomb52/-ro-guard`, branch `main`, entry `app.py`).
+
+### Custom URL (recommended)
+
+Replace the long auto-generated URL with a short one:
+
+1. From the live app, click **Manage app** (bottom-right).
+2. **Settings** → **General** → **App URL**.
+3. Enter: **`ro-guard`** → **Save**.
+4. Your app moves to **`https://ro-guard.streamlit.app`**.
+
+If `ro-guard` is taken, try `roshield`, `roshield-audit`, or `newsmyrna-ro-guard` (6–63 characters).
+
+After changing the URL, update **Streamlit Secrets** and **Supabase URL Configuration** (steps below) so login and password reset links still work.
+
+4. Confirm deploy settings:
+   - **Repository:** `holcomb52/-ro-guard`
    - **Branch:** `main`
    - **Main file path:** `app.py`
 
@@ -36,6 +50,7 @@ In the app → **Settings** → **Secrets**, paste:
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "your_publishable_key_here"
 RO_SHIELD_APP_URL = "https://YOUR-LIVE-APP.streamlit.app"
+RO_SHIELD_OWNER_EMAIL = "holcomb52@yahoo.com"
 ```
 
 Use the same Supabase values as your local `.env`. Set `RO_SHIELD_APP_URL` to your **live Streamlit URL** so password reset emails return to the deployed app. Save — the app will reboot.
@@ -93,6 +108,6 @@ Usually one of:
 ```toml
 SUPABASE_URL = "https://eyufnhnabdgehkfvhqzf.supabase.co"
 SUPABASE_KEY = "your_publishable_key"
-RO_SHIELD_APP_URL = "https://ro-guard-eaaifcsxfgxt5rw9bgx4eb.streamlit.app"
+RO_SHIELD_APP_URL = "https://ro-guard.streamlit.app"
 ```
 
