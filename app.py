@@ -58,8 +58,8 @@ from review_store import (
     save_smart_warranty_settings,
     smart_warranty_punch_exempt,
 )
-from theme_styles import THEME_CSS
-from display_prefs import build_user_display_css, render_display_settings_sidebar
+from theme_styles import BRAND_TEXT, THEME_CSS, brand_color_lock_css
+from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
 
@@ -1078,7 +1078,8 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
 def apply_style(theme="Dark", display_prefs: dict | None = None):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
     if display_prefs:
-        css += build_user_display_css(display_prefs)
+        css += build_user_display_css(display_prefs, theme=theme)
+    css += brand_color_lock_css(theme)
     if not streamlit_cloud_chrome_allowed():
         css = STREAMLIT_CHROME_HIDE_CSS + css
         _inject_streamlit_cloud_chrome_hide()
@@ -2418,26 +2419,35 @@ def _apply_ro_scan_to_form(import_data: dict):
                 st.session_state[f"{dest}_{idx}"] = True
 
 
-def _render_app_workspace_header() -> None:
+def _inline_text_color(color: str) -> str:
+    return f' style="color: {color} !important; -webkit-text-fill-color: {color} !important;"'
+
+
+def _render_app_workspace_header(theme: str = "Dark") -> None:
+    key = "Light" if str(theme).lower() == "light" else "Dark"
+    c = BRAND_TEXT[key]
     st.markdown(
-        """
+        f"""
 <div class="app-workspace-header">
-<div class="app-workspace-kicker">RO Guard · Warranty Workspace</div>
-<h2>Smarter Claims. <span>Stronger Profits.</span></h2>
-<p>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
-<div class="app-workspace-accent">Control the Claim · Protect the Profit</div>
+<div class="app-workspace-kicker"{_inline_text_color(c["workspace_kicker"])}>RO Guard · Warranty Workspace</div>
+<h2{_inline_text_color(c["workspace_h2"])}>Smarter Claims. <span{_inline_text_color(c["workspace_h2"])}>Stronger Profits.</span></h2>
+<p{_inline_text_color(c["workspace_body"])}>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
+<div class="app-workspace-accent"{_inline_text_color(c["workspace_accent"])}>Control the Claim · Protect the Profit</div>
 </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def _render_ro_scanner():
+def _render_ro_scanner(theme: str | None = None):
+    theme = theme or st.session_state.get("appearance", "Dark")
+    key = "Light" if str(theme).lower() == "light" else "Dark"
+    c = BRAND_TEXT[key]
     st.markdown(
-        """
+        f"""
 <div class="review-scan-intro">
-<h3>Scan Repair Order &amp; Invoice</h3>
-<p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately to auto-fill the review form below.</p>
+<h3{_inline_text_color(c["scan_h3"])}>Scan Repair Order &amp; Invoice</h3>
+<p{_inline_text_color(c["scan_body"])}>Upload the <strong{_inline_text_color(c["scan_strong"])}>final repair order</strong> and <strong{_inline_text_color(c["scan_strong"])}>final invoice</strong> separately to auto-fill the review form below.</p>
 </div>
         """,
         unsafe_allow_html=True,
@@ -4228,10 +4238,15 @@ def main():
         key="appearance_select",
     )
     st.session_state.appearance = appearance
+
+    if st.session_state.get("_display_theme") != appearance:
+        st.session_state._display_theme = appearance
+        request_display_widget_resync()
+
     display_prefs = render_display_settings_sidebar(supabase, theme=appearance)
     apply_style(appearance, display_prefs)
 
-    _render_app_workspace_header()
+    _render_app_workspace_header(appearance)
 
     tabs = st.tabs(["Review", "ROI Dashboard", "Claim Learning", "Reporting", "Admin", "TSB / Bulletins", "WAM"])
     with tabs[0]:

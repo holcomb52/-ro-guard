@@ -1,3 +1,93 @@
+BRAND_TEXT = {
+    "Dark": {
+        "workspace_kicker": "#94a3b8",
+        "workspace_h2": "#f8fbff",
+        "workspace_body": "#94a3b8",
+        "workspace_accent": "#60a5fa",
+        "scan_h3": "#f8fbff",
+        "scan_body": "#94a3b8",
+        "scan_strong": "#cbd5e1",
+        "sidebar_label": "#93c5fd",
+        "sidebar_caption": "#94a3b8",
+        "sidebar_brand": "#f8fbff",
+        "sidebar_brand_sub": "#94a3b8",
+    },
+    "Light": {
+        "workspace_kicker": "#64748b",
+        "workspace_h2": "#0f172a",
+        "workspace_body": "#475569",
+        "workspace_accent": "#1d4ed8",
+        "scan_h3": "#0f172a",
+        "scan_body": "#475569",
+        "scan_strong": "#334155",
+        "sidebar_label": "#475569",
+        "sidebar_caption": "#64748b",
+        "sidebar_brand": "#0f172a",
+        "sidebar_brand_sub": "#64748b",
+    },
+}
+
+
+def brand_color_lock_css(theme: str = "Dark") -> str:
+    """Force readable colors on branded chrome; appended last in apply_style()."""
+    key = "Light" if str(theme).lower() == "light" else "Dark"
+    c = BRAND_TEXT[key]
+
+    def lock(selectors: str, color: str) -> str:
+        return f"""
+    {selectors} {{
+        color: {color} !important;
+        -webkit-text-fill-color: {color} !important;
+    }}"""
+
+    header = ".app-workspace-header"
+    header_sel = (
+        f"section.main div[data-testid='stMarkdownContainer'] {header}, "
+        f"section.main {header}"
+    )
+    scan = ".review-scan-intro"
+    scan_sel = (
+        f"section.main div[data-testid='stMarkdownContainer'] {scan}, "
+        f"section.main {scan}"
+    )
+    return (
+        lock(
+            f"{header_sel} .app-workspace-kicker, div.app-workspace-kicker",
+            c["workspace_kicker"],
+        )
+        + lock(
+            f"{header_sel} h2, {header_sel} h2 span, div.app-workspace-header h2, div.app-workspace-header h2 span",
+            c["workspace_h2"],
+        )
+        + lock(f"{header_sel} p, div.app-workspace-header p", c["workspace_body"])
+        + lock(
+            f"{header_sel} .app-workspace-accent, div.app-workspace-accent",
+            c["workspace_accent"],
+        )
+        + lock(f"{scan_sel} h3, div.review-scan-intro h3", c["scan_h3"])
+        + lock(f"{scan_sel} p, div.review-scan-intro p", c["scan_body"])
+        + lock(f"{scan_sel} strong, div.review-scan-intro strong", c["scan_strong"])
+        + lock(
+            "section[data-testid='stSidebar'] div[data-testid='stSelectbox'] label, "
+            "section[data-testid='stSidebar'] div[data-testid='stSlider'] label, "
+            "section[data-testid='stSidebar'] .rg-sidebar-settings-title",
+            c["sidebar_label"],
+        )
+        + lock(
+            "section[data-testid='stSidebar'] div[data-testid='stCaptionContainer'] p",
+            c["sidebar_caption"],
+        )
+        + lock(
+            "section[data-testid='stSidebar'] .app-sidebar-name",
+            c["sidebar_brand"],
+        )
+        + lock(
+            "section[data-testid='stSidebar'] .app-sidebar-sub",
+            c["sidebar_brand_sub"],
+        )
+    )
+
+
 THEME_CSS = {
     "Dark": """
     .stApp {
