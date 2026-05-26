@@ -860,11 +860,23 @@ def _normalize_wam_ref(wam_ref: str) -> str:
     return re.sub(r"^WAM\s*", "", str(wam_ref or "").strip(), flags=re.I).upper()
 
 
+def extract_warranty_coverage_code(text: str) -> str:
+    """Pull Stellantis Warranty Coverage Code from servlet / inquiry PDFs."""
+    match = re.search(r"Warranty Coverage\s*Code:\s*(\d+)", str(text or ""), re.I)
+    if match:
+        return f"Coverage Code {match.group(1).strip()}"
+    return ""
+
+
 def extract_declined_wam_reference(claim_text: str, *, document_text: str = "") -> str:
     """Find the WAM tied to a declined claim — usually near Message Code Information."""
-    combined = "\n".join(part for part in (document_text, claim_text) if str(part or "").strip())
+    combined = "\n".join(part for part in (claim_text, document_text) if str(part or "").strip())
     if not combined.strip():
         return ""
+
+    coverage = extract_warranty_coverage_code(combined)
+    if coverage:
+        return coverage
 
     flat = re.sub(r"\s+", " ", combined).strip()
     msg_match = re.search(r"message code information", flat, re.I)
@@ -1312,6 +1324,79 @@ def render_declined_claim_alert(current_job: dict, similar_declined: list) -> No
                 st.markdown(f"**{match.get('score', 0)}%** · {label[:120]}")
 
 
+def _sync_declined_upload_metadata(file_name: str, claims: list[str]) -> int:
+    """Refresh decline/WAM fields on declined rows from the same upload file."""
+    if supabase is None or not file_name or not claims:
+        return 0
+
+    updated = 0
+
+    def _apply_patch(row_id: str, claim: str) -> bool:
+        nonlocal updated
+        claim_num = extract_claim_ro_number(claim)
+        decline_reason = extract_decline_reason(claim)
+        wam_ref = extract_declined_wam_reference(claim)
+        wam_summary = summarize_wam_reference(wam_ref) if wam_ref else ""
+        patch: dict = {}
+        if decline_reason:
+            patch["reference"] = decline_reason
+            patch["content"] = decline_reason
+        if wam_ref:
+            patch["wam_reference"] = wam_ref
+        if wam_summary:
+            patch["wam"] = wam_summary
+        if claim_num:
+            patch["vin"] = claim_num
+        if not patch:
+            return False
+        try:
+            supabase.table("claims").update(patch).eq("id", row_id).execute()
+            updated += 1
+            return True
+        except Exception:
+            return False
+
+    try:
+        existing_rows = (
+            supabase.table("claims")
+            .select("id, vin, reference, wam_reference, story")
+            .eq("ro_number", file_name)
+            .eq("claim_status", "declined")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return 0
+
+    by_vin: dict[str, dict] = {}
+    stale_rows: list[dict] = []
+    for row in existing_rows:
+        vin = str(row.get("vin") or "").strip()
+        if vin:
+            by_vin[vin] = row
+        elif not str(row.get("reference") or "").strip():
+            stale_rows.append(row)
+
+    matched_ids: set[str] = set()
+    for claim in claims:
+        claim_num = extract_claim_ro_number(claim)
+        if claim_num and claim_num in by_vin:
+            row = by_vin[claim_num]
+            if _apply_patch(str(row["id"]), claim):
+                matched_ids.add(str(row["id"]))
+
+    remaining_claims = [c for c in claims if extract_claim_ro_number(c) not in by_vin]
+    remaining_stale = [r for r in stale_rows if str(r["id"]) not in matched_ids]
+    if remaining_stale and remaining_claims:
+        remaining_stale.sort(key=lambda r: str(r.get("id")))
+        remaining_claims.sort(key=lambda c: extract_claim_ro_number(c) or c[:40])
+        for row, claim in zip(remaining_stale, remaining_claims):
+            _apply_patch(str(row["id"]), claim)
+
+    return updated
+
+
 def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_text: str = "") -> dict:
     stats = {"parsed": len(claims), "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0, "updated": 0}
     outcome = str(outcome or "paid").strip().lower()
@@ -1352,17 +1437,20 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_te
         wam_ref = fields.get("wam_reference", "")
         wam_summary = ""
         if outcome == "declined":
-            decline_reason = (
-                extract_decline_reason(claim, document_text=document_text)
-                or doc_meta.get("decline_reason", "")
-            )
+            decline_reason = extract_decline_reason(claim)
+            if not decline_reason and len(claims) == 1:
+                decline_reason = doc_meta.get("decline_reason", "")
             wam_ref = (
-                extract_declined_wam_reference(claim, document_text=document_text)
-                or doc_meta.get("wam_reference", "")
+                extract_declined_wam_reference(claim)
+                or extract_warranty_coverage_code(claim)
                 or wam_ref
             )
-            wam_summary = summarize_wam_reference(wam_ref) if wam_ref else doc_meta.get("wam_summary", "")
-        claim_ro = extract_claim_ro_number(claim) or extract_claim_ro_number(document_text)
+            if not wam_ref and len(claims) == 1:
+                wam_ref = doc_meta.get("wam_reference", "") or wam_ref
+            wam_summary = summarize_wam_reference(wam_ref) if wam_ref else ""
+            if not wam_summary and len(claims) == 1:
+                wam_summary = doc_meta.get("wam_summary", "")
+        claim_ro = extract_claim_ro_number(claim)
 
         if (
             len(claim_body) < 40
@@ -1398,14 +1486,17 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_te
                 continue
 
         try:
-            existing = (
+            existing_query = (
                 supabase.table("claims")
                 .select("id, reference, wam_reference")
                 .eq("ro_number", file_name)
-                .eq("story", data["story"])
                 .eq("claim_status", outcome)
-                .execute()
             )
+            if outcome == "declined" and data.get("vin"):
+                existing_query = existing_query.eq("vin", data["vin"])
+            else:
+                existing_query = existing_query.eq("story", data["story"])
+            existing = existing_query.execute()
             if existing.data:
                 stats["duplicate"] += 1
                 if outcome == "declined" and decline_reason:
@@ -1428,7 +1519,9 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_te
             st.warning(f"Could not save learned claim {idx}: {e}")
 
     if outcome == "declined":
-        stats["updated"] += _backfill_declined_file_metadata(file_name, document_text, doc_meta)
+        stats["updated"] += _sync_declined_upload_metadata(file_name, claims)
+        if len(claims) == 1:
+            stats["updated"] += _backfill_declined_file_metadata(file_name, document_text, doc_meta)
 
     return stats
 
@@ -1469,7 +1562,13 @@ def extract_message_code_reasons(claim_text: str) -> list[str]:
         code = code.strip().upper()
         description = re.sub(r"\s+", " ", description or "").strip(" .:-_")
         description = re.sub(r"\s+Condition-\d+\s*$", "", description, flags=re.I)
-        if len(code) < 3 or len(description) < 8:
+        description = re.sub(
+            r"\s+(?:Dealer Correctable|Authorization Required|Informational Message).*$",
+            "",
+            description,
+            flags=re.I,
+        )
+        if len(code) < 2 or len(description) < 8:
             return
         if description.lower() in {
             "message code description",
@@ -1502,28 +1601,36 @@ def extract_message_code_reasons(claim_text: str) -> list[str]:
         cat_before = len(reasons)
 
         row_pattern = re.compile(
-            r"Condition-\d+\s+(?:(L-\d+)\s+)?([A-Z]{2,4}\d{1,2})\s+(.{10,240}?)"
-            r"(?=\s*Condition-\d+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+            r"Condition-\d+\s+(?:L-(\d+)\s*)?([A-Z]{2,4}\d{0,2})\s+(.{10,240}?)"
+            r"(?=\s*Condition-\d+|\s*Claim\s+[A-Z0-9]{2,4}\s+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
             re.I,
         )
         for row in row_pattern.finditer(cat_section):
-            _add_reason(row.group(2), row.group(3), line=row.group(1) or "", category=category_label)
+            _add_reason(row.group(2), row.group(3), line=f"L-{row.group(1)}" if row.group(1) else "", category=category_label)
+
+        claim_row_pattern = re.compile(
+            r"Claim\s+([A-Z0-9]{2,4})\s+(.{10,240}?)"
+            r"(?=\s*Claim\s+[A-Z0-9]{2,4}\s+|\s*Condition-\d+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+            re.I,
+        )
+        for row in claim_row_pattern.finditer(cat_section):
+            _add_reason(row.group(1), row.group(2), category=category_label)
 
         if len(reasons) == cat_before:
             loose_pattern = re.compile(
-                r"(?:(L-\d+)\s+)?([A-Z]{2,4}\d{1,2})\s+(.{10,240}?)"
-                r"(?=\s*(?:L-\d+\s+)?[A-Z]{2,4}\d{1,2}\s+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+                r"(?:(?:L-(\d+))\s*)?([A-Z]{2,4}\d{0,2})\s+(.{10,240}?)"
+                r"(?=\s*(?:(?:L-\d+\s*)?[A-Z]{2,4}\d{0,2}\s+)|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
                 re.I,
             )
             for row in loose_pattern.finditer(cat_section):
-                _add_reason(row.group(2), row.group(3), line=row.group(1) or "", category=category_label)
+                _add_reason(row.group(2), row.group(3), line=f"L-{row.group(1)}" if row.group(1) else "", category=category_label)
 
     if reasons:
         return reasons
 
     # Last resort: any message-code-shaped token followed by descriptive text.
     fallback = re.compile(
-        r"\b([A-Z]{2,4}\d{1,2})\s+(.{12,220}?)(?=\s+[A-Z]{2,4}\d{1,2}\s+|\s*$)",
+        r"\b([A-Z]{2,4}\d{0,2})\s+(.{12,220}?)(?=\s+[A-Z]{2,4}\d{0,2}\s+|\s*$)",
         re.I,
     )
     for row in fallback.finditer(section):
@@ -1561,20 +1668,28 @@ def _extract_message_codes_loose(flat: str) -> list[str]:
         reasons.append(f"{code} — {desc}")
 
     row_pattern = re.compile(
-        r"Condition-\d+\s+(?:(L-\d+)\s+)?([A-Z]{2,4}\d{1,2})\s+(.{12,220}?)"
-        r"(?=\s*Condition-\d+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+        r"Condition-\d+\s+(?:L-(\d+)\s*)?([A-Z]{2,4}\d{0,2})\s+(.{12,220}?)"
+        r"(?=\s*Condition-\d+|\s*Claim\s+[A-Z0-9]{2,4}\s+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
         re.I,
     )
     for row in row_pattern.finditer(flat):
-        line = row.group(1) or ""
+        line = f"L-{row.group(1)}" if row.group(1) else ""
         desc = row.group(3)
         if line:
             desc = f"{line}: {desc}"
         _add(row.group(2), desc)
 
+    claim_pattern = re.compile(
+        r"Claim\s+([A-Z0-9]{2,4})\s+(.{12,220}?)"
+        r"(?=\s*Claim\s+[A-Z0-9]{2,4}\s+|\s*Condition-\d+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+        re.I,
+    )
+    for row in claim_pattern.finditer(flat):
+        _add(row.group(1), row.group(2))
+
     if not reasons:
         fallback = re.compile(
-            r"\b([A-Z]{2,4}\d{1,2})\s+((?:Only |LOP |Missing |Incomplete |Invalid ).{10,220}?)(?=\s+[A-Z]{2,4}\d{1,2}\s+|\s*$)",
+            r"\b([A-Z]{2,4}\d{0,2})\s+((?:Only |LOP |Missing |Incomplete |Invalid |Contract |Claim ).{10,220}?)(?=\s+[A-Z]{2,4}\d{0,2}\s+|\s*$)",
             re.I,
         )
         for row in fallback.finditer(flat):
@@ -1828,6 +1943,52 @@ def extract_pages(file):
     return pages
 
 
+def is_acknowledgement_servlet_export(document_text: str) -> bool:
+    return bool(re.search(r"global claim acknowledgement", str(document_text or ""), re.I))
+
+
+def split_acknowledgement_servlet_claims(pages: list[str]) -> list[str]:
+    """Group servlet export pages by claim number; attach code-only continuation pages."""
+    groups: list[dict] = []
+    current: dict = {"claim_number": "", "pages": []}
+
+    def _flush() -> None:
+        nonlocal current
+        if not current["pages"]:
+            return
+        text = "\n\n".join(current["pages"]).strip()
+        if len(text) >= 80:
+            groups.append({"claim_number": current["claim_number"], "text": text})
+        current = {"claim_number": "", "pages": []}
+
+    for page in pages:
+        text = str(page or "").strip()
+        if not text:
+            continue
+
+        claim_match = re.search(r"Claim Number:\s*(\d+)", text, re.I)
+        claim_num = claim_match.group(1).strip() if claim_match else ""
+
+        if claim_num:
+            if current["pages"] and claim_num != current["claim_number"]:
+                _flush()
+            current["claim_number"] = claim_num
+            current["pages"].append(text)
+            continue
+
+        if current["pages"]:
+            current["pages"].append(text)
+            continue
+
+        if extract_message_code_reasons(text) and groups:
+            groups[-1]["text"] = f"{groups[-1]['text']}\n\n{text}".strip()
+        elif len(text) >= 80:
+            current["pages"].append(text)
+
+    _flush()
+    return [g["text"] for g in groups if g.get("text")]
+
+
 def split_claims_from_pages(pages):
     claims = []
     for page in pages:
@@ -1920,6 +2081,10 @@ def prepare_declined_pdf_claims(file) -> tuple[list[str], str, dict]:
             pass
 
     claims = split_declined_claims_from_pages(pages if pages else ([document_text] if document_text else []))
+    if is_acknowledgement_servlet_export(document_text):
+        servlet_claims = split_acknowledgement_servlet_claims(pages if pages else [document_text])
+        if servlet_claims:
+            claims = servlet_claims
     if not claims and document_text:
         claims = split_claims_from_pages([document_text])
 
@@ -1928,6 +2093,7 @@ def prepare_declined_pdf_claims(file) -> tuple[list[str], str, dict]:
         "ocr_used": ocr_used,
         "page_count": len(pages),
         "claim_segments": len(claims),
+        "servlet_export": is_acknowledgement_servlet_export(document_text),
     }
 
 
@@ -3928,12 +4094,17 @@ def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_ke
     for f in files:
         if outcome == "declined":
             claims, document_text, pdf_info = prepare_declined_pdf_claims(f)
+            page_count = pdf_info.get("page_count", 0)
             if not pdf_info.get("has_message_codes"):
                 pdf_diagnostics.append(
                     f"**{f.name}:** No Message Code Information found in PDF text. "
-                    "AcknowledgementServlet batch exports often include **narratives only**. "
-                    "In Dealer Connect, open each **declined claim → Claim Inquiry → Print/Save** "
-                    "so the PDF includes the Message Code Information page."
+                    "Try opening each declined claim in Dealer Connect → Claim Inquiry → Print/Save "
+                    "so the export includes the Message Code Information page."
+                )
+            elif pdf_info.get("servlet_export"):
+                pdf_diagnostics.append(
+                    f"**{f.name}:** AcknowledgementServlet batch export detected — "
+                    f"{pdf_info.get('claim_segments', 0)} claims grouped with message codes."
                 )
             elif pdf_info.get("ocr_used"):
                 pdf_diagnostics.append(
@@ -3944,11 +4115,12 @@ def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_ke
             document_text = "\n\n".join(pages)
             claims = split_claims_from_pages(pages)
             pdf_info = {}
+            page_count = len(pages)
         stats = save_learned_claims(f.name, claims, outcome=outcome, document_text=document_text)
         for key in totals:
             totals[key] += stats.get(key, 0)
         per_file.append(
-            f"**{f.name}:** {len(pages)} pages → {stats['parsed']} parsed → "
+            f"**{f.name}:** {page_count} pages → {stats['parsed']} parsed → "
             f"**{stats['saved']} saved**, {stats.get('updated', 0)} updated, "
             f"{stats['duplicate']} duplicates, "
             f"{stats['skipped']} skipped, {stats['errors']} errors"
