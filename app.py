@@ -3944,9 +3944,10 @@ def _review_option_label(row: dict) -> str:
     return " · ".join(parts)
 
 
-def render_outcome_followup(df: pd.DataFrame) -> None:
+def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> None:
     """Let warranty staff record OEM paid/rejected results after submission."""
-    st.subheader("Update Claim Outcomes")
+    if show_title:
+        st.subheader("Update Claim Outcomes")
     st.caption(
         "After Stellantis pays or rejects the claim, record the result here — even if the audit "
         "was saved weeks ago with no outcome selected."
@@ -4123,39 +4124,7 @@ def render_outcome_followup(df: pd.DataFrame) -> None:
         st.dataframe(pending_view[pending_cols].head(15), use_container_width=True, hide_index=True)
 
 
-def render_reporting():
-    st.markdown(
-        """
-        <div class="reporting-hero">
-            <h2>Reporting</h2>
-            <p>Team-wide review history stored in Supabase.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col_refresh, col_migrate = st.columns([1, 2])
-    with col_refresh:
-        if st.button("Refresh Reporting"):
-            st.rerun()
-    with col_migrate:
-        if st.button("Import old local reviews (SQLite → Supabase)"):
-            migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
-            st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
-            st.rerun()
-
-    df = load_reviews()
-    if df.empty:
-        st.info("No reviews saved yet. Complete a review on the Review tab and click Run Audit + Save Review.")
-        return
-
-    df = _filter_reviews_by_date(df, key_prefix="report")
-    if df.empty:
-        st.warning("No reviews in the selected date range.")
-        return
-
-    df = normalize_reviews_dataframe(df)
-
+def render_reporting_summary(df: pd.DataFrame) -> None:
     review_count = len(df)
     avg_score = pd.to_numeric(df.get("score", 0), errors="coerce").fillna(0).mean()
     avg_days = pd.to_numeric(df.get("days_to_submit", 0), errors="coerce").fillna(0).mean()
@@ -4164,7 +4133,6 @@ def render_reporting():
     hard_stops = int(pd.to_numeric(df.get("hard_stop_count", 0), errors="coerce").fillna(0).sum())
     time_bypasses = int(pd.to_numeric(df.get("time_bypass", 0), errors="coerce").fillna(0).sum())
 
-    st.markdown("### Summary")
     render_metric_rows([
         [
             ("Reviews", f"{review_count:,}"),
@@ -4181,125 +4149,107 @@ def render_reporting():
         ],
     ])
 
-    if len(df) > 0:
-        with st.container(border=True):
-            st.markdown("### Visual Summary")
-            r1, r2 = st.columns(2)
-            with r1:
-                status_png = review_status_pie(df)
-                if status_png:
-                    st.image(status_png, use_container_width=True, caption="Review Status Mix")
-            with r2:
-                score_png = score_distribution_chart(df)
-                if score_png:
-                    st.image(score_png, use_container_width=True, caption="Audit Score Distribution")
 
-    st.subheader("First-Pass Approval Tracking")
-    fp_df = df.copy()
-    fp_df["first_pass_paid"] = pd.to_numeric(fp_df.get("first_pass_paid", 0), errors="coerce").fillna(0)
-    fp_df["rejected"] = pd.to_numeric(fp_df.get("rejected", 0), errors="coerce").fillna(0)
-    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
+def render_reporting_charts(df: pd.DataFrame) -> None:
+    if df.empty:
+        return
+    with st.container(border=True):
+        st.markdown("### Visual Summary")
+        r1, r2 = st.columns(2)
+        with r1:
+            status_png = review_status_pie(df)
+            if status_png:
+                st.image(status_png, use_container_width=True, caption="Review Status Mix")
+        with r2:
+            score_png = score_distribution_chart(df)
+            if score_png:
+                st.image(score_png, use_container_width=True, caption="Audit Score Distribution")
 
-    total_reviews = len(fp_df)
-    first_pass_count = int(fp_df["first_pass_paid"].sum())
-    rejected_count = int(fp_df["rejected"].sum())
-    first_pass_pct = (first_pass_count / total_reviews * 100) if total_reviews else 0
-    rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
-    rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
 
-    pending_count = total_reviews - first_pass_count - rejected_count
-    resolved_count = first_pass_count + rejected_count
-    first_pass_resolved_pct = (first_pass_count / resolved_count * 100) if resolved_count else 0.0
-    rejected_resolved_pct = (rejected_count / resolved_count * 100) if resolved_count else 0.0
-
-    render_metric_rows([
-        [
-            (
-                "First-Pass % (resolved)",
-                f"{first_pass_resolved_pct:.1f}%",
-                "Of reviews with a recorded paid or rejected OEM outcome.",
-            ),
-            ("Pending Outcome", f"{pending_count:,}"),
-            ("First-Pass Paid Count", f"{first_pass_count:,}"),
-        ],
-        [
-            ("Rejected % (resolved)", f"{rejected_resolved_pct:.1f}%"),
-            ("Rejected Claim Value", f"${rejected_value:,.2f}"),
-        ],
-    ])
-
-    render_outcome_followup(df)
-
-    st.subheader("VIN Recall Tracking")
-    if "vin_recall_identified" in df.columns:
-        recall_flag = pd.to_numeric(df["vin_recall_identified"], errors="coerce").fillna(0).astype(int)
-        recall_df = df[recall_flag == 1].copy()
-        all_time_df = load_reviews()
-        all_time_total = 0
-        if not all_time_df.empty and "vin_recall_identified" in all_time_df.columns:
-            all_time_total = int(
-                pd.to_numeric(all_time_df["vin_recall_identified"], errors="coerce").fillna(0).astype(int).sum()
-            )
-
-        r1, r2, r3 = st.columns(3)
-        r1.metric("VINs With Recalls (this period)", len(recall_df))
-        r2.metric("VINs With Recalls (all time)", all_time_total)
-        r3.metric(
-            "Recall Acknowledgments (this period)",
-            int(pd.to_numeric(recall_df.get("vin_recall_acknowledged", 0), errors="coerce").fillna(0).sum())
-            if not recall_df.empty else 0,
-        )
-
-        if recall_df.empty:
-            st.info("No VINs with identified recalls in the selected reporting period.")
-        else:
-            recall_display = recall_df.copy()
-            if "created_at" in recall_display.columns:
-                recall_display["created_at"] = pd.to_datetime(
-                    recall_display["created_at"], errors="coerce"
-                ).dt.strftime("%Y-%m-%d %H:%M")
-            show_cols = [
-                c for c in (
-                    "created_at", "ro_number", "vin", "vin_recall_count",
-                    "vin_recall_campaigns", "vin_recall_acknowledged", "advisor",
-                )
-                if c in recall_display.columns
-            ]
-            st.dataframe(recall_display[show_cols], use_container_width=True)
-    else:
+def render_reporting_vin_recalls(df: pd.DataFrame) -> None:
+    st.caption("VINs flagged with open or identified recall campaigns during the selected period.")
+    if "vin_recall_identified" not in df.columns:
         st.info(
             "VIN recall columns are not in Supabase yet. Run the migration in "
             "`docs/SUPABASE_SCHEMA.sql`, then save new reviews to populate this report."
         )
+        return
 
-    if "rejection_reason" in fp_df.columns:
-        reasons = fp_df[fp_df["rejection_reason"].astype(str).str.strip() != ""].copy()
-        if not reasons.empty:
-            st.markdown("### Rejection Reasons")
-            st.caption("Grouped by standard library reason (text before optional notes).")
-            reasons["rejection_reason_primary"] = (
-                reasons["rejection_reason"].astype(str).str.split(" — ").str[0].str.strip()
-            )
-            reason_summary = reasons.groupby("rejection_reason_primary").agg(
-                count=("ro_number", "count"),
-                total_value=("total_claim_value", "sum"),
-            ).reset_index().sort_values("count", ascending=False)
-            reason_summary = reason_summary.rename(columns={"rejection_reason_primary": "rejection_reason"})
-            st.dataframe(reason_summary, use_container_width=True)
+    recall_flag = pd.to_numeric(df["vin_recall_identified"], errors="coerce").fillna(0).astype(int)
+    recall_df = df[recall_flag == 1].copy()
+    all_time_df = load_reviews()
+    all_time_total = 0
+    if not all_time_df.empty and "vin_recall_identified" in all_time_df.columns:
+        all_time_total = int(
+            pd.to_numeric(all_time_df["vin_recall_identified"], errors="coerce").fillna(0).astype(int).sum()
+        )
 
-            with st.expander("All rejection detail (including notes)"):
-                detail = reasons.copy()
-                if "created_at" in detail.columns:
-                    detail["created_at"] = pd.to_datetime(
-                        detail["created_at"], errors="coerce"
-                    ).dt.strftime("%Y-%m-%d %H:%M")
-                detail_cols = [
-                    c for c in ("created_at", "ro_number", "rejection_reason", "total_claim_value", "advisor")
-                    if c in detail.columns
-                ]
-                st.dataframe(detail[detail_cols], use_container_width=True)
+    render_metric_rows([
+        [
+            ("VINs With Recalls (period)", f"{len(recall_df):,}"),
+            ("VINs With Recalls (all time)", f"{all_time_total:,}"),
+            (
+                "Recall Acknowledgments",
+                f"{int(pd.to_numeric(recall_df.get('vin_recall_acknowledged', 0), errors='coerce').fillna(0).sum()) if not recall_df.empty else 0:,}",
+            ),
+        ],
+    ])
 
-    st.subheader("Top Offenders / Best Performers")
+    if recall_df.empty:
+        st.info("No VINs with identified recalls in the selected reporting period.")
+        return
+
+    recall_display = recall_df.copy()
+    if "created_at" in recall_display.columns:
+        recall_display["created_at"] = pd.to_datetime(
+            recall_display["created_at"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d %H:%M")
+    show_cols = [
+        c for c in (
+            "created_at", "ro_number", "vin", "vin_recall_count",
+            "vin_recall_campaigns", "vin_recall_acknowledged", "advisor",
+        )
+        if c in recall_display.columns
+    ]
+    st.dataframe(recall_display[show_cols], use_container_width=True)
+
+
+def render_reporting_rejections(df: pd.DataFrame) -> None:
+    st.caption("Rejected and returned claims grouped by standard rejection reason.")
+    fp_df = df.copy()
+    fp_df["rejection_reason"] = fp_df.get("rejection_reason", "").astype(str)
+    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
+
+    reasons = fp_df[fp_df["rejection_reason"].str.strip() != ""].copy()
+    if reasons.empty:
+        st.info("No rejection reasons recorded yet. Mark rejections on Review or under Claim Outcomes.")
+        return
+
+    reasons["rejection_reason_primary"] = (
+        reasons["rejection_reason"].astype(str).str.split(" — ").str[0].str.strip()
+    )
+    reason_summary = reasons.groupby("rejection_reason_primary").agg(
+        count=("ro_number", "count"),
+        total_value=("total_claim_value", "sum"),
+    ).reset_index().sort_values("count", ascending=False)
+    reason_summary = reason_summary.rename(columns={"rejection_reason_primary": "rejection_reason"})
+    st.dataframe(reason_summary, use_container_width=True)
+
+    with st.expander("All rejection detail (including notes)"):
+        detail = reasons.copy()
+        if "created_at" in detail.columns:
+            detail["created_at"] = pd.to_datetime(
+                detail["created_at"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d %H:%M")
+        detail_cols = [
+            c for c in ("created_at", "ro_number", "rejection_reason", "total_claim_value", "advisor")
+            if c in detail.columns
+        ]
+        st.dataframe(detail[detail_cols], use_container_width=True)
+
+
+def render_reporting_team_performance(df: pd.DataFrame) -> None:
+    st.caption("Rank advisors, technicians, and warranty admins by audit quality.")
     perf_df = df.copy()
     perf_df["score"] = pd.to_numeric(perf_df.get("score", 0), errors="coerce").fillna(0)
     perf_df["hard_stop_count"] = pd.to_numeric(perf_df.get("hard_stop_count", 0), errors="coerce").fillna(0)
@@ -4328,10 +4278,11 @@ def render_reporting():
             st.markdown("### Best Performers")
             st.dataframe(best, use_container_width=True)
 
-    st.subheader("Employee Scorecards")
+    st.markdown("### Employee Scorecards")
     scorecard_role = st.selectbox(
         "Scorecard Type",
         ["Advisor", "Technician", "Warranty Admin"],
+        key="report_scorecard_role",
     )
     employee_col = {
         "Advisor": "advisor",
@@ -4354,7 +4305,9 @@ def render_reporting():
         ).reset_index().sort_values(["hard_stops", "avg_score"], ascending=[False, True])
         st.dataframe(scorecard, use_container_width=True)
 
-    st.subheader("Review Log")
+
+def render_reporting_review_log(df: pd.DataFrame) -> None:
+    st.caption("Full review history for the selected date range. Export for meetings or records.")
     display_df = df.drop(columns=["jobs"], errors="ignore")
     st.dataframe(display_df, use_container_width=True)
 
@@ -4388,6 +4341,69 @@ def render_reporting():
             st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
         except Exception as e:
             st.error(f"Review PDF could not be generated: {e}")
+
+
+def render_reporting():
+    st.markdown(
+        """
+        <div class="reporting-hero">
+            <h2>Reporting</h2>
+            <p>Team-wide review history stored in Supabase.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_refresh, col_migrate = st.columns([1, 2])
+    with col_refresh:
+        if st.button("Refresh Reporting"):
+            st.rerun()
+    with col_migrate:
+        if st.button("Import old local reviews (SQLite → Supabase)"):
+            migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
+            st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
+            st.rerun()
+
+    df = load_reviews()
+    if df.empty:
+        st.info("No reviews saved yet. Complete a review on the Review tab and click Run Audit + Save Review.")
+        return
+
+    df = _filter_reviews_by_date(df, key_prefix="report")
+    if df.empty:
+        st.warning("No reviews in the selected date range.")
+        return
+
+    df = normalize_reviews_dataframe(df)
+
+    overview_tab, outcomes_tab, recalls_tab, rejections_tab, team_tab, log_tab = st.tabs([
+        "Overview",
+        "Claim Outcomes",
+        "VIN Recalls",
+        "Rejections",
+        "Team Performance",
+        "Review Log",
+    ])
+
+    with overview_tab:
+        st.markdown("### Summary")
+        render_reporting_summary(df)
+        render_reporting_charts(df)
+
+    with outcomes_tab:
+        render_outcome_followup(df, show_title=False)
+
+    with recalls_tab:
+        render_reporting_vin_recalls(df)
+
+    with rejections_tab:
+        render_reporting_rejections(df)
+
+    with team_tab:
+        render_reporting_team_performance(df)
+
+    with log_tab:
+        render_reporting_review_log(df)
 
 
 def render_personnel_admin():
