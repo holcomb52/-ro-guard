@@ -386,7 +386,17 @@ THEME_CSS = {
     .review-scan-hero-top strong {
         color: #cbd5e1 !important;
     }
-    .app-workspace-accent,
+    .app-workspace-accent {
+        margin-top: 6px;
+        padding: 0;
+        text-align: left;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #60a5fa !important;
+        background: transparent;
+    }
     .review-scan-accent {
         padding: 0;
         text-align: left;
@@ -1109,11 +1119,14 @@ THEME_CSS = {
         line-height: 1.45;
     }
     .app-workspace-accent {
+        margin-top: 6px;
         padding: 0;
         text-align: left;
-        font-size: 13px;
-        font-weight: 600;
-        color: #64748b !important;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #1d4ed8 !important;
         background: transparent;
     }
     .review-scan-intro {
