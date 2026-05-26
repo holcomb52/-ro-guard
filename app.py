@@ -39,6 +39,7 @@ from auth import (
 )
 from review_store import (
     AUDIT_RULE_LABELS,
+    DEFAULT_AUDIT_RULES,
     active_rejection_reason_labels,
     compute_hard_stop_breakdown,
     compute_roi_metrics,
@@ -4823,7 +4824,8 @@ def render_audit_rules_admin():
         st.caption("Turn rules off entirely with the checkbox, or change whether they hard-stop or warn.")
 
         new_rules = {}
-        for rule_key, label in AUDIT_RULE_LABELS.items():
+        for rule_key in DEFAULT_AUDIT_RULES:
+            label = AUDIT_RULE_LABELS[rule_key]
             current = rules[rule_key]
             c1, c2, c3 = st.columns([0.55, 0.25, 0.20])
             enabled = c1.checkbox(label, value=current["enabled"], key=f"audit_en_{rule_key}")
