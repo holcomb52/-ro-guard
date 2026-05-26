@@ -388,68 +388,44 @@ def _mark_login_page() -> None:
 
 
 def _render_login_brand_panel(*, headline: str, lede: str, compact: bool = False) -> None:
-    features_html = ""
-    if not compact:
-        features_html = """
-            <div class="login-features">
-                <div class="login-feature">
-                    <div class="login-feature-icon">🛡</div>
-                    <div>
-                        <strong>Prevent Claim Rejections</strong>
-                        <span>Catch hard stops before submission</span>
-                    </div>
-                </div>
-                <div class="login-feature">
-                    <div class="login-feature-icon">📋</div>
-                    <div>
-                        <strong>Audit-Ready Every Time</strong>
-                        <span>Guided review with manual intelligence</span>
-                    </div>
-                </div>
-                <div class="login-feature">
-                    <div class="login-feature-icon">📈</div>
-                    <div>
-                        <strong>Maximize Warranty Recovery</strong>
-                        <span>Protect profits and prove ROI</span>
-                    </div>
-                </div>
-            </div>
-            <div class="login-strapline">
-                <span>Audit Protection · Claim Approval</span>
-                <span>Protect Profits · Drive Performance</span>
-            </div>
-        """
+    panel_class = "login-brand-panel login-brand-panel-compact" if compact else "login-brand-panel"
+    logo_block = """
+<div class="login-brand-top">
+<div class="login-brand-row">
+<div class="login-logo-shield" aria-hidden="true">
+<svg viewBox="0 0 72 82" role="img" aria-label="RO Guard">
+<path d="M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
+<text x="36" y="46" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="800" font-family="Arial, sans-serif">RO</text>
+<path d="M28 52 L34 58 L46 44" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+</div>
+<div class="login-brand-text">
+<div class="login-brand-name">RO GUARD</div>
+<div class="login-brand-sub">Warranty Software</div>
+</div>
+</div>
+<div class="login-badge">Patent Pending</div>
+</div>
+""".strip()
 
-    st.markdown(
-        f"""
-        <div class="login-brand-panel{' login-brand-panel-compact' if compact else ''}">
-            <div class="login-brand-top">
-                <div class="login-brand-row">
-                    <div class="login-logo-shield" aria-hidden="true">
-                        <svg viewBox="0 0 72 82" role="img" aria-label="RO Guard">
-                            <path d="M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z"
-                                  fill="#2563eb" stroke="#1d4ed8" stroke-width="1.5"/>
-                            <text x="36" y="46" text-anchor="middle" fill="#ffffff"
-                                  font-size="20" font-weight="800" font-family="Arial, sans-serif">RO</text>
-                            <path d="M28 52 L34 58 L46 44" fill="none" stroke="#ffffff"
-                                  stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <div class="login-brand-text">
-                        <div class="login-brand-name">RO GUARD</div>
-                        <div class="login-brand-sub">Warranty Software</div>
-                    </div>
-                </div>
-                <div class="login-badge">Patent Pending</div>
-            </div>
-            <h2 class="login-headline">{headline}</h2>
-            <p class="login-lede">{lede}</p>
-            {features_html}
-            <div class="login-bottom-bar">Control the Claim · Protect the Profit</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    features_block = """
+<div class="login-features">
+<div class="login-feature"><div class="login-feature-icon">&#128737;</div><div><strong>Prevent Claim Rejections</strong><span>Catch hard stops before submission</span></div></div>
+<div class="login-feature"><div class="login-feature-icon">&#128203;</div><div><strong>Audit-Ready Every Time</strong><span>Guided review with manual intelligence</span></div></div>
+<div class="login-feature"><div class="login-feature-icon">&#128200;</div><div><strong>Maximize Warranty Recovery</strong><span>Protect profits and prove ROI</span></div></div>
+</div>
+<div class="login-strapline"><span>Audit Protection · Claim Approval</span><span>Protect Profits · Drive Performance</span></div>
+""".strip()
+
+    html = (
+        f'<div class="{panel_class}">{logo_block}'
+        f'<h2 class="login-headline">{headline}</h2>'
+        f'<p class="login-lede">{lede}</p>'
     )
+    if not compact:
+        html += features_block
+    html += '<div class="login-bottom-bar">Control the Claim · Protect the Profit</div></div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
@@ -471,6 +447,7 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
         )
 
     with form_col:
+        st.markdown('<div class="login-form-column-marker"></div>', unsafe_allow_html=True)
         st.markdown("#### Sign In")
         st.caption("Use your dealership account to access review, reporting, and admin tools.")
 
@@ -540,6 +517,7 @@ def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) 
         )
 
     with form_col:
+        st.markdown('<div class="login-form-column-marker"></div>', unsafe_allow_html=True)
         st.markdown("#### Update Password")
 
         st.info(

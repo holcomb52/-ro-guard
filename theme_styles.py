@@ -327,6 +327,9 @@ THEME_CSS = {
         border: 1px solid rgba(140, 200, 255, .70) !important;
     }
     .ro-login-active { display: none !important; }
+    .stApp:has(.ro-login-active) .login-form-column-marker {
+        display: none !important;
+    }
     .stApp:has(.ro-login-active) {
         background:
             linear-gradient(rgba(4, 10, 20, 0.94), rgba(4, 10, 20, 0.98)),
@@ -416,6 +419,12 @@ THEME_CSS = {
         line-height: 1.15;
         color: #f8fafc !important;
     }
+    .stApp:has(.ro-login-active) .login-brand-panel-compact .login-headline {
+        color: #0f172a !important;
+    }
+    .stApp:has(.ro-login-active) .login-brand-panel-compact .login-headline span {
+        color: #2563eb !important;
+    }
     .stApp:has(.ro-login-active) .login-headline span {
         color: #3b82f6 !important;
     }
@@ -497,33 +506,41 @@ THEME_CSS = {
         background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
         box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
     }
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) {
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        border-radius: 18px;
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) {
+        background: rgba(255, 255, 255, 0.98) !important;
+        border: 1px solid rgba(148, 163, 184, 0.35) !important;
+        border-radius: 18px !important;
         padding: 24px 22px 18px !important;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35) !important;
     }
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) h4,
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) label,
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) p {
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) h4,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) label,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) p,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) span {
         color: #0f172a !important;
     }
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-testid="stCaptionContainer"] p {
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) div[data-testid="stCaptionContainer"] p {
         color: #475569 !important;
     }
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) input,
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="input"],
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="input"] > div,
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) div[data-baseweb="base-input"] > div {
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) input,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) div[data-baseweb="input"],
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) div[data-baseweb="input"] > div,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) div[data-baseweb="base-input"],
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) div[data-baseweb="base-input"] > div {
         background-color: #ffffff !important;
         color: #0f172a !important;
         -webkit-text-fill-color: #0f172a !important;
         border-color: #94a3b8 !important;
     }
-    .stApp:has(.ro-login-active) div[data-testid="column"]:nth-child(2) input::placeholder {
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) input::placeholder {
         color: #64748b !important;
         -webkit-text-fill-color: #64748b !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) input:-webkit-autofill,
+    .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) input:-webkit-autofill:focus {
+        -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+        -webkit-text-fill-color: #0f172a !important;
+        caret-color: #0f172a !important;
     }
     .stApp:has(.ro-login-active) section[data-testid="stForm"] {
         background: transparent !important;
@@ -541,6 +558,10 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) details[data-testid="stExpander"] summary {
         color: #1d4ed8 !important;
         font-weight: 600;
+    }
+    .stApp:has(.ro-login-active) details[data-testid="stExpander"] p,
+    .stApp:has(.ro-login-active) details[data-testid="stExpander"] label {
+        color: #334155 !important;
     }
     .stApp:has(.ro-login-active) div[data-testid="stCaptionContainer"] p {
         color: #64748b !important;
