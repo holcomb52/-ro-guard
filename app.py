@@ -1024,11 +1024,13 @@ def _owner_emails() -> set[str]:
 
 def streamlit_cloud_chrome_allowed() -> bool:
     """Streamlit Share / Manage app chrome only for configured owner login(s)."""
-    if not is_authenticated():
-        return False
     owners = _owner_emails()
     if not owners:
-        return False
+        # No owner list configured — rely on Streamlit Cloud toolbarMode=auto
+        # (workspace admins see Share; regular app users do not).
+        return True
+    if not is_authenticated():
+        return True
     return normalize_email(auth_user_email()) in owners
 
 
