@@ -998,9 +998,20 @@ def save_learned_claims(file_name, claims):
 # =========================
 # STYLE
 # =========================
+STREAMLIT_CHROME_HIDE_CSS = """
+[data-testid="stHeaderActionElements"],
+[data-testid="stToolbar"],
+[data-testid="stToolbarActions"],
+.stAppDeployButton,
+.stDeployButton {
+    display: none !important;
+}
+"""
+
+
 def apply_style(theme="Dark"):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{STREAMLIT_CHROME_HIDE_CSS}{css}</style>", unsafe_allow_html=True)
 
 
 # =========================

@@ -1,0 +1,7 @@
+[client]
+# Hide Streamlit developer toolbar items (Deploy, Settings dev options, etc.)
+# for everyone viewing the deployed app, including workspace admins.
+toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false
