@@ -4211,8 +4211,15 @@ def main():
 
     render_authenticated_sidebar(supabase)
 
+    st.sidebar.divider()
+
     if "appearance" not in st.session_state:
         st.session_state.appearance = "Dark"
+
+    st.sidebar.markdown(
+        '<div class="rg-sidebar-settings-title">Settings</div>',
+        unsafe_allow_html=True,
+    )
 
     appearance = st.sidebar.selectbox(
         "Appearance",

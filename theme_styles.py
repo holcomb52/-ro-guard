@@ -58,6 +58,33 @@ THEME_CSS = {
             linear-gradient(180deg, #071322, #030811) !important;
         border-right: 1px solid rgba(36,135,255,.30);
     }
+    section[data-testid="stSidebar"] > div {
+        padding-top: 0.75rem;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+        gap: 0.45rem !important;
+    }
+    section[data-testid="stSidebar"] hr {
+        margin: 0.65rem 0 !important;
+        border-color: rgba(96, 165, 250, 0.22) !important;
+    }
+    section[data-testid="stSidebar"] .rg-sidebar-settings-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #93c5fd !important;
+        margin: 0.15rem 0 0.1rem 0;
+    }
+    [data-testid="stIconMaterial"],
+    span[data-testid="stIconMaterial"],
+    .material-symbols-rounded {
+        font-family: "Material Symbols Rounded" !important;
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        -webkit-text-fill-color: currentColor !important;
+    }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
         color: #f8fbff;
     }
@@ -917,6 +944,33 @@ THEME_CSS = {
             radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.26), transparent 58%),
             linear-gradient(180deg, #e8eff6, #d8e4ef) !important;
         border-right: 1px solid #cbd5e1;
+    }
+    section[data-testid="stSidebar"] > div {
+        padding-top: 0.75rem;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+        gap: 0.45rem !important;
+    }
+    section[data-testid="stSidebar"] hr {
+        margin: 0.65rem 0 !important;
+        border-color: #c7d5e3 !important;
+    }
+    section[data-testid="stSidebar"] .rg-sidebar-settings-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #475569 !important;
+        margin: 0.15rem 0 0.1rem 0;
+    }
+    [data-testid="stIconMaterial"],
+    span[data-testid="stIconMaterial"],
+    .material-symbols-rounded {
+        font-family: "Material Symbols Rounded" !important;
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        -webkit-text-fill-color: currentColor !important;
     }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
         color: #0f172a;

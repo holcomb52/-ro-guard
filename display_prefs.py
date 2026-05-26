@@ -105,14 +105,12 @@ def build_user_display_css(prefs: dict) -> str:
         --rg-user-font-size: {size}px;
         --rg-user-text-color: {color};
     }}
-    section.main .block-container,
-    section[data-testid="stSidebar"] {{
+    section.main .block-container {{
         font-family: var(--rg-user-font-family) !important;
         font-size: var(--rg-user-font-size) !important;
     }}
     section.main p,
     section.main label,
-    section.main span,
     section.main li,
     section.main td,
     section.main th,
@@ -124,12 +122,7 @@ def build_user_display_css(prefs: dict) -> str:
     section.main div[data-testid="stNumberInput"] label,
     section.main div[data-testid="stSelectbox"] label,
     section.main div[data-testid="stCheckbox"] label,
-    section.main div[data-testid="stDateInput"] label,
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] h4 {{
+    section.main div[data-testid="stDateInput"] label {{
         font-family: var(--rg-user-font-family) !important;
         font-size: var(--rg-user-font-size) !important;
         color: var(--rg-user-text-color) !important;
@@ -147,6 +140,17 @@ def build_user_display_css(prefs: dict) -> str:
         font-family: var(--rg-user-font-family) !important;
         color: var(--rg-user-text-color) !important;
     }}
+    section[data-testid="stSidebar"] .app-sidebar-name,
+    section[data-testid="stSidebar"] .app-sidebar-sub,
+    section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
+    section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] p,
+    section[data-testid="stSidebar"] div[data-testid="stSelectbox"] label,
+    section[data-testid="stSidebar"] div[data-testid="stSlider"] label,
+    section[data-testid="stSidebar"] .rg-sidebar-settings-title {{
+        font-family: var(--rg-user-font-family) !important;
+        font-size: var(--rg-user-font-size) !important;
+        color: var(--rg-user-text-color) !important;
+    }}
     .app-workspace-kicker,
     .app-workspace-header p,
     .review-scan-intro p,
@@ -162,6 +166,15 @@ def build_user_display_css(prefs: dict) -> str:
     .app-workspace-header h2 span {{
         color: var(--rg-user-text-color) !important;
     }}
+    [data-testid="stIconMaterial"],
+    span[data-testid="stIconMaterial"],
+    .material-symbols-rounded {{
+        font-family: "Material Symbols Rounded" !important;
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        -webkit-text-fill-color: currentColor !important;
+    }}
     """
 
 
@@ -173,35 +186,36 @@ def render_display_settings_sidebar(supabase, *, theme: str = "Dark") -> dict:
         st.session_state.user_display_font_size = int(prefs["font_size"])
 
     family_labels = list(FONT_FAMILY_OPTIONS.keys())
-    family_index = family_labels.index(st.session_state.user_display_font_family) if st.session_state.user_display_font_family in family_labels else 0
 
-    with st.sidebar.expander("My Display", expanded=False):
-        st.caption("Personalize how RO Guard looks on your screen.")
-        font_family = st.selectbox(
-            "Font style",
-            family_labels,
-            index=family_index,
-            key="user_display_font_family",
-        )
-        font_color = st.color_picker(
-            "Font color",
-            key="user_display_font_color",
-        )
-        font_size = st.slider(
-            "Font size",
-            min_value=FONT_SIZE_MIN,
-            max_value=FONT_SIZE_MAX,
-            step=1,
-            help=f"Limited to {FONT_SIZE_MAX}px so text fits the layout without clipping.",
-            key="user_display_font_size",
-        )
-        if st.button("Reset display defaults", key="user_display_reset", use_container_width=True):
-            reset = default_display_prefs(theme)
-            save_display_prefs(supabase, reset)
-            st.session_state.user_display_font_family = reset["font_family"]
-            st.session_state.user_display_font_color = reset["font_color"]
-            st.session_state.user_display_font_size = reset["font_size"]
-            st.rerun()
+    st.sidebar.markdown(
+        '<div class="rg-sidebar-settings-title">My Display</div>',
+        unsafe_allow_html=True,
+    )
+    st.sidebar.caption("Personalize fonts on your screen.")
+    font_family = st.sidebar.selectbox(
+        "Font style",
+        family_labels,
+        key="user_display_font_family",
+    )
+    font_color = st.sidebar.color_picker(
+        "Font color",
+        key="user_display_font_color",
+    )
+    font_size = st.sidebar.slider(
+        "Font size",
+        min_value=FONT_SIZE_MIN,
+        max_value=FONT_SIZE_MAX,
+        step=1,
+        help=f"Limited to {FONT_SIZE_MAX}px so text fits the layout without clipping.",
+        key="user_display_font_size",
+    )
+    if st.sidebar.button("Reset display defaults", key="user_display_reset", use_container_width=True):
+        reset = default_display_prefs(theme)
+        save_display_prefs(supabase, reset)
+        st.session_state.user_display_font_family = reset["font_family"]
+        st.session_state.user_display_font_color = reset["font_color"]
+        st.session_state.user_display_font_size = reset["font_size"]
+        st.rerun()
 
     updated = normalize_display_prefs(
         {
