@@ -4024,14 +4024,13 @@ def render_outcome_followup(df: pd.DataFrame) -> None:
     current_reason = str(selected.get("rejection_reason") or "").strip()
 
     info_cols = st.columns(4)
-    info_cols[0].markdown(f"**RO** {selected.get('ro_number', '—')}")
-    info_cols[1].markdown(f"**Advisor** {selected.get('advisor', '—')}")
-    info_cols[2].markdown(
-        f"**Claim $** ${float(selected.get('total_claim_value') or 0):,.2f}"
+    info_cols[0].metric("RO", str(selected.get("ro_number") or "—"))
+    info_cols[1].metric("Advisor", str(selected.get("advisor") or "—"))
+    info_cols[2].metric(
+        "Claim Value",
+        f"${float(selected.get('total_claim_value') or 0):,.2f}",
     )
-    info_cols[3].markdown(
-        f"**Current** {review_outcome_label(current_fp, current_rej)}"
-    )
+    info_cols[3].metric("Current", review_outcome_label(current_fp, current_rej))
 
     if selected.get("outcome_updated_by") or selected.get("outcome_updated_at"):
         updated_by = str(selected.get("outcome_updated_by") or "—")
