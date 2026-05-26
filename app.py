@@ -2340,11 +2340,9 @@ def _render_app_workspace_header() -> None:
     st.markdown(
         """
 <div class="app-workspace-header">
-<div class="app-workspace-top">
 <div class="app-workspace-kicker">RO Guard · Warranty Workspace</div>
 <h2>Smarter Claims. <span>Stronger Profits.</span></h2>
 <p>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
-</div>
 <div class="app-workspace-accent">Control the Claim · Protect the Profit</div>
 </div>
         """,

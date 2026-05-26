@@ -337,7 +337,13 @@ THEME_CSS = {
         background: rgba(37, 99, 235, 0.18);
         border: 1px solid rgba(96, 165, 250, 0.28);
     }
-    .app-workspace-header,
+    .app-workspace-header {
+        margin: 0 0 4px 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
     .review-scan-hero {
         margin-bottom: 8px;
         border-radius: 16px;
@@ -346,74 +352,73 @@ THEME_CSS = {
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
         background: linear-gradient(145deg, rgba(10, 31, 57, 0.94), rgba(2, 9, 19, 0.96));
     }
-    .app-workspace-top,
     .review-scan-hero-top {
         padding: 12px 18px 10px;
     }
     .app-workspace-kicker,
     .review-scan-kicker {
-        margin-bottom: 4px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #93c5fd !important;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #94a3b8 !important;
     }
-    .app-workspace-top h2,
+    .app-workspace-header h2,
     .review-scan-hero-top h2 {
-        margin: 0 0 4px 0;
+        margin: 0 0 8px 0;
         color: #f8fbff !important;
-        font-size: 20px;
+        font-size: 28px;
         font-weight: 800;
         line-height: 1.15;
     }
-    .app-workspace-top h2 span,
+    .app-workspace-header h2 span,
     .review-scan-hero-top h2 span {
-        color: #60a5fa !important;
+        color: #f8fbff !important;
     }
-    .app-workspace-top p,
+    .app-workspace-header p,
     .review-scan-hero-top p {
-        margin: 0;
-        color: #cbd5e1 !important;
-        font-size: 12px;
-        line-height: 1.4;
+        margin: 0 0 8px 0;
+        color: #94a3b8 !important;
+        font-size: 15px;
+        line-height: 1.45;
     }
-    .app-workspace-top strong,
+    .app-workspace-header strong,
     .review-scan-hero-top strong {
-        color: #60a5fa !important;
+        color: #cbd5e1 !important;
     }
     .app-workspace-accent,
     .review-scan-accent {
-        padding: 7px 12px;
-        text-align: center;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #ffffff !important;
-        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+        padding: 0;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: normal;
+        text-transform: none;
+        color: #94a3b8 !important;
+        background: transparent;
     }
     .review-scan-intro {
-        margin: 0 0 8px 0;
-        padding: 10px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(96, 165, 250, 0.22);
-        background: rgba(7, 19, 34, 0.72);
+        margin: 16px 0 8px 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
     }
     .review-scan-intro h3 {
-        margin: 0 0 4px 0;
+        margin: 0 0 6px 0;
         color: #f8fbff !important;
-        font-size: 16px;
+        font-size: 18px;
         font-weight: 700;
     }
     .review-scan-intro p {
         margin: 0;
-        color: #cbd5e1 !important;
-        font-size: 12px;
-        line-height: 1.4;
+        color: #94a3b8 !important;
+        font-size: 14px;
+        line-height: 1.45;
     }
     .review-scan-intro strong {
-        color: #60a5fa !important;
+        color: #cbd5e1 !important;
+        font-weight: 600;
     }
     .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type {
         margin-top: 0 !important;
@@ -1034,6 +1039,105 @@ THEME_CSS = {
         background-color: #ffffff !important;
         color: #0f172a !important;
         border: 1px solid #94a3b8 !important;
+    }
+    .app-sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 4px 12px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .app-sidebar-logo svg {
+        width: 46px;
+        height: 52px;
+        display: block;
+    }
+    .app-sidebar-name {
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0.05em;
+        color: #0f172a !important;
+        line-height: 1.1;
+    }
+    .app-sidebar-sub {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #64748b !important;
+        margin-top: 3px;
+    }
+    .app-sidebar-badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #1d4ed8 !important;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+    }
+    .app-workspace-header {
+        margin: 0 0 4px 0;
+        padding: 0;
+    }
+    .app-workspace-kicker {
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #64748b !important;
+    }
+    .app-workspace-header h2 {
+        margin: 0 0 8px 0;
+        color: #0f172a !important;
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.15;
+    }
+    .app-workspace-header h2 span {
+        color: #0f172a !important;
+    }
+    .app-workspace-header p {
+        margin: 0 0 8px 0;
+        color: #475569 !important;
+        font-size: 15px;
+        line-height: 1.45;
+    }
+    .app-workspace-accent {
+        padding: 0;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748b !important;
+        background: transparent;
+    }
+    .review-scan-intro {
+        margin: 16px 0 8px 0;
+        padding: 0;
+    }
+    .review-scan-intro h3 {
+        margin: 0 0 6px 0;
+        color: #0f172a !important;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .review-scan-intro p {
+        margin: 0;
+        color: #475569 !important;
+        font-size: 14px;
+        line-height: 1.45;
+    }
+    .review-scan-intro strong {
+        color: #334155 !important;
+        font-weight: 600;
+    }
+    .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type {
+        margin-top: 0 !important;
     }
     """,
 }
