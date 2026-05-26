@@ -419,12 +419,13 @@ def _render_login_brand_panel(*, headline: str, lede: str, compact: bool = False
 
     html = (
         f'<div class="{panel_class}">{logo_block}'
+        f'<div class="login-brand-dark">'
         f'<h2 class="login-headline">{headline}</h2>'
         f'<p class="login-lede">{lede}</p>'
     )
     if not compact:
         html += features_block
-    html += '<div class="login-bottom-bar">Control the Claim · Protect the Profit</div></div>'
+    html += '<div class="login-bottom-bar">Control the Claim · Protect the Profit</div></div></div>'
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -443,12 +444,12 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
     with brand_col:
         _render_login_brand_panel(
             headline='Smarter Claims. <span>Stronger Profits.</span>',
-            lede="Sign in to audit warranty ROs, catch compliance gaps, and protect claim dollars before they leave your store.",
+            lede="Audit warranty ROs, catch compliance gaps, and protect claim dollars before they leave your store.",
         )
 
     with form_col:
         st.markdown('<div class="login-form-column-marker"></div>', unsafe_allow_html=True)
-        st.markdown("#### Sign In")
+        st.markdown('<p class="login-form-title">Sign In</p>', unsafe_allow_html=True)
         st.caption("Use your dealership account to access review, reporting, and admin tools.")
 
         with st.form("ro_shield_login_form", clear_on_submit=False):
@@ -518,7 +519,7 @@ def render_password_reset_page(supabase, *, apply_style: Callable[[str], None]) 
 
     with form_col:
         st.markdown('<div class="login-form-column-marker"></div>', unsafe_allow_html=True)
-        st.markdown("#### Update Password")
+        st.markdown('<p class="login-form-title">Update Password</p>', unsafe_allow_html=True)
 
         st.info(
             "Stay on this page until your password is saved. "
