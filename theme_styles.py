@@ -827,12 +827,12 @@ THEME_CSS = {
         position: relative;
         isolation: isolate;
         color: #0f172a;
-        background-color: #dce8f4;
+        background-color: #c8d6e4;
         background-image:
-            radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.42), transparent 55%),
-            radial-gradient(circle at 88% 20%, rgba(96, 165, 250, 0.20), transparent 30%),
-            radial-gradient(circle at 12% 78%, rgba(147, 197, 253, 0.26), transparent 35%),
-            linear-gradient(180deg, #e8f1f9 0%, #dce8f4 55%, #d2e0ee 100%);
+            radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.34), transparent 55%),
+            radial-gradient(circle at 88% 20%, rgba(96, 165, 250, 0.16), transparent 30%),
+            radial-gradient(circle at 12% 78%, rgba(147, 197, 253, 0.20), transparent 35%),
+            linear-gradient(180deg, #dbe6f0 0%, #c8d6e4 55%, #bccddd 100%);
         background-attachment: fixed;
     }
     .stApp::before {
@@ -859,8 +859,8 @@ THEME_CSS = {
         height: min(560px, 62vh);
         z-index: 0;
         pointer-events: none;
-        opacity: 0.06;
-        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Cpath d='M36 22 L52 30 V40 C52 50 45 58 36 62 C27 58 20 50 20 40 V30 Z' fill='none' stroke='%2360a5fa' stroke-width='0.8' opacity='0.4'/%3E%3C/svg%3E") no-repeat center / contain;
+        opacity: 0.08;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Ctext x='36' y='43' text-anchor='middle' fill='%232563eb' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3ERO-%3C/text%3E%3Ctext x='36' y='54' text-anchor='middle' fill='%232563eb' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3EGuard%3C/text%3E%3C/svg%3E") no-repeat center / contain;
     }
     .stApp:has(.ro-login-active)::before,
     .stApp:has(.ro-login-active)::after {
@@ -876,8 +876,8 @@ THEME_CSS = {
     header[data-testid="stHeader"] { background: rgba(255,255,255,0.75); }
     section[data-testid="stSidebar"] {
         background:
-            radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.32), transparent 58%),
-            linear-gradient(180deg, #f1f6fb, #e2ebf4) !important;
+            radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.26), transparent 58%),
+            linear-gradient(180deg, #e8eff6, #d8e4ef) !important;
         border-right: 1px solid #cbd5e1;
     }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
