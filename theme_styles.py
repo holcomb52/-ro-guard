@@ -1,16 +1,61 @@
 THEME_CSS = {
     "Dark": """
     .stApp {
-        background:
-            linear-gradient(rgba(1, 7, 14, .91), rgba(1, 7, 14, .95)),
-            radial-gradient(circle at 14% 8%, rgba(0, 114, 255, .32), transparent 28%),
-            radial-gradient(circle at 90% 10%, rgba(45, 156, 255, .18), transparent 26%),
-            linear-gradient(135deg, #06101d 0%, #02070d 100%);
+        position: relative;
+        isolation: isolate;
         color: #f8fbff;
+        background-color: #02070d;
+        background-image:
+            radial-gradient(ellipse 90% 55% at 50% -15%, rgba(37, 99, 235, 0.38), transparent 58%),
+            radial-gradient(circle at 92% 18%, rgba(45, 156, 255, 0.22), transparent 32%),
+            radial-gradient(circle at 8% 72%, rgba(29, 78, 216, 0.16), transparent 38%),
+            radial-gradient(circle at 48% 100%, rgba(15, 118, 255, 0.10), transparent 42%),
+            linear-gradient(165deg, #071222 0%, #041018 42%, #02070d 100%);
+        background-attachment: fixed;
+    }
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+            linear-gradient(rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+            radial-gradient(circle at 18% 22%, rgba(96, 165, 250, 0.09) 0%, transparent 28%),
+            radial-gradient(circle at 82% 68%, rgba(59, 130, 246, 0.07) 0%, transparent 24%);
+        background-size: 64px 64px, 64px 64px, 100% 100%, 100% 100%;
+        mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
+        -webkit-mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
+    }
+    .stApp::after {
+        content: "";
+        position: fixed;
+        right: -6%;
+        bottom: -8%;
+        width: min(480px, 52vw);
+        height: min(560px, 62vh);
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.09;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Cpath d='M36 22 L52 30 V40 C52 50 45 58 36 62 C27 58 20 50 20 40 V30 Z' fill='none' stroke='%2360a5fa' stroke-width='0.8' opacity='0.4'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+    .stApp:has(.ro-login-active)::before,
+    .stApp:has(.ro-login-active)::after {
+        display: none;
+    }
+    header[data-testid="stHeader"],
+    section[data-testid="stSidebar"],
+    section.main,
+    div[data-testid="stAppViewContainer"] {
+        position: relative;
+        z-index: 1;
     }
     header[data-testid="stHeader"] { background: rgba(0,0,0,0); }
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #071322, #030811) !important;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.18), transparent 58%),
+            linear-gradient(180deg, #071322, #030811) !important;
         border-right: 1px solid rgba(36,135,255,.30);
     }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
@@ -779,12 +824,60 @@ THEME_CSS = {
     """,
     "Light": """
     .stApp {
-        background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+        position: relative;
+        isolation: isolate;
         color: #0f172a;
+        background-color: #eef4fb;
+        background-image:
+            radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.55), transparent 55%),
+            radial-gradient(circle at 88% 20%, rgba(96, 165, 250, 0.28), transparent 30%),
+            radial-gradient(circle at 12% 78%, rgba(191, 219, 254, 0.35), transparent 35%),
+            linear-gradient(180deg, #f8fbff 0%, #eef4fb 55%, #e8f0fa 100%);
+        background-attachment: fixed;
+    }
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+            linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+            radial-gradient(circle at 22% 18%, rgba(59, 130, 246, 0.10) 0%, transparent 26%),
+            radial-gradient(circle at 78% 72%, rgba(147, 197, 253, 0.12) 0%, transparent 22%);
+        background-size: 64px 64px, 64px 64px, 100% 100%, 100% 100%;
+        mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
+        -webkit-mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
+    }
+    .stApp::after {
+        content: "";
+        position: fixed;
+        right: -6%;
+        bottom: -8%;
+        width: min(480px, 52vw);
+        height: min(560px, 62vh);
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0.06;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Cpath d='M36 22 L52 30 V40 C52 50 45 58 36 62 C27 58 20 50 20 40 V30 Z' fill='none' stroke='%2360a5fa' stroke-width='0.8' opacity='0.4'/%3E%3C/svg%3E") no-repeat center / contain;
+    }
+    .stApp:has(.ro-login-active)::before,
+    .stApp:has(.ro-login-active)::after {
+        display: none;
+    }
+    header[data-testid="stHeader"],
+    section[data-testid="stSidebar"],
+    section.main,
+    div[data-testid="stAppViewContainer"] {
+        position: relative;
+        z-index: 1;
     }
     header[data-testid="stHeader"] { background: rgba(255,255,255,0.75); }
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #ffffff, #f1f5f9) !important;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.45), transparent 58%),
+            linear-gradient(180deg, #ffffff, #f1f5f9) !important;
         border-right: 1px solid #cbd5e1;
     }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
