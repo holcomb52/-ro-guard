@@ -1397,6 +1397,44 @@ def _sync_declined_upload_metadata(file_name: str, claims: list[str]) -> int:
     return updated
 
 
+def clear_all_declined_claims() -> dict:
+    """Remove every declined row from the claims library."""
+    stats = {"removed": 0, "errors": 0, "method": ""}
+    if supabase is None:
+        return stats
+
+    try:
+        resp = supabase.rpc("clear_declined_claims", {}).execute()
+        if resp.data is not None:
+            stats["removed"] = int(resp.data)
+            stats["method"] = "rpc"
+            return stats
+    except Exception:
+        pass
+
+    try:
+        rows = (
+            supabase.table("claims")
+            .select("id")
+            .eq("claim_status", "declined")
+            .execute()
+            .data
+            or []
+        )
+        for row in rows:
+            try:
+                deleted = supabase.table("claims").delete().eq("id", row["id"]).execute().data
+                if deleted:
+                    stats["removed"] += len(deleted)
+            except Exception:
+                stats["errors"] += 1
+        stats["method"] = "row_delete"
+    except Exception:
+        stats["errors"] += 1
+
+    return stats
+
+
 def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_text: str = "") -> dict:
     stats = {"parsed": len(claims), "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0, "updated": 0}
     outcome = str(outcome or "paid").strip().lower()
@@ -4350,6 +4388,34 @@ def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
         )
 
     _render_claim_upload_summary("claim_upload_last_summary_declined", "clear_claim_upload_summary_declined")
+
+    if user_can_admin_write():
+        declined_count = len(_claims_for_outcome(all_claims, "declined"))
+        if declined_count:
+            st.markdown("---")
+            st.caption(f"{declined_count} declined record(s) in your library.")
+            confirm_clear = st.checkbox(
+                "Permanently remove all declined claims from the library",
+                key="confirm_clear_all_declined_claims",
+            )
+            if st.button(
+                "Clear all declined claims",
+                type="primary",
+                disabled=not confirm_clear,
+                key="clear_all_declined_claims_btn",
+            ):
+                result = clear_all_declined_claims()
+                if result["removed"] > 0:
+                    st.success(f"Removed {result['removed']} declined claim record(s).")
+                    st.rerun()
+                elif result["errors"]:
+                    st.error(
+                        "Could not remove declined claims. Run "
+                        "`docs/CLEAR_DECLINED_CLAIMS.sql` in Supabase SQL Editor once, then retry."
+                    )
+                else:
+                    st.info("No declined claims to remove.")
+
     _render_claim_library_table(
         all_claims,
         outcome="declined",

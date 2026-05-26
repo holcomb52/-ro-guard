@@ -154,6 +154,33 @@ ALTER TABLE claims ADD COLUMN IF NOT EXISTS wam TEXT;
 -- Declined uploads: claim_status = 'declined', decline reason stored in reference.
 -- Paid uploads: claim_status = 'paid' (or NULL on older rows — treated as paid).
 
+ALTER TABLE claims ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "claims_read" ON claims;
+DROP POLICY IF EXISTS "claims_write" ON claims;
+
+CREATE POLICY "claims_read" ON claims
+    FOR SELECT USING (true);
+
+CREATE POLICY "claims_write" ON claims
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE OR REPLACE FUNCTION clear_declined_claims()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE cnt integer;
+BEGIN
+  DELETE FROM claims WHERE claim_status = 'declined';
+  GET DIAGNOSTICS cnt = ROW_COUNT;
+  RETURN cnt;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION clear_declined_claims() TO anon, authenticated;
+
 -- Personnel (Review selectboxes + auth role linking)
 CREATE TABLE IF NOT EXISTS personnel (
     id BIGSERIAL PRIMARY KEY,
