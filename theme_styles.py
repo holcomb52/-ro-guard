@@ -285,23 +285,29 @@ THEME_CSS = {
         color: #94a3b8 !important;
         background: transparent !important;
         border: none !important;
-        border-radius: 0 !important;
+        border-radius: 8px 8px 0 0 !important;
         box-shadow: none !important;
         padding: 0.62rem 0.95rem 0.72rem !important;
         font-size: 0.9rem !important;
         font-weight: 600 !important;
         letter-spacing: 0.01em;
         min-height: auto !important;
+        cursor: pointer !important;
+        transition: color 0.15s ease, background-color 0.15s ease;
     }
-    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-        color: #e2e8f0 !important;
-        background: transparent !important;
+    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover:not([aria-selected="true"]) {
+        color: #dbeafe !important;
+        background: rgba(59, 130, 246, 0.16) !important;
     }
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
         color: #f8fbff !important;
         background: transparent !important;
         border: none !important;
         font-weight: 700 !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"]:hover {
+        color: #ffffff !important;
+        background: rgba(59, 130, 246, 0.10) !important;
     }
     .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type button[data-baseweb="tab"] {
         font-size: 0.94rem !important;
@@ -1105,23 +1111,29 @@ THEME_CSS = {
         color: #64748b !important;
         background: transparent !important;
         border: none !important;
-        border-radius: 0 !important;
+        border-radius: 8px 8px 0 0 !important;
         box-shadow: none !important;
         padding: 0.62rem 0.95rem 0.72rem !important;
         font-size: 0.9rem !important;
         font-weight: 600 !important;
         letter-spacing: 0.01em;
         min-height: auto !important;
+        cursor: pointer !important;
+        transition: color 0.15s ease, background-color 0.15s ease;
     }
-    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-        color: #334155 !important;
-        background: transparent !important;
+    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover:not([aria-selected="true"]) {
+        color: #1d4ed8 !important;
+        background: rgba(37, 99, 235, 0.12) !important;
     }
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
         color: #1d4ed8 !important;
         background: transparent !important;
         border: none !important;
         font-weight: 700 !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"]:hover {
+        color: #1e40af !important;
+        background: rgba(37, 99, 235, 0.08) !important;
     }
     .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type button[data-baseweb="tab"] {
         font-size: 0.94rem !important;
