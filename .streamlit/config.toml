@@ -1,7 +1,7 @@
 [client]
-# Hide Streamlit developer toolbar items (Deploy, Settings dev options, etc.)
-# for everyone viewing the deployed app, including workspace admins.
-toolbarMode = "viewer"
+# "auto" = Share/admin toolbar only for Streamlit Cloud workspace admins (you).
+# Regular RO Guard users do not see Share, Deploy, or developer menu items.
+toolbarMode = "auto"
 
 [browser]
 gatherUsageStats = false
