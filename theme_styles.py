@@ -669,6 +669,47 @@ THEME_CSS = {
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] {
         background: transparent !important;
     }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],
+    div[data-testid="stDataFrame"] button[kind="header"] {
+        background: linear-gradient(180deg, #1f4f92 0%, #163b70 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(140, 200, 255, 0.85) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22) !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button:hover,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"]:hover,
+    div[data-testid="stDataFrame"] button[kind="header"]:hover {
+        background: linear-gradient(180deg, #2a66b8 0%, #1f4f92 100%) !important;
+        color: #ffffff !important;
+        border-color: #ffffff !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button svg,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] span,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stIconMaterial"] {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    [data-testid="stElementToolbar"] button,
+    [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],
+    button[kind="header"],
+    [data-testid="stBaseButton-header"] {
+        background: linear-gradient(180deg, #1f4f92 0%, #163b70 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(140, 200, 255, 0.85) !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stElementToolbar"] button svg,
+    [data-testid="stElementToolbar"] span,
+    [data-testid="stElementToolbar"] [data-testid="stIconMaterial"],
+    button[kind="header"] svg,
+    [data-testid="stBaseButton-header"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
     div[data-testid="stImage"] {
         background: rgba(7, 19, 34, .72);
         border: 1px solid rgba(62,150,255,.28);
@@ -1355,6 +1396,50 @@ THEME_CSS = {
         border-radius: 14px !important;
         padding: 4px !important;
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] {
+        background: transparent !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],
+    div[data-testid="stDataFrame"] button[kind="header"] {
+        background: var(--rg-surface-input) !important;
+        color: #0f172a !important;
+        border: 1px solid var(--rg-border) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12) !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button:hover,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"]:hover,
+    div[data-testid="stDataFrame"] button[kind="header"]:hover {
+        background: var(--rg-surface-hover) !important;
+        color: #1d4ed8 !important;
+        border-color: #2563eb !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button svg,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] span,
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stIconMaterial"] {
+        color: #0f172a !important;
+        fill: #0f172a !important;
+        -webkit-text-fill-color: #0f172a !important;
+    }
+    [data-testid="stElementToolbar"] button,
+    [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],
+    button[kind="header"],
+    [data-testid="stBaseButton-header"] {
+        background: var(--rg-surface-input) !important;
+        color: #0f172a !important;
+        border: 1px solid var(--rg-border) !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stElementToolbar"] button svg,
+    [data-testid="stElementToolbar"] span,
+    [data-testid="stElementToolbar"] [data-testid="stIconMaterial"],
+    button[kind="header"] svg,
+    [data-testid="stBaseButton-header"] svg {
+        color: #0f172a !important;
+        fill: #0f172a !important;
+        -webkit-text-fill-color: #0f172a !important;
     }
     div[data-testid="stImage"] {
         background: var(--rg-surface);
