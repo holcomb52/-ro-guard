@@ -476,6 +476,73 @@ def claim_source_text(*chunks):
     return " ".join(str(c or "") for c in chunks).strip()
 
 
+LEARNED_CLAIM_NARRATIVE_TERMS = (
+    "customer states",
+    "verified",
+    "found",
+    "performed",
+    "replaced",
+    "repaired",
+    "installed",
+    "diagnosed",
+    "concern",
+    "correction",
+)
+
+
+def learned_claim_narrative_text(record) -> str:
+    if not isinstance(record, dict):
+        return ""
+    return claim_source_text(
+        record.get("concern"),
+        record.get("cause"),
+        record.get("correction"),
+        record.get("story"),
+        record.get("content"),
+    )
+
+
+def learned_claim_is_useful(record) -> bool:
+    text = learned_claim_narrative_text(record).strip()
+    lower = text.lower()
+    if len(lower) < 40:
+        return False
+    compact = lower.replace(" ", "")
+    if not compact or set(compact) <= {"_", "-", "."}:
+        return False
+    if "____" in lower or lower.count("_") > max(20, len(lower) // 3):
+        return False
+
+    junk_markers = (
+        "acknowledgementservlet",
+        "privacy policy",
+        "authorization number:",
+        "date received:",
+        "technician identification:",
+        "line item number:",
+        "vehicle description:",
+        "thank you from the warranty contact center",
+    )
+    if any(marker in lower for marker in junk_markers) and not any(
+        term in lower for term in LEARNED_CLAIM_NARRATIVE_TERMS
+    ):
+        return False
+
+    concern = str(record.get("concern") or "").strip()
+    cause = str(record.get("cause") or "").strip()
+    correction = str(record.get("correction") or "").strip()
+    has_structured = any(len(part) >= 12 for part in (concern, cause, correction))
+    has_story_terms = any(term in lower for term in LEARNED_CLAIM_NARRATIVE_TERMS)
+    return has_structured or (has_story_terms and len(lower) >= 60)
+
+
+def filter_useful_learned_claims(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    mask = df.apply(lambda row: learned_claim_is_useful(row.to_dict()), axis=1)
+    return df.loc[mask].copy()
+
+
 def extract_labor_ops_detail(text):
     """Pull labor op numbers and hours from paid-claim narrative text."""
     text = str(text or "")
@@ -994,6 +1061,10 @@ def save_learned_claims(file_name, claims) -> dict:
             "parts": fields.get("parts", ""),
             "wam_reference": fields.get("wam_reference", ""),
         }
+
+        if not learned_claim_is_useful(data):
+            stats["skipped"] += 1
+            continue
 
         try:
             existing = (
@@ -1715,6 +1786,9 @@ def find_similar_paid_claims(current_job, limit=5):
             return []
 
         for row in rows:
+            if not learned_claim_is_useful(row):
+                continue
+
             ro_name = str(row.get("ro_number", "")).lower()
             if any(term in ro_name for term in bad_terms):
                 continue
@@ -3081,6 +3155,7 @@ def render_claims():
             if "claim" in key.lower():
                 del st.session_state[key]
 
+        st.session_state.paid_claim_upload_nonce = 0
         st.success("Claim learning cache cleared. Refresh the app and re-upload claims.")
     
     if st.button("Reprocess Existing Claims"):
@@ -3121,35 +3196,89 @@ def render_claims():
         st.error("PyPDF2 is not installed. Run: python3 -m pip install -r requirements.txt")
         return
 
-    files = st.file_uploader("Upload paid claim PDFs", type=["pdf"], accept_multiple_files=True, key="paid_claim_upload")
+    if "paid_claim_upload_nonce" not in st.session_state:
+        st.session_state.paid_claim_upload_nonce = 0
+
+    files = st.file_uploader(
+        "Upload paid claim PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key=f"paid_claim_upload_{st.session_state.paid_claim_upload_nonce}",
+    )
     if files:
         totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+        per_file = []
         for f in files:
             pages = extract_pages(f)
             claims = split_claims_from_pages(pages)
             stats = save_learned_claims(f.name, claims)
             for key in totals:
                 totals[key] += stats.get(key, 0)
-            st.success(
+            per_file.append(
                 f"**{f.name}:** {len(pages)} pages → {stats['parsed']} parsed → "
                 f"**{stats['saved']} saved**, {stats['duplicate']} duplicates, "
                 f"{stats['skipped']} skipped, {stats['errors']} errors"
             )
+        st.session_state.claim_upload_last_summary = {
+            "totals": totals,
+            "per_file": per_file,
+        }
+        st.session_state.paid_claim_upload_nonce += 1
+        st.rerun()
+
+    last_summary = st.session_state.get("claim_upload_last_summary")
+    if last_summary:
+        for line in last_summary.get("per_file", []):
+            st.success(line)
+        totals = last_summary.get("totals") or {}
         st.info(
-            f"Upload summary: **{totals['saved']} new records saved** to your library "
-            f"(from {totals['parsed']} parsed segments). "
-            f"{totals['duplicate']} were already in the library, "
-            f"{totals['skipped']} did not pass narrative quality checks."
+            f"Upload summary: **{totals.get('saved', 0)} new records saved** to your library "
+            f"(from {totals.get('parsed', 0)} parsed segments). "
+            f"{totals.get('duplicate', 0)} were already in the library, "
+            f"{totals.get('skipped', 0)} did not pass narrative quality checks."
         )
+        if st.button("Clear upload results", key="clear_claim_upload_summary"):
+            st.session_state.pop("claim_upload_last_summary", None)
+            st.rerun()
 
     df = load_shared_claims()
-    try:
-        claim_count = supabase.table("claims").select("id", count="exact").execute().count
-    except Exception:
-        claim_count = len(df)
-    st.metric("Learned Claim Records", claim_count or 0)
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
+    useful_df = filter_useful_learned_claims(df)
+    hidden_junk = max(0, len(df) - len(useful_df))
+    st.metric("Learned Claim Records", len(useful_df))
+    if hidden_junk:
+        st.caption(f"Hiding {hidden_junk} blank or junk record(s) with no usable narrative.")
+    if user_can_admin_write():
+        if st.button("Remove junk from library", key="purge_junk_learned_claims"):
+            removed = 0
+            for _, row in df.iterrows():
+                if learned_claim_is_useful(row.to_dict()):
+                    continue
+                try:
+                    supabase.table("claims").delete().eq("id", int(row["id"])).execute()
+                    removed += 1
+                except Exception as e:
+                    st.warning(f"Could not remove claim {row.get('id')}: {e}")
+            st.success(f"Removed {removed} junk record(s) from the library.")
+            st.rerun()
+    if not useful_df.empty:
+        display_cols = [
+            c
+            for c in [
+                "ro_number",
+                "vin",
+                "concern",
+                "cause",
+                "correction",
+                "labor_ops",
+                "parts",
+                "wam_reference",
+                "created_at",
+            ]
+            if c in useful_df.columns
+        ]
+        st.dataframe(useful_df[display_cols] if display_cols else useful_df, use_container_width=True)
+    elif not df.empty:
+        st.info("No useful learned claims to display yet. Upload paid claim PDFs with warranty narratives.")
 
 def _filter_reviews_by_date(df, key_prefix="report"):
     if df.empty or "created_at" not in df.columns:
