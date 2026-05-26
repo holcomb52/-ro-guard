@@ -862,6 +862,10 @@ THEME_CSS = {
             radial-gradient(circle at 12% 78%, rgba(147, 197, 253, 0.20), transparent 35%),
             linear-gradient(180deg, #dbe6f0 0%, #c8d6e4 55%, #bccddd 100%);
         background-attachment: fixed;
+        --rg-surface: #dde8f2;
+        --rg-surface-input: #e8f0f8;
+        --rg-surface-hover: #d2e0ed;
+        --rg-border: #b6c7da;
     }
     .stApp::before {
         content: "";
@@ -914,8 +918,8 @@ THEME_CSS = {
     .hero {
         padding: 28px 30px;
         border-radius: 22px;
-        background: linear-gradient(135deg, #ffffff, #eef4ff);
-        border: 1px solid #93c5fd;
+        background: linear-gradient(135deg, var(--rg-surface-input), var(--rg-surface));
+        border: 1px solid var(--rg-border);
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
         margin-bottom: 22px;
     }
@@ -924,21 +928,32 @@ THEME_CSS = {
     .section-card {
         padding: 18px;
         border-radius: 18px;
-        background: #ffffff;
-        border: 1px solid #dbeafe;
+        background: var(--rg-surface);
+        border: 1px solid var(--rg-border);
         margin: 10px 0 18px 0;
     }
     textarea, input, div[data-baseweb="input"] input {
         color: #0f172a !important;
         -webkit-text-fill-color: #0f172a !important;
-        background-color: #ffffff !important;
-        border: 1px solid #94a3b8 !important;
+        background-color: var(--rg-surface-input) !important;
+        border: 1px solid var(--rg-border) !important;
+    }
+    div[data-testid="stTextArea"] textarea,
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] textarea,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stTextArea"] div[data-baseweb="base-input"],
+    div[data-testid="stTextArea"] div[data-baseweb="base-input"] > div,
+    section[data-testid="stForm"] textarea,
+    section[data-testid="stForm"] input {
+        background-color: var(--rg-surface-input) !important;
+        border-color: var(--rg-border) !important;
     }
     textarea::placeholder, input::placeholder { color: #64748b !important; opacity: 1 !important; }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
     div[data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        border: 1px solid #94a3b8 !important;
+        background-color: var(--rg-surface-input) !important;
+        border: 1px solid var(--rg-border) !important;
     }
     div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
     div[data-testid="stSelectbox"] div[data-baseweb="select"] div,
@@ -956,28 +971,28 @@ THEME_CSS = {
     div[data-baseweb="popover"] div[data-baseweb="menu"],
     div[data-baseweb="popover"] ul,
     ul[role="listbox"] {
-        background-color: #ffffff !important;
-        border: 1px solid #94a3b8 !important;
+        background-color: var(--rg-surface-input) !important;
+        border: 1px solid var(--rg-border) !important;
     }
     div[data-baseweb="popover"] li,
     li[role="option"] {
         color: #0f172a !important;
-        background-color: #ffffff !important;
+        background-color: var(--rg-surface-input) !important;
     }
     div[data-baseweb="popover"] li:hover,
     li[role="option"]:hover,
     li[role="option"][aria-selected="true"],
     div[data-baseweb="popover"] li[aria-selected="true"] {
-        background-color: #eff6ff !important;
+        background-color: var(--rg-surface-hover) !important;
         color: #1d4ed8 !important;
     }
     section[data-testid="stFileUploaderDropzone"] {
-        background-color: #ffffff !important;
-        border: 1px dashed #64748b !important;
+        background-color: var(--rg-surface-input) !important;
+        border: 1px dashed var(--rg-border) !important;
     }
     div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #dbeafe;
+        background: var(--rg-surface);
+        border: 1px solid var(--rg-border);
         border-radius: 16px;
         padding: 14px;
         min-height: 112px;
@@ -998,9 +1013,9 @@ THEME_CSS = {
     div.stButton > button,
     button[kind="secondary"],
     button[data-testid="stBaseButton-secondary"] {
-        background: #ffffff !important;
+        background: var(--rg-surface) !important;
         color: #0f172a !important;
-        border: 1px solid #64748b !important;
+        border: 1px solid var(--rg-border) !important;
         border-radius: 10px !important;
         font-weight: 600 !important;
         min-height: 2.6rem !important;
@@ -1009,7 +1024,7 @@ THEME_CSS = {
     div.stButton > button:hover,
     button[kind="secondary"]:hover,
     button[data-testid="stBaseButton-secondary"]:hover {
-        background: #eff6ff !important;
+        background: var(--rg-surface-hover) !important;
         border-color: #2563eb !important;
         color: #1d4ed8 !important;
     }
@@ -1035,9 +1050,9 @@ THEME_CSS = {
     section[data-testid="stForm"] button[kind="secondary"],
     section[data-testid="stForm"] button[data-testid="stBaseButton-secondary"],
     section[data-testid="stForm"] button[data-testid="stBaseButton-secondaryFormSubmit"] {
-        background: #ffffff !important;
+        background: var(--rg-surface) !important;
         color: #0f172a !important;
-        border: 1px solid #64748b !important;
+        border: 1px solid var(--rg-border) !important;
         border-radius: 10px !important;
         font-weight: 600 !important;
         min-height: 2.6rem !important;
@@ -1049,7 +1064,7 @@ THEME_CSS = {
     section[data-testid="stForm"] button[kind="secondary"]:hover,
     section[data-testid="stForm"] button[data-testid="stBaseButton-secondary"]:hover,
     section[data-testid="stForm"] button[data-testid="stBaseButton-secondaryFormSubmit"]:hover {
-        background: #eff6ff !important;
+        background: var(--rg-surface-hover) !important;
         border-color: #2563eb !important;
         color: #1d4ed8 !important;
     }
@@ -1070,8 +1085,8 @@ THEME_CSS = {
         color: #0f172a !important;
     }
     div[data-baseweb="checkbox"] {
-        background-color: #ffffff !important;
-        border-color: #64748b !important;
+        background-color: var(--rg-surface-input) !important;
+        border-color: var(--rg-border) !important;
     }
     div[data-testid="stTabs"] [data-baseweb="tab-list"] {
         gap: 2px;
@@ -1163,40 +1178,50 @@ THEME_CSS = {
     .reporting-hero {
         padding: 22px 26px;
         border-radius: 18px;
-        background: linear-gradient(135deg, #ffffff, #eef4ff);
-        border: 1px solid #93c5fd;
+        background: linear-gradient(135deg, var(--rg-surface-input), var(--rg-surface));
+        border: 1px solid var(--rg-border);
         box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
         margin-bottom: 18px;
     }
     .reporting-hero h2 { margin: 0 0 6px 0; font-size: 28px; color: #0f172a !important; }
     .reporting-hero p { margin: 0; color: #334155 !important; font-size: 15px; }
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: rgba(255, 255, 255, 0.88) !important;
-        border-color: #dbeafe !important;
+        background: var(--rg-surface) !important;
+        border: 1px solid var(--rg-border) !important;
         border-radius: 16px !important;
         padding: 10px 14px !important;
         margin-bottom: 12px !important;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
     }
     div[data-testid="stDataFrame"] {
-        background: #ffffff !important;
-        border: 1px solid #dbeafe !important;
+        background: var(--rg-surface) !important;
+        border: 1px solid var(--rg-border) !important;
         border-radius: 14px !important;
         padding: 4px !important;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
     }
     div[data-testid="stImage"] {
-        background: #ffffff;
-        border: 1px solid #dbeafe;
+        background: var(--rg-surface);
+        border: 1px solid var(--rg-border);
         border-radius: 14px;
         padding: 8px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
     }
     div[data-testid="stDateInput"] > div,
     div[data-testid="stDateInput"] input {
-        background-color: #ffffff !important;
+        background-color: var(--rg-surface-input) !important;
         color: #0f172a !important;
-        border: 1px solid #94a3b8 !important;
+        border: 1px solid var(--rg-border) !important;
+    }
+    details[data-testid="stExpander"] {
+        background: var(--rg-surface) !important;
+        border: 1px solid var(--rg-border) !important;
+        border-radius: 14px !important;
+    }
+    section[data-testid="stForm"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
     .app-sidebar-brand {
         display: flex;
