@@ -38,7 +38,7 @@ THEME_CSS = {
         z-index: 0;
         pointer-events: none;
         opacity: 0.09;
-        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Cpath d='M36 22 L52 30 V40 C52 50 45 58 36 62 C27 58 20 50 20 40 V30 Z' fill='none' stroke='%2360a5fa' stroke-width='0.8' opacity='0.4'/%3E%3C/svg%3E") no-repeat center / contain;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%2360a5fa' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Ctext x='36' y='43' text-anchor='middle' fill='%2393c5fd' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3ERO-%3C/text%3E%3Ctext x='36' y='54' text-anchor='middle' fill='%2393c5fd' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3EGuard%3C/text%3E%3C/svg%3E") no-repeat center / contain;
     }
     .stApp:has(.ro-login-active)::before,
     .stApp:has(.ro-login-active)::after {
@@ -842,10 +842,10 @@ THEME_CSS = {
         z-index: 0;
         pointer-events: none;
         background-image:
-            linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px),
-            radial-gradient(circle at 22% 18%, rgba(59, 130, 246, 0.10) 0%, transparent 26%),
-            radial-gradient(circle at 78% 72%, rgba(147, 197, 253, 0.12) 0%, transparent 22%);
+            linear-gradient(rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+            radial-gradient(circle at 22% 18%, rgba(59, 130, 246, 0.14) 0%, transparent 26%),
+            radial-gradient(circle at 78% 72%, rgba(100, 116, 139, 0.12) 0%, transparent 22%);
         background-size: 64px 64px, 64px 64px, 100% 100%, 100% 100%;
         mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
         -webkit-mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, black 20%, transparent 100%);
@@ -859,8 +859,8 @@ THEME_CSS = {
         height: min(560px, 62vh);
         z-index: 0;
         pointer-events: none;
-        opacity: 0.08;
-        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%232563eb' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%233b82f6' stroke-width='1' opacity='0.65'/%3E%3Ctext x='36' y='43' text-anchor='middle' fill='%232563eb' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3ERO-%3C/text%3E%3Ctext x='36' y='54' text-anchor='middle' fill='%232563eb' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3EGuard%3C/text%3E%3C/svg%3E") no-repeat center / contain;
+        opacity: 0.13;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 82'%3E%3Cpath d='M36 4 L66 18 V40 C66 58 52 72 36 78 C20 72 6 58 6 40 V18 Z' fill='none' stroke='%231d4ed8' stroke-width='1.8'/%3E%3Cpath d='M36 12 L60 24 V40 C60 54 50 66 36 72 C22 66 12 54 12 40 V24 Z' fill='none' stroke='%232563eb' stroke-width='1' opacity='0.75'/%3E%3Ctext x='36' y='43' text-anchor='middle' fill='%231d4ed8' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3ERO-%3C/text%3E%3Ctext x='36' y='54' text-anchor='middle' fill='%231d4ed8' font-size='9' font-weight='800' font-family='Arial,sans-serif'%3EGuard%3C/text%3E%3C/svg%3E") no-repeat center / contain;
     }
     .stApp:has(.ro-login-active)::before,
     .stApp:has(.ro-login-active)::after {
