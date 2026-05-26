@@ -2339,8 +2339,9 @@ def _apply_ro_scan_to_form(import_data: dict):
 def _render_ro_scanner():
     st.markdown(
         """
-<div class="review-scan-panel">
-<div class="review-scan-top">
+<div class="review-scan-hero">
+<div class="review-scan-hero-top">
+<div class="review-scan-kicker">RO Guard · Review Workspace</div>
 <h2>Scan Repair Order &amp; Invoice</h2>
 <p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately. RO Shield reads warranty jobs by pay type <strong>W</strong> / <strong>Warranty</strong> and pulls cause/correction narratives from the invoice.</p>
 </div>
@@ -2446,20 +2447,8 @@ def _render_ro_scanner():
 def render_review():
     _render_ro_scanner()
 
-    col_a, col_b = st.columns([8, 2])
-
-    with col_a:
-        st.markdown(
-            """
-<div class="review-section-header">
-<div class="review-section-title">RO Warranty Review</div>
-<div class="review-section-sub">Audit-ready warranty review · Patent Pending</div>
-</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with col_b:
+    _, next_col = st.columns([5, 1])
+    with next_col:
         if st.button("Next Claim"):
             fv = st.session_state.form_version
             st.session_state.pop(f"vin_recall_result_{fv}", None)

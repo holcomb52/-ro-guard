@@ -337,35 +337,43 @@ THEME_CSS = {
         background: rgba(37, 99, 235, 0.18);
         border: 1px solid rgba(96, 165, 250, 0.28);
     }
-    .review-scan-panel {
+    .review-scan-hero {
         margin-bottom: 10px;
         border-radius: 16px;
         overflow: hidden;
-        border: 1px solid rgba(148, 163, 184, 0.28);
+        border: 1px solid rgba(96, 165, 250, 0.28);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+        background: linear-gradient(145deg, rgba(10, 31, 57, 0.94), rgba(2, 9, 19, 0.96));
     }
-    .review-scan-top {
-        background: #ffffff;
-        padding: 16px 20px 12px;
+    .review-scan-hero-top {
+        padding: 14px 18px 12px;
     }
-    .review-scan-top h2 {
+    .review-scan-kicker {
+        margin-bottom: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #93c5fd !important;
+    }
+    .review-scan-hero-top h2 {
         margin: 0 0 6px 0;
-        color: #0f172a !important;
-        font-size: 24px;
+        color: #f8fbff !important;
+        font-size: 22px;
         font-weight: 800;
         line-height: 1.15;
     }
-    .review-scan-top p {
+    .review-scan-hero-top p {
         margin: 0;
-        color: #475569 !important;
+        color: #cbd5e1 !important;
         font-size: 13px;
-        line-height: 1.5;
+        line-height: 1.45;
     }
-    .review-scan-top strong {
-        color: #1d4ed8 !important;
+    .review-scan-hero-top strong {
+        color: #60a5fa !important;
     }
     .review-scan-accent {
-        padding: 9px 12px;
+        padding: 8px 12px;
         text-align: center;
         font-size: 10px;
         font-weight: 800;
@@ -392,10 +400,10 @@ THEME_CSS = {
         letter-spacing: 0.05em;
         color: #94a3b8 !important;
     }
-    .stApp:has(.review-scan-panel) div[data-testid="stTabs"] {
+    .stApp:has(.review-scan-hero) div[data-testid="stTabs"] {
         margin-top: 0 !important;
     }
-    .stApp:has(.review-scan-panel) section[data-testid="stFileUploaderDropzone"] {
+    .stApp:has(.review-scan-hero) section[data-testid="stFileUploaderDropzone"] {
         background-color: rgba(13, 30, 55, .92) !important;
         border: 1px dashed rgba(96, 165, 250, 0.45) !important;
         border-radius: 14px !important;
