@@ -827,12 +827,12 @@ THEME_CSS = {
         position: relative;
         isolation: isolate;
         color: #0f172a;
-        background-color: #eef4fb;
+        background-color: #dce8f4;
         background-image:
-            radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.55), transparent 55%),
-            radial-gradient(circle at 88% 20%, rgba(96, 165, 250, 0.28), transparent 30%),
-            radial-gradient(circle at 12% 78%, rgba(191, 219, 254, 0.35), transparent 35%),
-            linear-gradient(180deg, #f8fbff 0%, #eef4fb 55%, #e8f0fa 100%);
+            radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.42), transparent 55%),
+            radial-gradient(circle at 88% 20%, rgba(96, 165, 250, 0.20), transparent 30%),
+            radial-gradient(circle at 12% 78%, rgba(147, 197, 253, 0.26), transparent 35%),
+            linear-gradient(180deg, #e8f1f9 0%, #dce8f4 55%, #d2e0ee 100%);
         background-attachment: fixed;
     }
     .stApp::before {
@@ -876,8 +876,8 @@ THEME_CSS = {
     header[data-testid="stHeader"] { background: rgba(255,255,255,0.75); }
     section[data-testid="stSidebar"] {
         background:
-            radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.45), transparent 58%),
-            linear-gradient(180deg, #ffffff, #f1f5f9) !important;
+            radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.32), transparent 58%),
+            linear-gradient(180deg, #f1f6fb, #e2ebf4) !important;
         border-right: 1px solid #cbd5e1;
     }
     .stApp, .stApp p, .stApp label, .stApp span, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
