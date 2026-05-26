@@ -944,24 +944,33 @@ def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: 
                 st.markdown("---")
 
 
-def save_learned_claims(file_name, claims):
+def save_learned_claims(file_name, claims) -> dict:
+    stats = {"parsed": len(claims), "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+    required_terms = [
+        "customer states",
+        "verified",
+        "found",
+        "performed",
+        "replaced",
+        "customer",
+        "states",
+    ]
+
     for idx, claim in enumerate(claims, start=1):
         fields = extract_claim_fields(claim)
-
         if not fields:
+            stats["skipped"] += 1
             continue
-        claim_body = (
-            fields.get("concern", "") +
-            fields.get("correction", "")
-        ).strip().lower()
 
-        required_terms = [
-            "customer states",
-            "verified",
-            "found",
-            "performed",
-            "replaced"
-        ]
+        claim_body = (
+            fields.get("story")
+            or claim_source_text(
+                fields.get("concern"),
+                fields.get("cause"),
+                fields.get("correction"),
+            )
+            or claim
+        ).strip().lower()
 
         if (
             len(claim_body) < 40
@@ -969,7 +978,9 @@ def save_learned_claims(file_name, claims):
             or "____" in claim_body
             or not any(term in claim_body for term in required_terms)
         ):
+            stats["skipped"] += 1
             continue
+
         data = {
             "ro_number": file_name,
             "vin": "",
@@ -978,10 +989,10 @@ def save_learned_claims(file_name, claims):
             "correction": fields.get("correction", ""),
             "tech": "",
             "advisor": "",
-            "story": fields.get("story", ""),
+            "story": fields.get("story", "") or claim_body[:5000],
             "labor_ops": fields.get("labor_ops", ""),
             "parts": fields.get("parts", ""),
-            "wam_reference": fields.get("wam_reference", "")
+            "wam_reference": fields.get("wam_reference", ""),
         }
 
         try:
@@ -992,10 +1003,16 @@ def save_learned_claims(file_name, claims):
                 .eq("story", data["story"])
                 .execute()
             )
-            if not existing.data:
-                supabase.table("claims").insert(data).execute()
+            if existing.data:
+                stats["duplicate"] += 1
+                continue
+            supabase.table("claims").insert(data).execute()
+            stats["saved"] += 1
         except Exception as e:
+            stats["errors"] += 1
             st.warning(f"Could not save learned claim {idx}: {e}")
+
+    return stats
 
 
 # =========================
@@ -3064,7 +3081,7 @@ def render_claims():
             if "claim" in key.lower():
                 del st.session_state[key]
 
-    st.success("Claim learning cache cleared. Refresh the app and re-upload claims.")
+        st.success("Claim learning cache cleared. Refresh the app and re-upload claims.")
     
     if st.button("Reprocess Existing Claims"):
         rows = supabase.table("claims").select("*").limit(10000).execute().data or []
@@ -3106,18 +3123,31 @@ def render_claims():
 
     files = st.file_uploader("Upload paid claim PDFs", type=["pdf"], accept_multiple_files=True, key="paid_claim_upload")
     if files:
-        total = 0
+        totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
         for f in files:
             pages = extract_pages(f)
             claims = split_claims_from_pages(pages)
-            save_learned_claims(f.name, claims)
-            st.success(f"{f.name}: {len(pages)} pages → learned {len(claims)} claim records")
-            total += len(claims)
-        st.success(f"Total learned claim records added: {total}")
+            stats = save_learned_claims(f.name, claims)
+            for key in totals:
+                totals[key] += stats.get(key, 0)
+            st.success(
+                f"**{f.name}:** {len(pages)} pages → {stats['parsed']} parsed → "
+                f"**{stats['saved']} saved**, {stats['duplicate']} duplicates, "
+                f"{stats['skipped']} skipped, {stats['errors']} errors"
+            )
+        st.info(
+            f"Upload summary: **{totals['saved']} new records saved** to your library "
+            f"(from {totals['parsed']} parsed segments). "
+            f"{totals['duplicate']} were already in the library, "
+            f"{totals['skipped']} did not pass narrative quality checks."
+        )
 
     df = load_shared_claims()
-    claim_count = supabase.table("claims").select("id", count="exact").execute().count or len(df)
-    st.metric("Learned Claim Records", claim_count)
+    try:
+        claim_count = supabase.table("claims").select("id", count="exact").execute().count
+    except Exception:
+        claim_count = len(df)
+    st.metric("Learned Claim Records", claim_count or 0)
     if not df.empty:
         st.dataframe(df, use_container_width=True)
 
