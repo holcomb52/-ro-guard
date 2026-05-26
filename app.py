@@ -484,7 +484,6 @@ LEARNED_CLAIM_NARRATIVE_TERMS = (
     "verified concern",
     "found that",
     "found the",
-    "found ",
     "performed",
     "replaced",
     "repaired",
@@ -595,17 +594,26 @@ def learned_claim_narrative_text(record) -> str:
     )
 
 
+def learned_claim_has_visible_narrative(record) -> bool:
+    concern = str(record.get("concern") or "").strip()
+    correction = str(record.get("correction") or "").strip()
+    return len(concern) >= 15 or len(correction) >= 15
+
+
 def learned_claim_is_useful(record) -> bool:
     concern = str(record.get("concern") or "").strip()
     cause = str(record.get("cause") or "").strip()
     correction = str(record.get("correction") or "").strip()
     story = str(record.get("story") or record.get("content") or "").strip()
 
+    if not learned_claim_has_visible_narrative(record):
+        return False
+
     structured = claim_source_text(concern, cause, correction)
     full_text = claim_source_text(concern, cause, correction, story)
     lower = full_text.lower()
 
-    if len(structured) < 20 and len(story) < 80:
+    if len(structured) < 20:
         return False
 
     compact = lower.replace(" ", "")
@@ -633,13 +641,7 @@ def learned_claim_is_useful(record) -> bool:
     if _learned_claim_is_maintenance_only(lower):
         return False
 
-    # Need a real concern or correction line, not story-only PDF fragments.
-    primary_narrative = concern if len(concern) >= 20 else correction if len(correction) >= 20 else ""
-    if len(primary_narrative) < 20:
-        if len(story) < 100 or not _learned_claim_has_warranty_narrative(story):
-            return False
-        primary_narrative = story
-
+    primary_narrative = concern if len(concern) >= 20 else correction
     if not _learned_claim_has_warranty_narrative(primary_narrative):
         return False
 
