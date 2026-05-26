@@ -59,6 +59,7 @@ from review_store import (
     smart_warranty_punch_exempt,
 )
 from theme_styles import THEME_CSS
+from display_prefs import build_user_display_css, render_display_settings_sidebar
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
 
@@ -1074,8 +1075,10 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
     )
 
 
-def apply_style(theme="Dark"):
+def apply_style(theme="Dark", display_prefs: dict | None = None):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
+    if display_prefs:
+        css += build_user_display_css(display_prefs)
     if not streamlit_cloud_chrome_allowed():
         css = STREAMLIT_CHROME_HIDE_CSS + css
         _inject_streamlit_cloud_chrome_hide()
@@ -4218,7 +4221,8 @@ def main():
         key="appearance_select",
     )
     st.session_state.appearance = appearance
-    apply_style(appearance)
+    display_prefs = render_display_settings_sidebar(supabase, theme=appearance)
+    apply_style(appearance, display_prefs)
 
     _render_app_workspace_header()
 
