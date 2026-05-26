@@ -2336,16 +2336,28 @@ def _apply_ro_scan_to_form(import_data: dict):
                 st.session_state[f"{dest}_{idx}"] = True
 
 
+def _render_app_workspace_header() -> None:
+    st.markdown(
+        """
+<div class="app-workspace-header">
+<div class="app-workspace-top">
+<div class="app-workspace-kicker">RO Guard · Warranty Workspace</div>
+<h2>Smarter Claims. <span>Stronger Profits.</span></h2>
+<p>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
+</div>
+<div class="app-workspace-accent">Control the Claim · Protect the Profit</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_ro_scanner():
     st.markdown(
         """
-<div class="review-scan-hero">
-<div class="review-scan-hero-top">
-<div class="review-scan-kicker">RO Guard · Review Workspace</div>
-<h2>Scan Repair Order &amp; Invoice</h2>
-<p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately. RO Shield reads warranty jobs by pay type <strong>W</strong> / <strong>Warranty</strong> and pulls cause/correction narratives from the invoice.</p>
-</div>
-<div class="review-scan-accent">Control the Claim · Protect the Profit</div>
+<div class="review-scan-intro">
+<h3>Scan Repair Order &amp; Invoice</h3>
+<p>Upload the <strong>final repair order</strong> and <strong>final invoice</strong> separately to auto-fill the review form below.</p>
 </div>
         """,
         unsafe_allow_html=True,
@@ -4114,6 +4126,8 @@ def main():
     )
     st.session_state.appearance = appearance
     apply_style(appearance)
+
+    _render_app_workspace_header()
 
     tabs = st.tabs(["Review", "ROI Dashboard", "Claim Learning", "Reporting", "Admin", "TSB / Bulletins", "WAM"])
     with tabs[0]:

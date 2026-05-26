@@ -337,43 +337,54 @@ THEME_CSS = {
         background: rgba(37, 99, 235, 0.18);
         border: 1px solid rgba(96, 165, 250, 0.28);
     }
+    .app-workspace-header,
     .review-scan-hero {
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         border-radius: 16px;
         overflow: hidden;
         border: 1px solid rgba(96, 165, 250, 0.28);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
         background: linear-gradient(145deg, rgba(10, 31, 57, 0.94), rgba(2, 9, 19, 0.96));
     }
+    .app-workspace-top,
     .review-scan-hero-top {
-        padding: 14px 18px 12px;
+        padding: 12px 18px 10px;
     }
+    .app-workspace-kicker,
     .review-scan-kicker {
-        margin-bottom: 6px;
+        margin-bottom: 4px;
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.14em;
         text-transform: uppercase;
         color: #93c5fd !important;
     }
+    .app-workspace-top h2,
     .review-scan-hero-top h2 {
-        margin: 0 0 6px 0;
+        margin: 0 0 4px 0;
         color: #f8fbff !important;
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 800;
         line-height: 1.15;
     }
+    .app-workspace-top h2 span,
+    .review-scan-hero-top h2 span {
+        color: #60a5fa !important;
+    }
+    .app-workspace-top p,
     .review-scan-hero-top p {
         margin: 0;
         color: #cbd5e1 !important;
-        font-size: 13px;
-        line-height: 1.45;
+        font-size: 12px;
+        line-height: 1.4;
     }
+    .app-workspace-top strong,
     .review-scan-hero-top strong {
         color: #60a5fa !important;
     }
+    .app-workspace-accent,
     .review-scan-accent {
-        padding: 8px 12px;
+        padding: 7px 12px;
         text-align: center;
         font-size: 10px;
         font-weight: 800;
@@ -381,6 +392,31 @@ THEME_CSS = {
         text-transform: uppercase;
         color: #ffffff !important;
         background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+    }
+    .review-scan-intro {
+        margin: 0 0 8px 0;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(96, 165, 250, 0.22);
+        background: rgba(7, 19, 34, 0.72);
+    }
+    .review-scan-intro h3 {
+        margin: 0 0 4px 0;
+        color: #f8fbff !important;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .review-scan-intro p {
+        margin: 0;
+        color: #cbd5e1 !important;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .review-scan-intro strong {
+        color: #60a5fa !important;
+    }
+    .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type {
+        margin-top: 0 !important;
     }
     .review-section-header {
         margin: 2px 0 8px 0;
@@ -400,10 +436,8 @@ THEME_CSS = {
         letter-spacing: 0.05em;
         color: #94a3b8 !important;
     }
-    .stApp:has(.review-scan-hero) div[data-testid="stTabs"] {
-        margin-top: 0 !important;
-    }
-    .stApp:has(.review-scan-hero) section[data-testid="stFileUploaderDropzone"] {
+    .stApp:has(.review-scan-hero) section[data-testid="stFileUploaderDropzone"],
+    .stApp:has(.review-scan-intro) section[data-testid="stFileUploaderDropzone"] {
         background-color: rgba(13, 30, 55, .92) !important;
         border: 1px dashed rgba(96, 165, 250, 0.45) !important;
         border-radius: 14px !important;
