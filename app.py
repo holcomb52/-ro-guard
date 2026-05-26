@@ -855,6 +855,110 @@ def lookup_wam_for_claim_text(text):
     return " | ".join(deduped[:3])
 
 
+def _normalize_wam_ref(wam_ref: str) -> str:
+    return re.sub(r"^WAM\s*", "", str(wam_ref or "").strip(), flags=re.I).upper()
+
+
+def extract_declined_wam_reference(claim_text: str, *, document_text: str = "") -> str:
+    """Find the WAM tied to a declined claim — usually near Message Code Information."""
+    combined = "\n".join(part for part in (document_text, claim_text) if str(part or "").strip())
+    if not combined.strip():
+        return ""
+
+    flat = re.sub(r"\s+", " ", combined).strip()
+    msg_match = re.search(r"message code information", flat, re.I)
+    if msg_match:
+        window = flat[max(0, msg_match.start() - 700) : msg_match.start() + 120]
+        ref = extract_wam_reference(window)
+        if ref:
+            return ref
+
+    return extract_wam_reference(combined)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _load_wam_document_rows() -> list[dict]:
+    if supabase is None:
+        return []
+    try:
+        return supabase.table("wam_documents").select("*").limit(1000).execute().data or []
+    except Exception:
+        return []
+
+
+def summarize_wam_reference(wam_ref: str, *, max_len: int = 240) -> str:
+    """Return a short plain-language summary from uploaded WAM documents."""
+    ref_key = _normalize_wam_ref(wam_ref)
+    if not ref_key:
+        return ""
+
+    best = ""
+    for row in _load_wam_document_rows():
+        section = str(row.get("section") or "")
+        source = str(row.get("source_file") or "")
+        content = re.sub(r"\s+", " ", str(row.get("content") or "")).strip()
+        blob = f"{section} {source} {content}".upper()
+        if ref_key not in blob and f"WAM{ref_key}" not in blob:
+            continue
+
+        idx = blob.find(ref_key)
+        if idx < 0:
+            idx = blob.find(f"WAM{ref_key}")
+        if content and idx >= 0:
+            snippet = content[max(0, idx - 50) : idx + max_len]
+        elif content:
+            snippet = content[:max_len]
+        else:
+            snippet = section or source
+
+        snippet = snippet.strip()
+        if len(snippet) > len(best):
+            best = snippet
+
+    if len(best) > max_len:
+        best = best[: max_len - 3].rsplit(" ", 1)[0] + "..."
+    return best
+
+
+def _declined_wam_reference(row) -> str:
+    if isinstance(row, dict):
+        return str(row.get("wam_reference") or extract_wam_reference(row.get("story") or "") or "").strip()
+    return str(getattr(row, "wam_reference", None) or "").strip()
+
+
+def _declined_wam_summary(row) -> str:
+    if isinstance(row, dict):
+        stored = str(row.get("wam") or "").strip()
+        if stored:
+            return stored
+        wam_ref = _declined_wam_reference(row)
+    else:
+        stored = str(getattr(row, "wam", None) or "").strip()
+        if stored:
+            return stored
+        wam_ref = _declined_wam_reference(row)
+
+    if not wam_ref:
+        return ""
+    return summarize_wam_reference(wam_ref)
+
+
+def _declined_issue_summary(row) -> str:
+    """Short issue text for tables — prefer WAM summary, else first message code."""
+    wam_summary = _declined_wam_summary(row)
+    if wam_summary:
+        return wam_summary
+
+    reason = _decline_reason_value(row)
+    if not reason:
+        return ""
+
+    first = reason.split(" | ")[0].strip()
+    first = re.sub(r"^\[[^\]]+\]\s*", "", first)
+    first = re.sub(r"^[A-Z]{2,4}\d{1,2}\s*(?:L-\d+\s*)?—\s*", "", first)
+    return first[:240]
+
+
 def format_recommendation_list(value, empty_label):
     val = str(value or "").strip()
     if not val:
@@ -1161,14 +1265,33 @@ def render_declined_claim_alert(current_job: dict, similar_declined: list) -> No
 
     best = similar_declined[0]
     reason = _decline_reason_value(best).strip()
+    wam_ref = _declined_wam_reference(best)
+    wam_summary = _declined_wam_summary(best)
+    issue_bits = []
+    if wam_ref:
+        issue_bits.append(f"**WAM {wam_ref.lstrip('WAM ').strip()}**")
+    if wam_summary:
+        issue_bits.append(wam_summary)
+    elif reason:
+        issue_bits.append(_declined_issue_summary(best))
+
     st.warning(
         f"**{best.get('score', 0)}% match** to a declined claim"
-        + (f" — **{reason}**" if reason else ". Review the reference below before submit.")
+        + (f" — {' · '.join(issue_bits)}" if issue_bits else ". Review the reference below before submit.")
     )
 
     with st.expander("Declined claim reference", expanded=True):
+        if wam_ref:
+            st.markdown(f"**WAM reference:** {wam_ref}")
+        if wam_summary:
+            st.markdown(f"**WAM issue:** {wam_summary}")
+        elif wam_ref:
+            st.caption(
+                "Upload this WAM on the **WAM** tab to see a fuller summary here. "
+                "Message codes from the declined claim are shown below."
+            )
         if reason:
-            st.markdown(f"**Decline reason:** {reason}")
+            st.markdown(f"**Message codes:** {reason}")
         st.markdown("**Concern / cause / correction from declined claim**")
         st.write(
             claim_source_text(
@@ -1188,7 +1311,7 @@ def render_declined_claim_alert(current_job: dict, similar_declined: list) -> No
                 st.markdown(f"**{match.get('score', 0)}%** · {label[:120]}")
 
 
-def save_learned_claims(file_name, claims, *, outcome: str = "paid") -> dict:
+def save_learned_claims(file_name, claims, *, outcome: str = "paid", document_text: str = "") -> dict:
     stats = {"parsed": len(claims), "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
     outcome = str(outcome or "paid").strip().lower()
     if outcome not in ("paid", "declined"):
@@ -1219,7 +1342,16 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid") -> dict:
             or claim
         ).strip().lower()
 
-        decline_reason = extract_decline_reason(claim) if outcome == "declined" else ""
+        decline_reason = (
+            extract_decline_reason(claim, document_text=document_text)
+            if outcome == "declined"
+            else ""
+        )
+        wam_ref = fields.get("wam_reference", "")
+        wam_summary = ""
+        if outcome == "declined":
+            wam_ref = extract_declined_wam_reference(claim, document_text=document_text) or wam_ref
+            wam_summary = summarize_wam_reference(wam_ref) if wam_ref else ""
 
         if (
             len(claim_body) < 40
@@ -1242,7 +1374,8 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid") -> dict:
             "story": fields.get("story", "") or claim_body[:5000],
             "labor_ops": fields.get("labor_ops", ""),
             "parts": fields.get("parts", ""),
-            "wam_reference": fields.get("wam_reference", ""),
+            "wam_reference": wam_ref,
+            "wam": wam_summary if outcome == "declined" else "",
             "claim_status": outcome,
             "reference": decline_reason if outcome == "declined" else "",
         }
@@ -1273,8 +1406,110 @@ def save_learned_claims(file_name, claims, *, outcome: str = "paid") -> dict:
     return stats
 
 
-def extract_decline_reason(claim_text: str) -> str:
+def extract_message_code_reasons(claim_text: str) -> list[str]:
+    """Parse Dealer Connect *Message Code Information* tables from PDF text."""
+    raw = str(claim_text or "")
+    if not raw.strip():
+        return []
+
+    flat = re.sub(r"\s+", " ", raw).strip()
+    match = re.search(r"message code information", flat, re.I)
+    if not match:
+        return []
+
+    section = flat[match.start():]
+    stop = re.search(
+        r"\b(claim narrative|date received|authorization number|vehicle description|"
+        r"owner'?s name|technician identification|net amount|repair sub total)\b",
+        section[40:],
+        re.I,
+    )
+    if stop:
+        section = section[: 40 + stop.start()]
+
+    categories = [
+        ("Dealer Correctable", r"dealer correctable message codes"),
+        ("Authorization Required", r"authorization required message codes"),
+        ("Informational", r"informational message codes"),
+    ]
+
+    reasons: list[str] = []
+    seen: set[str] = set()
+
+    def _add_reason(code: str, description: str, line: str = "", category: str = "") -> None:
+        code = code.strip().upper()
+        description = re.sub(r"\s+", " ", description or "").strip(" .:-_")
+        description = re.sub(r"\s+Condition-\d+\s*$", "", description, flags=re.I)
+        if len(code) < 3 or len(description) < 8:
+            return
+        if description.lower() in {
+            "message code description",
+            "message level line message code",
+            "message code",
+        }:
+            return
+        prefix = f"[{category}] " if category else ""
+        line_part = f"{line} " if line else ""
+        entry = f"{prefix}{code} {line_part}— {description}".strip()
+        key = f"{code}|{line}|{description.lower()}"
+        if key in seen:
+            return
+        seen.add(key)
+        reasons.append(entry)
+
+    for category_label, category_pat in categories:
+        cat_match = re.search(category_pat, section, re.I)
+        if not cat_match:
+            continue
+        next_starts = [
+            m.start()
+            for _, pat in categories
+            if pat != category_pat
+            for m in [re.search(pat, section[cat_match.end() :], re.I)]
+            if m
+        ]
+        cat_end = cat_match.end() + min(next_starts) if next_starts else len(section)
+        cat_section = section[cat_match.end() : cat_end]
+        cat_before = len(reasons)
+
+        row_pattern = re.compile(
+            r"Condition-\d+\s+(?:(L-\d+)\s+)?([A-Z]{2,4}\d{1,2})\s+(.{10,240}?)"
+            r"(?=\s*Condition-\d+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+            re.I,
+        )
+        for row in row_pattern.finditer(cat_section):
+            _add_reason(row.group(2), row.group(3), line=row.group(1) or "", category=category_label)
+
+        if len(reasons) == cat_before:
+            loose_pattern = re.compile(
+                r"(?:(L-\d+)\s+)?([A-Z]{2,4}\d{1,2})\s+(.{10,240}?)"
+                r"(?=\s*(?:L-\d+\s+)?[A-Z]{2,4}\d{1,2}\s+|\s*(?:Dealer Correctable|Authorization Required|Informational Message)|\s*$)",
+                re.I,
+            )
+            for row in loose_pattern.finditer(cat_section):
+                _add_reason(row.group(2), row.group(3), line=row.group(1) or "", category=category_label)
+
+    if reasons:
+        return reasons
+
+    # Last resort: any message-code-shaped token followed by descriptive text.
+    fallback = re.compile(
+        r"\b([A-Z]{2,4}\d{1,2})\s+(.{12,220}?)(?=\s+[A-Z]{2,4}\d{1,2}\s+|\s*$)",
+        re.I,
+    )
+    for row in fallback.finditer(section):
+        _add_reason(row.group(1), row.group(2))
+
+    return reasons
+
+
+def extract_decline_reason(claim_text: str, *, document_text: str = "") -> str:
     """Pull OEM decline/return reason text from a Dealer Connect claim PDF segment."""
+    combined = "\n".join(part for part in (claim_text, document_text) if str(part or "").strip())
+    message_codes = extract_message_code_reasons(combined)
+    if message_codes:
+        return " | ".join(message_codes)[:2000]
+
     text = re.sub(r"\s+", " ", str(claim_text or "")).strip()
     if not text:
         return ""
@@ -2117,6 +2352,7 @@ def find_similar_learned_claims(current_job, *, outcome: str = "paid", limit: in
                 "wam_reference": row.get("wam_reference", ""),
                 "reference": row.get("reference", ""),
                 "decline_reason": _decline_reason_value(row),
+                "wam_issue": _declined_issue_summary(row),
                 "match_reasons": matched_components,
                 "matching_codes": ", ".join(sorted(current_lops.intersection(claim_lops))) if current_lops else "",
             }))
@@ -3445,8 +3681,9 @@ def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_ke
     per_file = []
     for f in files:
         pages = extract_pages(f)
+        document_text = "\n\n".join(pages)
         claims = split_claims_from_pages(pages)
-        stats = save_learned_claims(f.name, claims, outcome=outcome)
+        stats = save_learned_claims(f.name, claims, outcome=outcome, document_text=document_text)
         for key in totals:
             totals[key] += stats.get(key, 0)
         per_file.append(
@@ -3529,6 +3766,30 @@ def _render_claim_library_table(
         st.info(empty_message)
         return
 
+    if outcome == "declined":
+        table_df = useful_df.copy()
+        table_df["decline_reason"] = table_df.apply(
+            lambda row: _decline_reason_value(row.to_dict()), axis=1
+        )
+        table_df["wam_issue"] = table_df.apply(
+            lambda row: _declined_issue_summary(row.to_dict()), axis=1
+        )
+        display_cols = [
+            c
+            for c in [
+                "ro_number",
+                "wam_reference",
+                "wam_issue",
+                "decline_reason",
+                "concern",
+                "labor_ops",
+                "created_at",
+            ]
+            if c in table_df.columns
+        ]
+        st.dataframe(table_df[display_cols] if display_cols else table_df, use_container_width=True)
+        return
+
     display_cols = [
         c
         for c in [
@@ -3585,8 +3846,9 @@ def _render_paid_claims_learning(all_claims: pd.DataFrame) -> None:
 
 def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
     st.caption(
-        "Upload declined/returned claim PDFs from Dealer Connect. RO Shield extracts decline reasons "
-        "and warns on **Review** when a job looks similar to a past rejection."
+        "Upload declined/returned claim PDFs from Dealer Connect. RO Shield extracts **WAM references**, "
+        "**message codes**, and a short **WAM issue** summary (from your WAM library) — then warns on "
+        "**Review** when a job looks similar to a past rejection."
     )
 
     if "declined_claim_upload_nonce" not in st.session_state:
@@ -3664,7 +3926,15 @@ def render_claims():
                 "wam_reference": fields.get("wam_reference", ""),
             }
             if _claim_status_value(row) == "declined":
-                update_data["reference"] = extract_decline_reason(story) or row.get("reference", "")
+                doc_text = story
+                wam_ref = extract_declined_wam_reference(story, document_text=doc_text)
+                update_data["reference"] = (
+                    extract_decline_reason(story, document_text=doc_text)
+                    or row.get("reference", "")
+                )
+                if wam_ref:
+                    update_data["wam_reference"] = wam_ref
+                    update_data["wam"] = summarize_wam_reference(wam_ref)
 
             try:
                 supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
