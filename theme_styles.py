@@ -268,16 +268,44 @@ THEME_CSS = {
         background-color: rgba(13, 30, 55, .96) !important;
         border-color: rgba(140, 200, 255, .85) !important;
     }
-    button[data-baseweb="tab"] {
-        color: #d6e8ff !important;
-        background-color: rgba(7, 19, 34, .55) !important;
-        border: 1px solid rgba(62,150,255,.25) !important;
-        border-radius: 10px 10px 0 0 !important;
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 2px;
+        border-bottom: 1px solid rgba(96, 165, 250, 0.22) !important;
+        background: transparent !important;
     }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #ffffff !important;
-        background-color: rgba(29, 78, 216, .55) !important;
-        border-color: rgba(140, 200, 255, .85) !important;
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+        background-color: transparent !important;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab-border"] {
+        background-color: #3b82f6 !important;
+        height: 2px !important;
+        border-radius: 2px 2px 0 0;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {
+        color: #94a3b8 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0.62rem 0.95rem 0.72rem !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.01em;
+        min-height: auto !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+        color: #e2e8f0 !important;
+        background: transparent !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+        color: #f8fbff !important;
+        background: transparent !important;
+        border: none !important;
+        font-weight: 700 !important;
+    }
+    .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type button[data-baseweb="tab"] {
+        font-size: 0.94rem !important;
+        padding: 0.72rem 1.05rem 0.82rem !important;
     }
     .status-ready {background:rgba(0,150,90,.20); border:1px solid rgba(0,220,130,.45); padding:16px; border-radius:16px;}
     .status-review {background:rgba(255,200,0,.18); border:1px solid rgba(255,210,0,.50); padding:16px; border-radius:16px;}
@@ -1045,17 +1073,44 @@ THEME_CSS = {
         background-color: #ffffff !important;
         border-color: #64748b !important;
     }
-    button[data-baseweb="tab"] {
-        color: #334155 !important;
-        background-color: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        border-radius: 10px 10px 0 0 !important;
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 2px;
+        border-bottom: 1px solid #c7d5e3 !important;
+        background: transparent !important;
     }
-    button[data-baseweb="tab"][aria-selected="true"] {
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+        background-color: transparent !important;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab-border"] {
+        background-color: #2563eb !important;
+        height: 2px !important;
+        border-radius: 2px 2px 0 0;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {
+        color: #64748b !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0.62rem 0.95rem 0.72rem !important;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.01em;
+        min-height: auto !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+        color: #334155 !important;
+        background: transparent !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
         color: #1d4ed8 !important;
-        background-color: #eff6ff !important;
-        border-color: #2563eb !important;
+        background: transparent !important;
+        border: none !important;
         font-weight: 700 !important;
+    }
+    .stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type button[data-baseweb="tab"] {
+        font-size: 0.94rem !important;
+        padding: 0.72rem 1.05rem 0.82rem !important;
     }
     .status-ready {background:#ecfdf5; border:1px solid #34d399; padding:16px; border-radius:16px; color:#065f46 !important;}
     .status-review {background:#fffbeb; border:1px solid #fbbf24; padding:16px; border-radius:16px; color:#92400e !important;}
