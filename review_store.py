@@ -95,6 +95,41 @@ def save_review(supabase, data: dict) -> bool:
         raise
 
 
+def review_outcome_label(first_pass_paid, rejected) -> str:
+    fp = int(first_pass_paid or 0)
+    rej = int(rejected or 0)
+    if fp and not rej:
+        return "First-Pass Paid"
+    if rej and not fp:
+        return "Rejected / Returned"
+    if fp and rej:
+        return "Needs correction"
+    return "Pending"
+
+
+def update_review_outcome(
+    supabase,
+    review_id: int,
+    *,
+    first_pass_paid: bool,
+    rejected: bool,
+    rejection_reason: str = "",
+    updated_by: str = "",
+) -> None:
+    if supabase is None:
+        raise RuntimeError("Supabase is not configured.")
+    if first_pass_paid and rejected:
+        raise ValueError("A claim cannot be both first-pass paid and rejected.")
+    payload = {
+        "first_pass_paid": 1 if first_pass_paid else 0,
+        "rejected": 1 if rejected else 0,
+        "rejection_reason": str(rejection_reason or "").strip() if rejected else "",
+        "outcome_updated_at": _utc_now_iso(),
+        "outcome_updated_by": str(updated_by or "").strip(),
+    }
+    supabase.table("reviews").update(payload).eq("id", int(review_id)).execute()
+
+
 def load_reviews(supabase, limit: int = 5000) -> pd.DataFrame:
     if supabase is None:
         return pd.DataFrame()
@@ -315,7 +350,281 @@ AUDIT_RULE_LABELS = {
     "alignment_report": "Alignment — printout report attached to RO",
     "parts_warranty_mopa": "Parts warranty — MOPAR and original RO",
     "manual_guidance": "WAM / TSB guidance confirmation warning",
+    "other": "Other / uncategorized finding",
 }
+
+ADVISOR_COACHING_PHRASES = {
+    "narrative_required": "missing concern, cause, or correction",
+    "pencil_wrench_cause": "incomplete cause narrative (diagnostics or failure not clear)",
+    "pencil_wrench_correction": "incomplete correction narrative (repair or verification not clear)",
+    "oil_leak": "oil dye not billed or not documented",
+    "sublet": "sublet paperwork incomplete (VIN, mileage, or notes)",
+    "rental": "rental days or manager sign-off missing",
+    "rental_high_days": "long rental — supporting documentation may be missing",
+    "warranty_add_on": "W+ add-on missing Service Manager sign-off",
+    "tech_time": "tech flagged time vs. time allotted out of range",
+    "battery_test_slip": "battery test slip/code missing",
+    "ac_evac_slip": "A/C EVAC/recharge slip missing",
+    "alignment_report": "alignment printout not attached to the RO",
+    "parts_warranty_mopa": "parts warranty missing MOPAR/original RO support",
+    "manual_guidance": "WAM/TSB guidance not confirmed",
+    "other": "other audit documentation issue",
+}
+
+
+def format_coaching_issue(claim_count: int, rule_key: str) -> str:
+    phrase = ADVISOR_COACHING_PHRASES.get(
+        str(rule_key or "").strip(),
+        audit_rule_label(rule_key).lower(),
+    )
+    noun = "claim" if claim_count == 1 else "claims"
+    return f"{claim_count} {noun} with {phrase}"
+
+
+def _valid_advisor_name(name: str) -> bool:
+    cleaned = str(name or "").strip()
+    return bool(cleaned) and cleaned not in {"—", "-", "Unknown", "unknown", "N/A", "n/a"}
+
+
+def finding_message(item) -> str:
+    if isinstance(item, dict):
+        return str(item.get("message") or "").strip()
+    return str(item or "").strip()
+
+
+def finding_rule_key(item) -> str:
+    if isinstance(item, dict):
+        rule = str(item.get("rule") or "").strip()
+        if rule:
+            return rule
+    return classify_finding_message(finding_message(item))
+
+
+def classify_finding_message(message: str) -> str:
+    """Map saved finding text to an audit rule bucket (legacy reviews without rule keys)."""
+    msg = str(message or "").lower()
+    if not msg:
+        return "other"
+    if msg.startswith("missing concern") or msg.startswith("missing cause") or msg.startswith("missing correction"):
+        return "narrative_required"
+    if "pencil wrench cause" in msg:
+        return "pencil_wrench_cause"
+    if "pencil wrench correction" in msg:
+        return "pencil_wrench_correction"
+    if "oil leak" in msg or "oil dye" in msg or "dye was used" in msg:
+        return "oil_leak"
+    if "sublet" in msg:
+        return "sublet"
+    if "rental days billed" in msg or ("manager sign-off" in msg and "rental" in msg):
+        return "rental"
+    if "rental days" in msg and "documentation" in msg:
+        return "rental_high_days"
+    if "add-on" in msg or "w+" in msg or "warranty add-on" in msg:
+        return "warranty_add_on"
+    if "tech flagged time" in msg or "time allotted" in msg:
+        return "tech_time"
+    if "battery" in msg and ("test slip" in msg or "test/code" in msg):
+        return "battery_test_slip"
+    if "a/c repair" in msg or "evac/recharge" in msg:
+        return "ac_evac_slip"
+    if "alignment" in msg:
+        return "alignment_report"
+    if "parts warranty" in msg or "mopar" in msg or "mopa" in msg:
+        return "parts_warranty_mopa"
+    if "manual guidance" in msg or "warranty manual" in msg:
+        return "manual_guidance"
+    return "other"
+
+
+def audit_rule_label(rule_key: str) -> str:
+    return AUDIT_RULE_LABELS.get(str(rule_key or "").strip(), AUDIT_RULE_LABELS["other"])
+
+
+def _parse_jobs_cell(value) -> list:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def _iter_review_findings(review_row: dict) -> list[dict]:
+    """Flatten hard stops and warnings from a saved review into analytic rows."""
+    jobs = _parse_jobs_cell(review_row.get("jobs"))
+    advisor = str(review_row.get("advisor") or "").strip() or "—"
+    technician = str(review_row.get("technician") or "").strip() or "—"
+    ro_number = str(review_row.get("ro_number") or "").strip()
+    created_at = review_row.get("created_at")
+    rows = []
+
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        job_no = job.get("job_no", "")
+        claim_value = float(job.get("claim_value") or 0)
+        for severity, key in (("hard", "hard_stops"), ("warn", "warnings")):
+            for item in job.get(key) or []:
+                message = finding_message(item)
+                if not message:
+                    continue
+                rule_key = finding_rule_key(item)
+                rows.append(
+                    {
+                        "ro_number": ro_number,
+                        "advisor": advisor,
+                        "technician": technician,
+                        "created_at": created_at,
+                        "job_no": job_no,
+                        "severity": severity,
+                        "rule_key": rule_key,
+                        "rule_label": audit_rule_label(rule_key),
+                        "message": message,
+                        "claim_value": claim_value,
+                    }
+                )
+    return rows
+
+
+def compute_hard_stop_breakdown(df: pd.DataFrame) -> dict:
+    """Summarize audit findings by rule, advisor, and week for coaching dashboards."""
+    empty = {
+        "finding_count": 0,
+        "hard_count": 0,
+        "warn_count": 0,
+        "reviews_with_findings": 0,
+        "rule_summary": pd.DataFrame(),
+        "rule_totals": pd.DataFrame(),
+        "advisor_rule_summary": pd.DataFrame(),
+        "weekly_rule_trend": pd.DataFrame(),
+        "advisor_coaching": [],
+    }
+    if df is None or df.empty:
+        return empty
+
+    data = normalize_reviews_dataframe(df)
+    all_rows: list[dict] = []
+    reviews_with_findings: set[str] = set()
+
+    for _, row in data.iterrows():
+        review_rows = _iter_review_findings(row.to_dict())
+        if review_rows:
+            reviews_with_findings.add(str(row.get("ro_number") or row.name))
+        all_rows.extend(review_rows)
+
+    if not all_rows:
+        return empty
+
+    findings = pd.DataFrame(all_rows)
+    hard_count = int((findings["severity"] == "hard").sum())
+    warn_count = int((findings["severity"] == "warn").sum())
+    total = len(findings)
+
+    rule_summary = (
+        findings.groupby(["rule_key", "rule_label", "severity"], as_index=False)
+        .agg(count=("message", "count"))
+        .sort_values(["count", "rule_label"], ascending=[False, True])
+    )
+    rule_summary["pct"] = (rule_summary["count"] / total * 100).round(1)
+
+    rule_totals = (
+        findings.groupby(["rule_key", "rule_label"], as_index=False)
+        .agg(total_count=("message", "count"))
+        .sort_values("total_count", ascending=False)
+    )
+
+    advisor_rule = (
+        findings.groupby(["advisor", "rule_label"], as_index=False)
+        .agg(count=("message", "count"))
+        .sort_values(["count", "advisor"], ascending=[False, True])
+    )
+
+    weekly_rule_trend = pd.DataFrame()
+    if "created_at" in findings.columns and findings["created_at"].notna().any():
+        trend = findings.dropna(subset=["created_at"]).copy()
+        trend["week"] = trend["created_at"].dt.to_period("W").astype(str)
+        top_rules = rule_totals.head(5)["rule_label"].tolist()
+        trend = trend[trend["rule_label"].isin(top_rules)]
+        if not trend.empty:
+            weekly_rule_trend = (
+                trend.groupby(["week", "rule_label"], as_index=False)
+                .agg(count=("message", "count"))
+                .sort_values("week")
+            )
+
+    coaching_priorities = []
+    for _, row in rule_totals.head(6).iterrows():
+        coaching_priorities.append(
+            {
+                "rule_key": row["rule_key"],
+                "rule_label": row["rule_label"],
+                "count": int(row["total_count"]),
+                "pct": round(float(row["total_count"]) / total * 100, 1),
+            }
+        )
+
+    advisor_coaching = _compute_advisor_coaching_details(findings)
+
+    return {
+        "finding_count": total,
+        "hard_count": hard_count,
+        "warn_count": warn_count,
+        "reviews_with_findings": len(reviews_with_findings),
+        "rule_summary": rule_summary,
+        "rule_totals": rule_totals,
+        "advisor_rule_summary": advisor_rule,
+        "weekly_rule_trend": weekly_rule_trend,
+        "coaching_priorities": coaching_priorities,
+        "advisor_coaching": advisor_coaching,
+    }
+
+
+def _compute_advisor_coaching_details(findings: pd.DataFrame) -> list[dict]:
+    """Per-advisor coaching list: distinct RO counts by issue type."""
+    if findings is None or findings.empty:
+        return []
+
+    scoped = findings.copy()
+    scoped["advisor"] = scoped["advisor"].astype(str).str.strip()
+    scoped = scoped[scoped["advisor"].map(_valid_advisor_name)]
+    if scoped.empty:
+        return []
+
+    claim_counts = (
+        scoped.groupby(["advisor", "rule_key"], as_index=False)
+        .agg(claim_count=("ro_number", "nunique"))
+        .sort_values(["advisor", "claim_count"], ascending=[True, False])
+    )
+
+    ros_with_issues = scoped.groupby("advisor")["ro_number"].nunique().to_dict()
+
+    coaching: list[dict] = []
+    for advisor, group in claim_counts.groupby("advisor", sort=False):
+        issues = [
+            format_coaching_issue(int(row["claim_count"]), row["rule_key"])
+            for _, row in group.iterrows()
+            if int(row["claim_count"]) > 0
+        ]
+        if not issues:
+            continue
+        coaching.append(
+            {
+                "advisor": advisor,
+                "ros_with_issues": int(ros_with_issues.get(advisor, 0)),
+                "issues": issues,
+            }
+        )
+
+    coaching.sort(
+        key=lambda item: (item["ros_with_issues"], len(item["issues"])),
+        reverse=True,
+    )
+    return coaching
 
 
 def normalize_audit_rules(raw: dict | None) -> dict:
@@ -519,6 +828,12 @@ def normalize_reviews_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         out["is_needs_review"] = status.str.contains("NEEDS", case=False, na=False).astype(int)
         out["is_ready"] = status.str.contains("READY", case=False, na=False).astype(int)
 
+    if "first_pass_paid" in out.columns and "rejected" in out.columns:
+        out["outcome_status"] = [
+            review_outcome_label(fp, rej)
+            for fp, rej in zip(out["first_pass_paid"], out["rejected"])
+        ]
+
     return out
 
 
@@ -536,10 +851,12 @@ def compute_roi_metrics(
         "total_claim_value": 0.0,
         "avg_score": 0.0,
         "first_pass_pct": 0.0,
+        "first_pass_pct_resolved": 0.0,
         "first_pass_count": 0,
         "rejected_pct": 0.0,
         "rejected_count": 0,
         "rejected_value": 0.0,
+        "pending_outcome_count": 0,
         "hard_stop_count": 0,
         "warning_count": 0,
         "do_not_submit_count": 0,
@@ -565,8 +882,14 @@ def compute_roi_metrics(
 
     first_pass_count = int(data.get("first_pass_paid", pd.Series([0])).sum())
     rejected_count = int(data.get("rejected", pd.Series([0])).sum())
+    pending_outcome_count = int(
+        ((data.get("first_pass_paid", pd.Series([0])) == 0) & (data.get("rejected", pd.Series([0])) == 0)).sum()
+        if "first_pass_paid" in data.columns and "rejected" in data.columns else 0
+    )
+    resolved_count = max(count - pending_outcome_count, 0)
     first_pass_pct = (first_pass_count / count * 100) if count else 0.0
-    rejected_pct = (rejected_count / count * 100) if count else 0.0
+    first_pass_pct_resolved = (first_pass_count / resolved_count * 100) if resolved_count else 0.0
+    rejected_pct = (rejected_count / resolved_count * 100) if resolved_count else 0.0
     rejected_value = float(
         data.loc[data.get("rejected", pd.Series([0])) == 1, "total_claim_value"].sum()
         if "rejected" in data.columns else 0.0
@@ -623,10 +946,12 @@ def compute_roi_metrics(
         "total_claim_value": total_claim,
         "avg_score": avg_score,
         "first_pass_pct": first_pass_pct,
+        "first_pass_pct_resolved": first_pass_pct_resolved,
         "first_pass_count": first_pass_count,
         "rejected_pct": rejected_pct,
         "rejected_count": rejected_count,
         "rejected_value": rejected_value,
+        "pending_outcome_count": pending_outcome_count,
         "hard_stop_count": hard_stops,
         "warning_count": warnings,
         "do_not_submit_count": do_not_submit,

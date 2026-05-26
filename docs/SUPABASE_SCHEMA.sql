@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     first_pass_paid BOOLEAN DEFAULT FALSE,
     rejected BOOLEAN DEFAULT FALSE,
     rejection_reason TEXT,
+    outcome_updated_at TIMESTAMPTZ,
+    outcome_updated_by TEXT,
     jobs JSONB DEFAULT '[]'::jsonb,
     vin_recall_identified INTEGER DEFAULT 0,
     vin_recall_count INTEGER DEFAULT 0,
@@ -50,6 +52,8 @@ ALTER TABLE reviews ADD COLUMN IF NOT EXISTS time_bypass_user TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS first_pass_paid BOOLEAN DEFAULT FALSE;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS rejected BOOLEAN DEFAULT FALSE;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS outcome_updated_at TIMESTAMPTZ;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS outcome_updated_by TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS jobs JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS status TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS vin_recall_identified INTEGER DEFAULT 0;

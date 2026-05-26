@@ -88,6 +88,51 @@ def brand_color_lock_css(theme: str = "Dark") -> str:
     )
 
 
+def metric_display_css() -> str:
+    """Compact metric cards with full label/value visibility (no ellipsis clipping)."""
+    return """
+    div[data-testid="stMetric"] {
+        padding: 8px 10px !important;
+        min-height: 64px !important;
+        height: auto !important;
+        overflow: visible !important;
+        border-radius: 12px !important;
+    }
+    div[data-testid="stMetricLabel"],
+    div[data-testid="stMetricLabel"] p,
+    div[data-testid="stMetricLabel"] span,
+    div[data-testid="stMetricLabel"] label {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        line-height: 1.25 !important;
+        font-size: 0.78rem !important;
+        max-width: 100% !important;
+        display: block !important;
+        -webkit-line-clamp: unset !important;
+    }
+    div[data-testid="stMetricValue"],
+    div[data-testid="stMetricValue"] p,
+    div[data-testid="stMetricValue"] span,
+    div[data-testid="stMetricValue"] div {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        line-height: 1.2 !important;
+        font-size: 1.15rem !important;
+        max-width: 100% !important;
+        -webkit-line-clamp: unset !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+        overflow: visible !important;
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+    }
+    """
+
+
 THEME_CSS = {
     "Dark": """
     .stApp {
@@ -285,21 +330,30 @@ THEME_CSS = {
         background: rgba(7, 19, 34, .86);
         border: 1px solid rgba(62,150,255,.28);
         border-radius: 16px;
-        padding: 14px;
-        min-height: 112px;
+        padding: 14px 16px;
+        min-height: 96px;
+        height: auto !important;
+        overflow: visible !important;
     }
     div[data-testid="stMetricValue"] {
-        white-space: nowrap !important;
+        white-space: normal !important;
         overflow: visible !important;
-        text-overflow: clip !important;
-        font-size: 1.9rem !important;
+        text-overflow: unset !important;
+        word-break: break-word;
+        font-size: clamp(1.15rem, 2.2vw, 1.75rem) !important;
+        line-height: 1.25 !important;
         color: #ffffff !important;
     }
     div[data-testid="stMetricLabel"] {
         white-space: normal !important;
         overflow: visible !important;
-        text-overflow: clip !important;
+        text-overflow: unset !important;
+        line-height: 1.35 !important;
         color: #d6e8ff !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        overflow: visible !important;
+        min-width: 7.5rem;
     }
     div.stButton > button,
     button[kind="secondary"],
@@ -1185,21 +1239,30 @@ THEME_CSS = {
         background: var(--rg-surface);
         border: 1px solid var(--rg-border);
         border-radius: 16px;
-        padding: 14px;
-        min-height: 112px;
+        padding: 14px 16px;
+        min-height: 96px;
+        height: auto !important;
+        overflow: visible !important;
     }
     div[data-testid="stMetricValue"] {
-        white-space: nowrap !important;
+        white-space: normal !important;
         overflow: visible !important;
-        text-overflow: clip !important;
-        font-size: 1.9rem !important;
+        text-overflow: unset !important;
+        word-break: break-word;
+        font-size: clamp(1.15rem, 2.2vw, 1.75rem) !important;
+        line-height: 1.25 !important;
         color: #0f172a !important;
     }
     div[data-testid="stMetricLabel"] {
         white-space: normal !important;
         overflow: visible !important;
-        text-overflow: clip !important;
+        text-overflow: unset !important;
+        line-height: 1.35 !important;
         color: #334155 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        overflow: visible !important;
+        min-width: 7.5rem;
     }
     div.stButton > button,
     button[kind="secondary"],

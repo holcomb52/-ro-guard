@@ -187,6 +187,32 @@ def advisor_hard_stops_chart(advisor_df: pd.DataFrame, limit: int = 8, *, compac
     return fig_to_png_bytes(fig, compact=compact)
 
 
+def hard_stop_rules_chart(rule_totals: pd.DataFrame, limit: int = 10, *, compact: bool = False) -> Optional[bytes]:
+    """Horizontal bar chart of top audit rule findings."""
+    if rule_totals is None or rule_totals.empty:
+        return None
+    count_col = "total_count" if "total_count" in rule_totals.columns else "count"
+    top = rule_totals.sort_values(count_col, ascending=False).head(limit)
+    if top[count_col].sum() <= 0:
+        return None
+
+    label_col = "rule_label" if "rule_label" in top.columns else "rule_key"
+    figsize = (4.6, max(2.4, 0.35 * len(top))) if compact else (7.8, max(4.0, 0.42 * len(top)))
+    fig, ax = _prep_figure(figsize=figsize, compact=compact)
+    y_labels = [str(name)[:34] for name in top[label_col]]
+    y_pos = range(len(y_labels))
+    ax.barh(list(y_pos), top[count_col], color=COLORS["stop"])
+    ax.set_yticks(list(y_pos))
+    tick_fs = 6 if compact else 8
+    title_fs = 9 if compact else 12
+    ax.set_yticklabels(y_labels, fontsize=tick_fs)
+    ax.invert_yaxis()
+    ax.set_title("Hard Stop & Warning Breakdown", color=COLORS["text"], fontsize=title_fs, pad=6)
+    ax.grid(axis="x", color=COLORS["grid"], alpha=0.35)
+    ax.tick_params(colors=COLORS["text"], labelsize=tick_fs)
+    return fig_to_png_bytes(fig, compact=compact)
+
+
 def review_status_pie(df: pd.DataFrame, *, compact: bool = False) -> Optional[bytes]:
     if df is None or df.empty or "status" not in df.columns:
         return None

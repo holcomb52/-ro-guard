@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 from fpdf import FPDF
 
+from review_store import finding_message
+
 
 def _safe_text(value) -> str:
     text = str(value or "").strip()
@@ -85,13 +87,14 @@ def _body_text(pdf: FPDF, text: str, size: int = 10):
     pdf.ln(1)
 
 
-def _bullet_list(pdf: FPDF, items: list[str]):
+def _bullet_list(pdf: FPDF, items: list):
     _ensure_left(pdf)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(30, 30, 30)
     for item in items:
-        if item:
-            pdf.multi_cell(0, 5, f"- {_safe_text(item)}")
+        text = finding_message(item)
+        if text:
+            pdf.multi_cell(0, 5, f"- {_safe_text(text)}")
     pdf.ln(1)
 
 
@@ -481,7 +484,8 @@ def build_roi_report_pdf(
         pdf,
         [
             ("Average Audit Score", f"{float(metrics.get('avg_score') or 0):.1f}"),
-            ("First-Pass Approval", f"{float(metrics.get('first_pass_pct') or 0):.1f}%"),
+            ("First-Pass Approval (resolved)", f"{float(metrics.get('first_pass_pct_resolved') or metrics.get('first_pass_pct') or 0):.1f}%"),
+            ("Pending Outcomes", str(int(metrics.get("pending_outcome_count") or 0))),
             ("Rejected Claim Value", f"${float(metrics.get('rejected_value') or 0):,.0f}"),
             ("Hard Stops Caught", str(metrics.get("hard_stop_count", 0))),
             ("Warnings Flagged", str(metrics.get("warning_count", 0))),

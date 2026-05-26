@@ -13,6 +13,7 @@ import streamlit.components.v1 as components
 
 from charts import (
     advisor_hard_stops_chart,
+    hard_stop_rules_chart,
     audit_outcomes_pie,
     first_pass_pie,
     issue_breakdown_pie,
@@ -39,7 +40,9 @@ from auth import (
 from review_store import (
     AUDIT_RULE_LABELS,
     active_rejection_reason_labels,
+    compute_hard_stop_breakdown,
     compute_roi_metrics,
+    finding_message,
     load_audit_rules,
     filter_bulletins_df,
     load_bulletins,
@@ -51,14 +54,16 @@ from review_store import (
     normalize_audit_rules,
     normalize_rejection_reason_library,
     normalize_reviews_dataframe,
+    review_outcome_label,
     save_audit_rules,
     save_bulletin as persist_bulletin,
     save_rejection_reason_library,
     save_review as persist_review,
     save_smart_warranty_settings,
     smart_warranty_punch_exempt,
+    update_review_outcome,
 )
-from theme_styles import BRAND_TEXT, THEME_CSS, brand_color_lock_css
+from theme_styles import BRAND_TEXT, THEME_CSS, brand_color_lock_css, metric_display_css
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -1299,6 +1304,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     if display_prefs:
         css += build_user_display_css(display_prefs, theme=theme)
     css += brand_color_lock_css(theme)
+    css += metric_display_css()
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -2021,10 +2027,11 @@ def _add_audit_finding(hard, warn, audit_rules, rule_key, message):
     severity = _audit_rule_severity(audit_rules, rule_key)
     if severity is None:
         return
+    finding = {"rule": rule_key, "message": message}
     if severity == "warn":
-        warn.append(message)
+        warn.append(finding)
     else:
-        hard.append(message)
+        hard.append(finding)
 
 
 def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules=None):
@@ -2845,41 +2852,49 @@ def render_review():
     )
     render_live_submit_status_bar(live_summary)
 
-    first_pass_paid = st.checkbox(
-        "Paid on First Submission",
-        key=f"first_pass_paid_{st.session_state.form_version}"
-    )
-
-    rejected = st.checkbox(
-        "Rejected / Returned",
-        key=f"rejected_{st.session_state.form_version}"
-    )
-
-    rejection_reason = ""
-    if rejected:
-        reason_labels = active_rejection_reason_labels(rejection_library)
-        if not reason_labels:
-            reason_labels = active_rejection_reason_labels({})
-
-        fv = st.session_state.form_version
-        selected_reason = st.selectbox(
-            "Rejection Reason",
-            options=[""] + reason_labels,
-            key=f"rejection_reason_select_{fv}",
-            help="Standard reasons are managed under Admin → Rejection Reason Library.",
+    with st.expander("Claim outcome (optional — update later in Reporting)", expanded=False):
+        st.caption(
+            "Record the Stellantis result when you know it. Leave both unchecked if the claim "
+            "is still pending — you can update outcomes anytime under **Reporting**."
         )
-        rejection_notes = st.text_input(
-            "Additional rejection notes (optional)",
-            key=f"rejection_reason_notes_{fv}",
-            placeholder="Required for 'Other' — optional detail for any reason.",
+        first_pass_paid = st.checkbox(
+            "Paid on First Submission",
+            key=f"first_pass_paid_{st.session_state.form_version}",
         )
-        if selected_reason:
-            if selected_reason.lower().startswith("other") and not rejection_notes.strip():
-                st.warning("Add notes when selecting **Other**.")
-            elif rejection_notes.strip():
-                rejection_reason = f"{selected_reason} — {rejection_notes.strip()}"
-            else:
-                rejection_reason = selected_reason
+
+        rejected = st.checkbox(
+            "Rejected / Returned",
+            key=f"rejected_{st.session_state.form_version}",
+        )
+
+        rejection_reason = ""
+        if rejected:
+            reason_labels = active_rejection_reason_labels(rejection_library)
+            if not reason_labels:
+                reason_labels = active_rejection_reason_labels({})
+
+            fv = st.session_state.form_version
+            selected_reason = st.selectbox(
+                "Rejection Reason",
+                options=[""] + reason_labels,
+                key=f"rejection_reason_select_{fv}",
+                help="Standard reasons are managed under Admin → Rejection Reason Library.",
+            )
+            rejection_notes = st.text_input(
+                "Additional rejection notes (optional)",
+                key=f"rejection_reason_notes_{fv}",
+                placeholder="Required for 'Other' — optional detail for any reason.",
+            )
+            if selected_reason:
+                if selected_reason.lower().startswith("other") and not rejection_notes.strip():
+                    st.warning("Add notes when selecting **Other**.")
+                elif rejection_notes.strip():
+                    rejection_reason = f"{selected_reason} — {rejection_notes.strip()}"
+                else:
+                    rejection_reason = selected_reason
+
+        if first_pass_paid and rejected:
+            st.error("Choose **either** First-Pass Paid **or** Rejected — not both.")
 
     days_to_submit = (day_submitted - ro_invoiced).days
     st.metric("Days to Submit", days_to_submit)
@@ -3157,141 +3172,147 @@ def render_review():
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
     ):
+        if first_pass_paid and rejected:
+            st.error(
+                "Fix claim outcome before saving: choose First-Pass Paid **or** Rejected, "
+                "or leave both unchecked if still pending."
+            )
+        if not (first_pass_paid and rejected):
 
-        all_hard = []
-        all_warn = []
-        scores = []
+            all_hard = []
+            all_warn = []
+            scores = []
 
-        total_value = sum(
-            float(j.get("claim_value") or 0)
-            for j in jobs
-        )
-
-        hard_value = 0.0
-
-        for job in jobs:
-            hard, warn, score = audit_job(
-                job,
-                time_bypass,
-                smart_warranty_time_exempt=smart_warranty_time_exempt,
-                audit_rules=audit_rules,
+            total_value = sum(
+                float(j.get("claim_value") or 0)
+                for j in jobs
             )
 
-            job["hard_stops"] = hard
-            job["warnings"] = warn
-            job["score"] = score
+            hard_value = 0.0
 
-            scores.append(score)
-            all_hard.extend(hard)
-            all_warn.extend(warn)
+            for job in jobs:
+                hard, warn, score = audit_job(
+                    job,
+                    time_bypass,
+                    smart_warranty_time_exempt=smart_warranty_time_exempt,
+                    audit_rules=audit_rules,
+                )
 
-            if hard:
-                hard_value += float(job.get("claim_value") or 0)
+                job["hard_stops"] = hard
+                job["warnings"] = warn
+                job["score"] = score
 
-        final_score = int(sum(scores) / len(scores)) if scores else 0
+                scores.append(score)
+                all_hard.extend(hard)
+                all_warn.extend(warn)
 
-        status = (
-            "🔴 DO NOT SUBMIT"
-            if all_hard
-            else (
-                "🟡 NEEDS REVIEW"
-                if all_warn
-                else "🟢 READY"
+                if hard:
+                    hard_value += float(job.get("claim_value") or 0)
+
+            final_score = int(sum(scores) / len(scores)) if scores else 0
+
+            status = (
+                "🔴 DO NOT SUBMIT"
+                if all_hard
+                else (
+                    "🟡 NEEDS REVIEW"
+                    if all_warn
+                    else "🟢 READY"
+                )
             )
-        )
 
-        result_banner(status)
+            result_banner(status)
 
-        recall_result = st.session_state.get(f"vin_recall_result_{st.session_state.form_version}")
-        if recall_result and recall_result.get("ok"):
-            job_text = _review_job_text_from_session(st.session_state.form_version, job_count)
-            recalls = apply_job_relevance(list(recall_result.get("recalls") or []), job_text)
-            related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
-            if related:
-                st.markdown("### VIN Recall Alert")
-                for recall in related[:3]:
-                    st.warning(
-                        f"NHTSA recall **{recall.get('campaign', '—')}** "
-                        f"({recall.get('component', '')}) may relate to this repair. "
-                        "Verify campaign status in OASIS / wiTECH before warranty submit."
+            recall_result = st.session_state.get(f"vin_recall_result_{st.session_state.form_version}")
+            if recall_result and recall_result.get("ok"):
+                job_text = _review_job_text_from_session(st.session_state.form_version, job_count)
+                recalls = apply_job_relevance(list(recall_result.get("recalls") or []), job_text)
+                related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
+                if related:
+                    st.markdown("### VIN Recall Alert")
+                    for recall in related[:3]:
+                        st.warning(
+                            f"NHTSA recall **{recall.get('campaign', '—')}** "
+                            f"({recall.get('component', '')}) may relate to this repair. "
+                            "Verify campaign status in OASIS / wiTECH before warranty submit."
+                        )
+                elif recall_result.get("recall_count"):
+                    st.info(
+                        f"This vehicle configuration has {recall_result['recall_count']} NHTSA recall(s) on file — "
+                        "confirm VIN-specific completion status before submit."
                     )
-            elif recall_result.get("recall_count"):
-                st.info(
-                    f"This vehicle configuration has {recall_result['recall_count']} NHTSA recall(s) on file — "
-                    "confirm VIN-specific completion status before submit."
+
+            x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
+
+            x1.metric("Audit Score", final_score)
+            x2.metric("Status", status)
+            x3.metric("Total Claim Value", f"${total_value:,.2f}")
+            x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
+            x5.metric("Hard Stops", len(all_hard))
+
+            for job in jobs:
+                with st.expander(
+                    f"Job {job['job_no']} Results",
+                    expanded=True
+                ):
+
+                    for h in job.get("hard_stops", []):
+                        st.error(finding_message(h))
+
+                    for w in job.get("warnings", []):
+                        st.warning(finding_message(w))
+
+                    render_applicable_manual_sections(
+                        job.get("manual_sections", []),
+                        key_prefix=f"audit_manual_{job['job_no']}",
+                    )
+
+                    if not job.get("hard_stops") and not job.get("warnings"):
+                        st.success("No audit issues found.")
+
+            report_payload = {
+                "ro_number": ro_number,
+                "vin": vin,
+                "ro_invoiced": str(ro_invoiced),
+                "day_submitted": str(day_submitted),
+                "days_to_submit": days_to_submit,
+                "first_pass_paid": first_pass_paid,
+                "rejected": rejected,
+                "rejection_reason": rejection_reason,
+                "advisor": advisor,
+                "technician": technician,
+                "warranty_admin": warranty_admin,
+                "score": final_score,
+                "status": status,
+                "total_claim_value": total_value,
+                "hard_stop_value": hard_value,
+                "hard_stop_count": len(all_hard),
+                "warning_count": len(all_warn),
+                "time_bypass": False if smart_warranty_time_exempt else time_bypass,
+                "time_bypass_user": "" if smart_warranty_time_exempt else time_bypass_user,
+                "entered_by": current_person_name(),
+                "jobs": jobs,
+                **_vin_recall_save_fields(st.session_state.form_version, vin),
+            }
+
+            if save_review(report_payload):
+                st.success("Review saved to Reporting (Supabase).")
+
+            try:
+                audit_pdf = build_audit_report_pdf(report_payload)
+                safe_ro = re.sub(r"[^\w\-]+", "_", str(ro_number or "audit")).strip("_") or "audit"
+                st.download_button(
+                    "Download Audit PDF",
+                    data=audit_pdf,
+                    file_name=f"RO_Shield_Audit_{safe_ro}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key=f"audit_pdf_{st.session_state.form_version}",
                 )
-
-        x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
-
-        x1.metric("Audit Score", final_score)
-        x2.metric("Status", status)
-        x3.metric("Total Claim Value", f"${total_value:,.2f}")
-        x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
-        x5.metric("Hard Stops", len(all_hard))
-
-        for job in jobs:
-            with st.expander(
-                f"Job {job['job_no']} Results",
-                expanded=True
-            ):
-
-                for h in job.get("hard_stops", []):
-                    st.error(h)
-
-                for w in job.get("warnings", []):
-                    st.warning(w)
-
-                render_applicable_manual_sections(
-                    job.get("manual_sections", []),
-                    key_prefix=f"audit_manual_{job['job_no']}",
-                )
-
-                if not job.get("hard_stops") and not job.get("warnings"):
-                    st.success("No audit issues found.")
-
-        report_payload = {
-            "ro_number": ro_number,
-            "vin": vin,
-            "ro_invoiced": str(ro_invoiced),
-            "day_submitted": str(day_submitted),
-            "days_to_submit": days_to_submit,
-            "first_pass_paid": first_pass_paid,
-            "rejected": rejected,
-            "rejection_reason": rejection_reason,
-            "advisor": advisor,
-            "technician": technician,
-            "warranty_admin": warranty_admin,
-            "score": final_score,
-            "status": status,
-            "total_claim_value": total_value,
-            "hard_stop_value": hard_value,
-            "hard_stop_count": len(all_hard),
-            "warning_count": len(all_warn),
-            "time_bypass": False if smart_warranty_time_exempt else time_bypass,
-            "time_bypass_user": "" if smart_warranty_time_exempt else time_bypass_user,
-            "entered_by": current_person_name(),
-            "jobs": jobs,
-            **_vin_recall_save_fields(st.session_state.form_version, vin),
-        }
-
-        if save_review(report_payload):
-            st.success("Review saved to Reporting (Supabase).")
-
-        try:
-            audit_pdf = build_audit_report_pdf(report_payload)
-            safe_ro = re.sub(r"[^\w\-]+", "_", str(ro_number or "audit")).strip("_") or "audit"
-            st.download_button(
-                "Download Audit PDF",
-                data=audit_pdf,
-                file_name=f"RO_Shield_Audit_{safe_ro}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key=f"audit_pdf_{st.session_state.form_version}",
-            )
-        except ImportError:
-            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
-        except Exception as e:
-            st.warning(f"Audit PDF could not be generated: {e}")
+            except ImportError:
+                st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
+            except Exception as e:
+                st.warning(f"Audit PDF could not be generated: {e}")
 
    
 
@@ -3435,6 +3456,24 @@ def render_claims():
     elif not df.empty:
         st.info("No useful learned claims to display yet. Upload paid claim PDFs with warranty narratives.")
 
+
+def render_metric_rows(rows: list[list], *, max_cols: int = 3) -> None:
+    """Render dashboard metrics in equal-width rows (max 3 per row) so text is not clipped."""
+    for row in rows:
+        if not row:
+            continue
+        for start in range(0, len(row), max_cols):
+            chunk = row[start : start + max_cols]
+            cols = st.columns(len(chunk))
+            for col, item in zip(cols, chunk):
+                if len(item) >= 3:
+                    label, value, help_text = item[0], item[1], item[2]
+                    col.metric(str(label), str(value), help=help_text)
+                else:
+                    label, value = item[0], item[1]
+                    col.metric(str(label), str(value))
+
+
 def _filter_reviews_by_date(df, key_prefix="report"):
     if df.empty or "created_at" not in df.columns:
         return df
@@ -3454,6 +3493,221 @@ def _filter_reviews_by_date(df, key_prefix="report"):
         (df["created_at"].dt.date >= start_date) &
         (df["created_at"].dt.date <= end_date)
     ]
+
+
+def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> None:
+    """Rule-level hard stop / warning analytics for manager coaching."""
+    breakdown = compute_hard_stop_breakdown(df)
+    if breakdown["finding_count"] <= 0:
+        st.info(
+            "No hard stops or warnings recorded in saved reviews for this period. "
+            "Complete audits on the **Review** tab to populate this breakdown."
+        )
+        return
+
+    st.markdown("### Hard Stop Breakdown")
+    st.caption(
+        "Which audit rules are firing most — use this to focus advisor and tech coaching."
+    )
+
+    severity_filter = st.radio(
+        "Show findings",
+        options=["All", "Hard stops only", "Warnings only"],
+        horizontal=True,
+        key=f"{key_prefix}_hs_severity_filter",
+    )
+
+    rule_summary = breakdown["rule_summary"].copy()
+    advisor_rule = breakdown["advisor_rule_summary"].copy()
+    if severity_filter == "Hard stops only":
+        rule_summary = rule_summary[rule_summary["severity"] == "hard"]
+        advisor_rule = advisor_rule[
+            advisor_rule["rule_label"].isin(rule_summary["rule_label"].unique())
+        ]
+        show_total = int(rule_summary["count"].sum()) if not rule_summary.empty else 0
+        show_hard = show_total
+        show_warn = 0
+    elif severity_filter == "Warnings only":
+        rule_summary = rule_summary[rule_summary["severity"] == "warn"]
+        advisor_rule = advisor_rule[
+            advisor_rule["rule_label"].isin(rule_summary["rule_label"].unique())
+        ]
+        show_total = int(rule_summary["count"].sum()) if not rule_summary.empty else 0
+        show_hard = 0
+        show_warn = show_total
+    else:
+        show_total = breakdown["finding_count"]
+        show_hard = breakdown["hard_count"]
+        show_warn = breakdown["warn_count"]
+
+    top_rule = "—"
+    top_rule_count = 0
+    rule_totals = breakdown["rule_totals"]
+    if not rule_totals.empty:
+        top_row = rule_totals.iloc[0]
+        top_rule = str(top_row.get("rule_label", "—"))
+        top_rule_count = int(top_row.get("total_count", 0))
+
+    render_metric_rows([
+        [
+            ("Total Findings", f"{show_total:,}"),
+            ("Hard Stops", f"{show_hard:,}"),
+            ("Warnings", f"{show_warn:,}"),
+        ],
+        [
+            ("ROs With Issues", f"{breakdown['reviews_with_findings']:,}"),
+            ("Top Rule Count", f"{top_rule_count:,}", top_rule),
+        ],
+    ])
+
+    chart_df = rule_totals.copy()
+    if severity_filter == "Hard stops only":
+        hard_rules = rule_summary.groupby(["rule_key", "rule_label"], as_index=False).agg(
+            total_count=("count", "sum")
+        )
+        chart_df = hard_rules
+    elif severity_filter == "Warnings only":
+        warn_rules = rule_summary.groupby(["rule_key", "rule_label"], as_index=False).agg(
+            total_count=("count", "sum")
+        )
+        chart_df = warn_rules
+
+    chart_png = hard_stop_rules_chart(chart_df)
+    if chart_png:
+        st.image(chart_png, use_container_width=True, caption="Findings by audit rule")
+
+    if breakdown["coaching_priorities"]:
+        priority_lines = []
+        for item in breakdown["coaching_priorities"][:5]:
+            priority_lines.append(
+                f"**{item['rule_label']}** — {item['count']} findings ({item['pct']:.1f}% of total)"
+            )
+        st.markdown("#### Coaching Priorities")
+        for line in priority_lines:
+            st.markdown(f"- {line}")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**By Audit Rule**")
+        if not rule_summary.empty:
+            display_rules = rule_summary.rename(
+                columns={
+                    "rule_label": "Audit Rule",
+                    "severity": "Type",
+                    "count": "Count",
+                    "pct": "% of Findings",
+                }
+            )
+            display_rules["Type"] = display_rules["Type"].map(
+                {"hard": "Hard Stop", "warn": "Warning"}
+            )
+            st.dataframe(
+                display_rules[["Audit Rule", "Type", "Count", "% of Findings"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("No findings for this filter.")
+
+    with c2:
+        st.markdown("**By Advisor (top issues)**")
+        if not advisor_rule.empty:
+            top_rules = (
+                chart_df.sort_values("total_count", ascending=False)
+                .head(5)["rule_label"]
+                .tolist()
+            )
+            advisor_pivot = (
+                advisor_rule[advisor_rule["rule_label"].isin(top_rules)]
+                .pivot_table(
+                    index="advisor",
+                    columns="rule_label",
+                    values="count",
+                    aggfunc="sum",
+                    fill_value=0,
+                )
+            )
+            advisor_pivot["Total"] = advisor_pivot.sum(axis=1)
+            advisor_pivot = advisor_pivot.sort_values("Total", ascending=False).head(8)
+            advisor_pivot = advisor_pivot.drop(columns=["Total"])
+            st.dataframe(advisor_pivot, use_container_width=True)
+        else:
+            st.caption("Advisor data will appear once reviews include advisor names.")
+
+    weekly = breakdown["weekly_rule_trend"]
+    if not weekly.empty:
+        st.markdown("**Trend — top rules by week**")
+        pivot_weekly = weekly.pivot_table(
+            index="week",
+            columns="rule_label",
+            values="count",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        st.line_chart(pivot_weekly)
+
+
+def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFrame) -> None:
+    """Show each advisor's specific audit issue areas for manager coaching."""
+    breakdown = compute_hard_stop_breakdown(df)
+    coaching = breakdown.get("advisor_coaching") or []
+
+    review_lookup: dict[str, dict] = {}
+    if advisor_summary is not None and not advisor_summary.empty:
+        for _, row in advisor_summary.iterrows():
+            name = str(row.get("advisor") or "").strip()
+            if not name:
+                continue
+            review_lookup[name] = {
+                "reviews": int(row.get("reviews") or 0),
+                "avg_score": float(row.get("avg_score") or 0),
+                "hard_stops": int(row.get("hard_stops") or 0),
+            }
+
+    st.markdown("**Advisor Coaching Focus**")
+    st.caption(
+        "Specific areas each advisor needs to tighten — counted by distinct ROs in this date range."
+    )
+
+    if coaching:
+        for entry in coaching[:12]:
+            advisor = entry["advisor"]
+            stats = review_lookup.get(advisor, {})
+            reviews = stats.get("reviews", entry.get("ros_with_issues", 0))
+            avg_score = stats.get("avg_score")
+            title_parts = [
+                advisor,
+                f"{reviews} review(s)",
+                f"{entry['ros_with_issues']} RO(s) with issues",
+            ]
+            if reviews and avg_score:
+                title_parts.append(f"avg score {avg_score:.0f}")
+            with st.expander(" · ".join(title_parts), expanded=len(coaching) <= 3):
+                for issue in entry["issues"]:
+                    st.markdown(f"- {issue}")
+        return
+
+    if advisor_summary is not None and not advisor_summary.empty:
+        named = advisor_summary[advisor_summary["advisor"].astype(str).str.strip() != ""]
+        if not named.empty:
+            st.info(
+                "Advisor names are on file, but saved reviews do not yet include job-level hard stops "
+                "or warnings. Run **Run Audit + Save Review** on recent ROs to populate coaching areas."
+            )
+            st.dataframe(
+                named.head(8).rename(columns={
+                    "advisor": "Advisor",
+                    "reviews": "Reviews",
+                    "avg_score": "Avg Score",
+                    "hard_stops": "Hard Stops",
+                    "protected_value": "Protected $",
+                    "rejected": "Rejected",
+                }),
+                use_container_width=True,
+            )
+            return
+
+    st.caption("Advisor coaching areas will appear once reviews include advisor names and audit findings.")
 
 
 def render_roi_dashboard():
@@ -3550,7 +3804,11 @@ def render_roi_dashboard():
     st.markdown("### Quality & Approval")
     q1, q2, q3, q4, q5 = st.columns(5)
     q1.metric("Avg Audit Score", f"{metrics['avg_score']:.1f}")
-    q2.metric("First-Pass Approval", f"{metrics['first_pass_pct']:.1f}%")
+    q2.metric(
+        "First-Pass Approval",
+        f"{metrics['first_pass_pct_resolved']:.1f}%",
+        help="Of reviews with a recorded paid or rejected OEM outcome.",
+    )
     q3.metric("Rejected Claim Value", f"${metrics['rejected_value']:,.0f}")
     q4.metric("Hard Stops Caught", metrics["hard_stop_count"])
     q5.metric("Warnings Flagged", metrics["warning_count"])
@@ -3560,6 +3818,8 @@ def render_roi_dashboard():
     o1.metric("🔴 Do Not Submit", metrics["do_not_submit_count"])
     o2.metric("🟡 Needs Review", metrics["needs_review_count"])
     o3.metric("🟢 Ready", metrics["ready_count"])
+
+    render_hard_stop_breakdown(df, key_prefix="roi")
 
     if metrics["review_count"] > 0:
         st.markdown("### Visual Summary")
@@ -3590,22 +3850,7 @@ def render_roi_dashboard():
     st.markdown("### Where to Focus Coaching")
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Advisors — Most Protected Claim Value**")
-        advisor_df = metrics["advisor_summary"]
-        if not advisor_df.empty:
-            st.dataframe(
-                advisor_df.head(8).rename(columns={
-                    "advisor": "Advisor",
-                    "reviews": "Reviews",
-                    "avg_score": "Avg Score",
-                    "hard_stops": "Hard Stops",
-                    "protected_value": "Protected $",
-                    "rejected": "Rejected",
-                }),
-                use_container_width=True,
-            )
-        else:
-            st.caption("Advisor data will appear once reviews include advisor names.")
+        render_advisor_coaching_focus(df, metrics["advisor_summary"])
 
     with c2:
         st.markdown("**Top Rejection Reasons**")
@@ -3659,6 +3904,226 @@ def render_roi_dashboard():
         st.warning(f"ROI PDF could not be generated: {e}")
 
 
+def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, str]:
+    selected_reason = str(selected_reason or "").strip()
+    notes = str(notes or "").strip()
+    if not selected_reason:
+        return False, "Select a rejection reason."
+    if selected_reason.lower().startswith("other") and not notes:
+        return False, "Add notes when selecting **Other**."
+    if notes:
+        return True, f"{selected_reason} — {notes}"
+    return True, selected_reason
+
+
+def _outcome_radio_index(first_pass_paid: int, rejected: int) -> int:
+    if first_pass_paid and not rejected:
+        return 1
+    if rejected and not first_pass_paid:
+        return 2
+    return 0
+
+
+def _review_option_label(row: dict) -> str:
+    ro_number = str(row.get("ro_number") or "—").strip() or "—"
+    advisor = str(row.get("advisor") or "—").strip() or "—"
+    claim_value = float(row.get("total_claim_value") or 0)
+    status = str(row.get("outcome_status") or review_outcome_label(
+        row.get("first_pass_paid"), row.get("rejected")
+    ))
+    audited = row.get("created_at")
+    audited_label = ""
+    if audited is not None and str(audited) not in ("", "NaT"):
+        try:
+            audited_label = pd.to_datetime(audited).strftime("%Y-%m-%d")
+        except Exception:
+            audited_label = str(audited)[:10]
+    parts = [f"RO {ro_number}", advisor, f"${claim_value:,.0f}", status]
+    if audited_label:
+        parts.append(audited_label)
+    return " · ".join(parts)
+
+
+def render_outcome_followup(df: pd.DataFrame) -> None:
+    """Let warranty staff record OEM paid/rejected results after submission."""
+    st.subheader("Update Claim Outcomes")
+    st.caption(
+        "After Stellantis pays or rejects the claim, record the result here — even if the audit "
+        "was saved weeks ago with no outcome selected."
+    )
+
+    if "id" not in df.columns:
+        st.warning("Review IDs are missing from Reporting data. Refresh after Supabase is up to date.")
+        return
+
+    work = df.copy()
+    work["first_pass_paid"] = pd.to_numeric(work.get("first_pass_paid", 0), errors="coerce").fillna(0).astype(int)
+    work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
+    if "outcome_status" not in work.columns:
+        work["outcome_status"] = [
+            review_outcome_label(fp, rej) for fp, rej in zip(work["first_pass_paid"], work["rejected"])
+        ]
+
+    pending_mask = (work["first_pass_paid"] == 0) & (work["rejected"] == 0)
+    pending_count = int(pending_mask.sum())
+    first_pass_count = int(work["first_pass_paid"].sum())
+    rejected_count = int(work["rejected"].sum())
+    resolved_count = len(work) - pending_count
+
+    render_metric_rows([
+        [
+            ("Pending Outcome", f"{pending_count:,}"),
+            ("First-Pass Paid", f"{first_pass_count:,}"),
+            ("Rejected / Returned", f"{rejected_count:,}"),
+        ],
+        [
+            (
+                "First-Pass % (resolved)",
+                f"{(first_pass_count / resolved_count * 100):.1f}%" if resolved_count else "—",
+                "Paid on first submission ÷ reviews with a recorded paid or rejected outcome.",
+            ),
+        ],
+    ])
+
+    filter_choice = st.radio(
+        "Show reviews",
+        ["Pending only", "All in date range", "First-Pass Paid", "Rejected / Returned"],
+        horizontal=True,
+        key="outcome_followup_filter",
+    )
+
+    filtered = work.copy()
+    if filter_choice == "Pending only":
+        filtered = filtered[pending_mask]
+    elif filter_choice == "First-Pass Paid":
+        filtered = filtered[work["first_pass_paid"] == 1]
+    elif filter_choice == "Rejected / Returned":
+        filtered = filtered[work["rejected"] == 1]
+
+    if filtered.empty:
+        st.info(f"No reviews match **{filter_choice}** for this date range.")
+        return
+
+    if "created_at" in filtered.columns:
+        filtered = filtered.sort_values("created_at", ascending=False)
+
+    option_rows = filtered.to_dict("records")
+    option_ids = [int(row["id"]) for row in option_rows]
+    label_by_id = {int(row["id"]): _review_option_label(row) for row in option_rows}
+
+    selected_id = st.selectbox(
+        "Select review to update",
+        options=option_ids,
+        format_func=lambda rid: label_by_id.get(int(rid), str(rid)),
+        key="outcome_followup_review_id",
+    )
+
+    selected = next(row for row in option_rows if int(row["id"]) == int(selected_id))
+    current_fp = int(selected.get("first_pass_paid") or 0)
+    current_rej = int(selected.get("rejected") or 0)
+    current_reason = str(selected.get("rejection_reason") or "").strip()
+
+    info_cols = st.columns(4)
+    info_cols[0].markdown(f"**RO** {selected.get('ro_number', '—')}")
+    info_cols[1].markdown(f"**Advisor** {selected.get('advisor', '—')}")
+    info_cols[2].markdown(
+        f"**Claim $** ${float(selected.get('total_claim_value') or 0):,.2f}"
+    )
+    info_cols[3].markdown(
+        f"**Current** {review_outcome_label(current_fp, current_rej)}"
+    )
+
+    if selected.get("outcome_updated_by") or selected.get("outcome_updated_at"):
+        updated_by = str(selected.get("outcome_updated_by") or "—")
+        updated_at = selected.get("outcome_updated_at")
+        updated_label = ""
+        if updated_at is not None and str(updated_at) not in ("", "NaT"):
+            try:
+                updated_label = pd.to_datetime(updated_at).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                updated_label = str(updated_at)[:16]
+        st.caption(f"Last outcome update: **{updated_by}** · {updated_label or '—'}")
+
+    rejection_library = load_rejection_reason_library(supabase)
+    reason_labels = active_rejection_reason_labels(rejection_library)
+    if not reason_labels:
+        reason_labels = active_rejection_reason_labels({})
+
+    existing_primary = current_reason.split(" — ")[0].strip() if current_reason else ""
+    existing_notes = current_reason.split(" — ", 1)[1].strip() if " — " in current_reason else ""
+
+    with st.form("outcome_followup_form", clear_on_submit=False):
+        outcome_choice = st.radio(
+            "OEM outcome",
+            ["Pending", "First-Pass Paid", "Rejected / Returned"],
+            index=_outcome_radio_index(current_fp, current_rej),
+            horizontal=True,
+        )
+
+        selected_reason = ""
+        rejection_notes = ""
+        if outcome_choice == "Rejected / Returned":
+            reason_default = existing_primary if existing_primary in reason_labels else ""
+            reason_index = reason_labels.index(reason_default) + 1 if reason_default in reason_labels else 0
+            selected_reason = st.selectbox(
+                "Rejection reason",
+                options=[""] + reason_labels,
+                index=reason_index,
+                help="Managed under Admin → Rejection Reason Library.",
+            )
+            rejection_notes = st.text_input(
+                "Additional rejection notes (optional)",
+                value=existing_notes,
+                placeholder="Required for 'Other' — optional detail for any reason.",
+            )
+
+        submitted = st.form_submit_button("Save outcome", type="primary", use_container_width=True)
+
+    if submitted:
+        first_pass_paid = outcome_choice == "First-Pass Paid"
+        rejected = outcome_choice == "Rejected / Returned"
+        rejection_reason = ""
+        if rejected:
+            ok, rejection_reason = _compose_rejection_reason(selected_reason, rejection_notes)
+            if not ok:
+                st.error(rejection_reason)
+                return
+
+        try:
+            update_review_outcome(
+                supabase,
+                int(selected_id),
+                first_pass_paid=first_pass_paid,
+                rejected=rejected,
+                rejection_reason=rejection_reason,
+                updated_by=current_person_name() or auth_user_email(),
+            )
+            st.success(f"Outcome saved for RO **{selected.get('ro_number', '—')}**.")
+            st.rerun()
+        except Exception as exc:
+            message = str(exc)
+            if "outcome_updated" in message.lower() or "column" in message.lower():
+                st.error(
+                    "Could not save outcome. Run the latest `docs/SUPABASE_SCHEMA.sql` migration "
+                    "in Supabase (adds outcome_updated_at / outcome_updated_by), then try again."
+                )
+            else:
+                st.error(f"Could not save outcome: {exc}")
+
+    if pending_count > 0:
+        st.markdown("**Still pending OEM outcome**")
+        pending_view = work[pending_mask].copy()
+        if "created_at" in pending_view.columns:
+            pending_view["created_at"] = pd.to_datetime(
+                pending_view["created_at"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
+        pending_cols = [
+            c for c in ("created_at", "ro_number", "advisor", "total_claim_value", "status")
+            if c in pending_view.columns
+        ]
+        st.dataframe(pending_view[pending_cols].head(15), use_container_width=True, hide_index=True)
+
+
 def render_reporting():
     st.markdown(
         """
@@ -3692,14 +4157,30 @@ def render_reporting():
 
     df = normalize_reviews_dataframe(df)
 
-    a, b, c, d, e, f = st.columns([1.0, 1.1, 1.8, 1.8, 1.1, 1.5])
-    a.metric("Reviews", len(df))
-    b.metric("Avg Score", f"{pd.to_numeric(df.get('score', 0), errors='coerce').fillna(0).mean():.1f}")
-    b.metric("Avg Days to Submit", f"{pd.to_numeric(df.get('days_to_submit', 0), errors='coerce').fillna(0).mean():.1f}")
-    c.metric("Total Claim Value", f"${pd.to_numeric(df.get('total_claim_value', 0), errors='coerce').fillna(0).sum():,.2f}")
-    d.metric("Hard Stop Value", f"${pd.to_numeric(df.get('hard_stop_value', 0), errors='coerce').fillna(0).sum():,.2f}")
-    e.metric("Hard Stops", int(pd.to_numeric(df.get("hard_stop_count", 0), errors="coerce").fillna(0).sum()))
-    f.metric("Time Bypasses", int(pd.to_numeric(df.get("time_bypass", 0), errors="coerce").fillna(0).sum()))
+    review_count = len(df)
+    avg_score = pd.to_numeric(df.get("score", 0), errors="coerce").fillna(0).mean()
+    avg_days = pd.to_numeric(df.get("days_to_submit", 0), errors="coerce").fillna(0).mean()
+    total_claim = pd.to_numeric(df.get("total_claim_value", 0), errors="coerce").fillna(0).sum()
+    hard_stop_val = pd.to_numeric(df.get("hard_stop_value", 0), errors="coerce").fillna(0).sum()
+    hard_stops = int(pd.to_numeric(df.get("hard_stop_count", 0), errors="coerce").fillna(0).sum())
+    time_bypasses = int(pd.to_numeric(df.get("time_bypass", 0), errors="coerce").fillna(0).sum())
+
+    st.markdown("### Summary")
+    render_metric_rows([
+        [
+            ("Reviews", f"{review_count:,}"),
+            ("Avg Score", f"{avg_score:.1f}"),
+            ("Avg Days to Submit", f"{avg_days:.1f}"),
+        ],
+        [
+            ("Hard Stops", f"{hard_stops:,}"),
+            ("Total Claim Value", f"${total_claim:,.2f}"),
+            ("Hard Stop Value", f"${hard_stop_val:,.2f}"),
+        ],
+        [
+            ("Time Bypasses", f"{time_bypasses:,}"),
+        ],
+    ])
 
     if len(df) > 0:
         with st.container(border=True):
@@ -3727,11 +4208,28 @@ def render_reporting():
     rejected_pct = (rejected_count / total_reviews * 100) if total_reviews else 0
     rejected_value = fp_df.loc[fp_df["rejected"] == 1, "total_claim_value"].sum()
 
-    fp1, fp2, fp3, fp4 = st.columns(4)
-    fp1.metric("First-Pass Approval %", f"{first_pass_pct:.1f}%")
-    fp2.metric("First-Pass Paid Count", first_pass_count)
-    fp3.metric("Rejected %", f"{rejected_pct:.1f}%")
-    fp4.metric("Rejected Claim Value", f"${rejected_value:,.2f}")
+    pending_count = total_reviews - first_pass_count - rejected_count
+    resolved_count = first_pass_count + rejected_count
+    first_pass_resolved_pct = (first_pass_count / resolved_count * 100) if resolved_count else 0.0
+    rejected_resolved_pct = (rejected_count / resolved_count * 100) if resolved_count else 0.0
+
+    render_metric_rows([
+        [
+            (
+                "First-Pass % (resolved)",
+                f"{first_pass_resolved_pct:.1f}%",
+                "Of reviews with a recorded paid or rejected OEM outcome.",
+            ),
+            ("Pending Outcome", f"{pending_count:,}"),
+            ("First-Pass Paid Count", f"{first_pass_count:,}"),
+        ],
+        [
+            ("Rejected % (resolved)", f"{rejected_resolved_pct:.1f}%"),
+            ("Rejected Claim Value", f"${rejected_value:,.2f}"),
+        ],
+    ])
+
+    render_outcome_followup(df)
 
     st.subheader("VIN Recall Tracking")
     if "vin_recall_identified" in df.columns:
