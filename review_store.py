@@ -280,6 +280,7 @@ DEFAULT_AUDIT_THRESHOLDS = {
     "tech_time_min_pct": 0.70,
     "tech_time_max_pct": 2.00,
     "rental_days_warn": 15,
+    "rental_dollars_per_day": 0.0,
 }
 
 DEFAULT_AUDIT_RULES = {
@@ -329,6 +330,7 @@ def normalize_audit_rules(raw: dict | None) -> dict:
     thresholds["tech_time_min_pct"] = min(max(thresholds["tech_time_min_pct"], 0.0), 1.0)
     thresholds["tech_time_max_pct"] = max(thresholds["tech_time_max_pct"], 1.0)
     thresholds["rental_days_warn"] = max(int(thresholds["rental_days_warn"]), 1)
+    thresholds["rental_dollars_per_day"] = max(float(thresholds.get("rental_dollars_per_day", 0.0)), 0.0)
 
     rules = {}
     stored_rules = raw.get("rules") or {}

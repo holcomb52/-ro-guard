@@ -2477,6 +2477,7 @@ def render_review():
     smart_warranty_time_exempt = smart_warranty_punch_exempt(sw_level)
     audit_rules = load_audit_rules(supabase)
     rejection_library = load_rejection_reason_library(supabase)
+    rental_dollars_per_day = float(audit_rules["thresholds"].get("rental_dollars_per_day", 0) or 0)
 
     if smart_warranty_time_exempt:
         st.success(
@@ -2711,6 +2712,12 @@ def render_review():
                     step=1,
                     key=f"rental_days_{job_no}"
                 )
+                if rental_dollars_per_day > 0:
+                    rental_total = float(rental_days or 0) * rental_dollars_per_day
+                    st.caption(
+                        f"**Rental Total:** ${rental_total:,.2f} "
+                        f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
+                    )
                 manager_signed_rental = st.checkbox(
                     "Manager Signed Rental",
                     key=f"rental_signed_{job_no}"
@@ -3882,6 +3889,14 @@ def render_audit_rules_admin():
             value=int(thresholds["rental_days_warn"]),
             help="Warn when billed rental days reach this count.",
         )
+        rental_dollars_per_day = st.number_input(
+            "Rental dollars per day ($)",
+            min_value=0.0,
+            value=float(thresholds.get("rental_dollars_per_day", 0) or 0),
+            step=1.0,
+            format="%.2f",
+            help="Daily rental rate used on Review to calculate rental total (rate × days billed).",
+        )
 
         st.subheader("Rule packs")
         st.caption("Turn rules off entirely with the checkbox, or change whether they hard-stop or warn.")
@@ -3918,6 +3933,7 @@ def render_audit_rules_admin():
                         "tech_time_min_pct": tech_min_pct / 100.0,
                         "tech_time_max_pct": tech_max_pct / 100.0,
                         "rental_days_warn": int(rental_days_warn),
+                        "rental_dollars_per_day": float(rental_dollars_per_day),
                     },
                     "rules": new_rules,
                 }
