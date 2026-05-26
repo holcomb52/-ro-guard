@@ -119,6 +119,41 @@ CREATE POLICY "dealer_settings_read" ON dealer_settings
 CREATE POLICY "dealer_settings_write" ON dealer_settings
     FOR ALL USING (true) WITH CHECK (true);
 
+-- Learned claims (paid + declined PDF libraries for Claim Learning)
+CREATE TABLE IF NOT EXISTS claims (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ro_number TEXT,
+    vin TEXT,
+    concern TEXT,
+    cause TEXT,
+    correction TEXT,
+    tech TEXT,
+    advisor TEXT,
+    story TEXT,
+    content TEXT,
+    labor_ops TEXT,
+    parts TEXT,
+    wam TEXT,
+    wam_reference TEXT,
+    reference TEXT,
+    claim_status TEXT DEFAULT 'paid'
+);
+
+CREATE INDEX IF NOT EXISTS idx_claims_status ON claims (claim_status);
+CREATE INDEX IF NOT EXISTS idx_claims_created_at ON claims (created_at DESC);
+
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS claim_status TEXT DEFAULT 'paid';
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS reference TEXT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS labor_ops TEXT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS parts TEXT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS wam_reference TEXT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS wam TEXT;
+
+-- Declined uploads: claim_status = 'declined', decline reason stored in reference.
+-- Paid uploads: claim_status = 'paid' (or NULL on older rows — treated as paid).
+
 -- Personnel (Review selectboxes + auth role linking)
 CREATE TABLE IF NOT EXISTS personnel (
     id BIGSERIAL PRIMARY KEY,

@@ -1147,8 +1147,52 @@ def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: 
                 st.markdown("---")
 
 
-def save_learned_claims(file_name, claims) -> dict:
+def render_declined_claim_alert(current_job: dict, similar_declined: list) -> None:
+    text_len = len(
+        f"{current_job.get('concern', '')} {current_job.get('cause', '')} {current_job.get('correction', '')}".strip()
+    )
+    if text_len < 20 or not similar_declined:
+        return
+
+    st.markdown("### Declined Claim Alert")
+    st.caption(
+        "This job looks similar to a declined claim from Dealer Connect — review before submit."
+    )
+
+    best = similar_declined[0]
+    reason = _decline_reason_value(best).strip()
+    st.warning(
+        f"**{best.get('score', 0)}% match** to a declined claim"
+        + (f" — **{reason}**" if reason else ". Review the reference below before submit.")
+    )
+
+    with st.expander("Declined claim reference", expanded=True):
+        if reason:
+            st.markdown(f"**Decline reason:** {reason}")
+        st.markdown("**Concern / cause / correction from declined claim**")
+        st.write(
+            claim_source_text(
+                best.get("concern"),
+                best.get("cause"),
+                best.get("correction"),
+                best.get("story"),
+            )[:2500]
+        )
+        if best.get("labor_ops"):
+            st.caption(f"Labor ops: {best.get('labor_ops')}")
+
+    if len(similar_declined) > 1:
+        with st.expander(f"Other similar declined claims ({len(similar_declined) - 1} more)"):
+            for match in similar_declined[1:]:
+                label = (_decline_reason_value(match) or match.get("ro_number") or "Declined claim").strip()
+                st.markdown(f"**{match.get('score', 0)}%** · {label[:120]}")
+
+
+def save_learned_claims(file_name, claims, *, outcome: str = "paid") -> dict:
     stats = {"parsed": len(claims), "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+    outcome = str(outcome or "paid").strip().lower()
+    if outcome not in ("paid", "declined"):
+        outcome = "paid"
     required_terms = [
         "customer states",
         "verified",
@@ -1175,14 +1219,17 @@ def save_learned_claims(file_name, claims) -> dict:
             or claim
         ).strip().lower()
 
+        decline_reason = extract_decline_reason(claim) if outcome == "declined" else ""
+
         if (
             len(claim_body) < 40
             or set(claim_body) <= {"_"}
             or "____" in claim_body
             or not any(term in claim_body for term in required_terms)
         ):
-            stats["skipped"] += 1
-            continue
+            if not (outcome == "declined" and decline_reason and len(claim_body) >= 20):
+                stats["skipped"] += 1
+                continue
 
         data = {
             "ro_number": file_name,
@@ -1196,11 +1243,14 @@ def save_learned_claims(file_name, claims) -> dict:
             "labor_ops": fields.get("labor_ops", ""),
             "parts": fields.get("parts", ""),
             "wam_reference": fields.get("wam_reference", ""),
+            "claim_status": outcome,
+            "reference": decline_reason if outcome == "declined" else "",
         }
 
         if not learned_claim_is_useful(data):
-            stats["skipped"] += 1
-            continue
+            if not (outcome == "declined" and decline_reason):
+                stats["skipped"] += 1
+                continue
 
         try:
             existing = (
@@ -1208,6 +1258,7 @@ def save_learned_claims(file_name, claims) -> dict:
                 .select("id")
                 .eq("ro_number", file_name)
                 .eq("story", data["story"])
+                .eq("claim_status", outcome)
                 .execute()
             )
             if existing.data:
@@ -1220,6 +1271,62 @@ def save_learned_claims(file_name, claims) -> dict:
             st.warning(f"Could not save learned claim {idx}: {e}")
 
     return stats
+
+
+def extract_decline_reason(claim_text: str) -> str:
+    """Pull OEM decline/return reason text from a Dealer Connect claim PDF segment."""
+    text = re.sub(r"\s+", " ", str(claim_text or "")).strip()
+    if not text:
+        return ""
+
+    patterns = [
+        r"(?:decline|declined|return|returned|reject(?:ed|ion)?)\s+reason[:\s-]+(.{8,400}?)(?:\s+claim narrative|\s+date received|\s+authorization|\s+line item|$)",
+        r"reason\s+for\s+(?:decline|return|reject(?:ion)?)[:\s-]+(.{8,400}?)(?:\s+claim narrative|\s+date received|$)",
+        r"claim\s+(?:was\s+)?(?:declined|returned|rejected)[:\s-]+(.{8,300}?)(?:\s+claim narrative|\s+date received|$)",
+        r"comments[:\s-]+(.{8,400}?)(?:\s+claim narrative|\s+date received|$)",
+    ]
+    for pat in patterns:
+        match = re.search(pat, text, re.I)
+        if not match:
+            continue
+        reason = match.group(1).strip(" .:-_")
+        if len(reason) >= 8 and reason.lower() not in {"n/a", "none", "see below"}:
+            return reason[:500]
+    return ""
+
+
+def _claim_status_value(row) -> str:
+    if isinstance(row, dict):
+        raw = row.get("claim_status") or row.get("claim_outcome") or "paid"
+    else:
+        raw = getattr(row, "claim_status", None) or getattr(row, "claim_outcome", None) or "paid"
+    status = str(raw or "paid").strip().lower()
+    return status if status in ("paid", "declined") else "paid"
+
+
+def _decline_reason_value(row) -> str:
+    if isinstance(row, dict):
+        reason = str(row.get("decline_reason") or "").strip()
+        if not reason and _claim_status_value(row) == "declined":
+            reason = str(row.get("reference") or "").strip()
+        return reason
+    reason = str(getattr(row, "decline_reason", None) or "").strip()
+    if not reason and _claim_status_value(row) == "declined":
+        reason = str(getattr(row, "reference", None) or "").strip()
+    return reason
+
+
+def _claims_for_outcome(df: pd.DataFrame, outcome: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+    outcome = str(outcome or "paid").strip().lower()
+    if "claim_status" not in df.columns and "claim_outcome" not in df.columns:
+        return df if outcome == "paid" else df.iloc[0:0].copy()
+    status_col = "claim_status" if "claim_status" in df.columns else "claim_outcome"
+    normalized = df[status_col].fillna("paid").astype(str).str.lower()
+    if outcome == "paid":
+        return df[normalized.isin(["paid", ""]) | normalized.isna()].copy()
+    return df[normalized == outcome].copy()
 
 
 # =========================
@@ -1875,8 +1982,9 @@ def _components_in_claim_text(text, terms=None):
     return [term for term in terms if term in text]
 
 
-def find_similar_paid_claims(current_job, limit=5):
+def find_similar_learned_claims(current_job, *, outcome: str = "paid", limit: int = 5):
     try:
+        outcome = str(outcome or "paid").strip().lower()
         current_text = " ".join([
             str(current_job.get("concern", "")),
             str(current_job.get("cause", "")),
@@ -1925,8 +2033,11 @@ def find_similar_paid_claims(current_job, limit=5):
             return []
 
         for row in rows:
-            if not learned_claim_is_useful(row):
+            if _claim_status_value(row) != outcome:
                 continue
+            if not learned_claim_is_useful(row):
+                if outcome != "declined" or not _decline_reason_value(row):
+                    continue
 
             ro_name = str(row.get("ro_number", "")).lower()
             if any(term in ro_name for term in bad_terms):
@@ -1946,7 +2057,8 @@ def find_similar_paid_claims(current_job, limit=5):
                 claim_text = claim_text.replace(phrase, "")
 
             if len(claim_text.strip()) < 40:
-                continue
+                if outcome != "declined" or not _decline_reason_value(row):
+                    continue
 
             claim_words = {
                 w.strip(".,:;()[]").lower()
@@ -1956,7 +2068,6 @@ def find_similar_paid_claims(current_job, limit=5):
 
             claim_components = _components_in_claim_text(claim_text, component_terms)
 
-            # Different repair family — e.g. control arms vs start/stop switch.
             if current_components or claim_components:
                 shared_components = set(current_components) & set(claim_components)
                 if not shared_components:
@@ -2005,6 +2116,7 @@ def find_similar_paid_claims(current_job, limit=5):
                 "wam": row.get("wam", ""),
                 "wam_reference": row.get("wam_reference", ""),
                 "reference": row.get("reference", ""),
+                "decline_reason": _decline_reason_value(row),
                 "match_reasons": matched_components,
                 "matching_codes": ", ".join(sorted(current_lops.intersection(claim_lops))) if current_lops else "",
             }))
@@ -2015,6 +2127,15 @@ def find_similar_paid_claims(current_job, limit=5):
     except Exception as e:
         st.warning(f"Claim Intelligence could not load: {e}")
         return []
+
+
+def find_similar_paid_claims(current_job, limit=5):
+    return find_similar_learned_claims(current_job, outcome="paid", limit=limit)
+
+
+def find_similar_declined_claims(current_job, limit=5):
+    return find_similar_learned_claims(current_job, outcome="declined", limit=limit)
+
 
 def _audit_rule_severity(audit_rules, rule_key):
     rule = audit_rules.get("rules", {}).get(rule_key, {})
@@ -3124,6 +3245,8 @@ def render_review():
             }
             similar_claims = find_similar_paid_claims(current_job_preview)
             render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
+            similar_declined = find_similar_declined_claims(current_job_preview)
+            render_declined_claim_alert(current_job_preview, similar_declined)
 
             jobs.append({
                 "job_no": str(job_no),
@@ -3317,8 +3440,192 @@ def render_review():
 
    
 
+def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_key: str) -> None:
+    totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+    per_file = []
+    for f in files:
+        pages = extract_pages(f)
+        claims = split_claims_from_pages(pages)
+        stats = save_learned_claims(f.name, claims, outcome=outcome)
+        for key in totals:
+            totals[key] += stats.get(key, 0)
+        per_file.append(
+            f"**{f.name}:** {len(pages)} pages → {stats['parsed']} parsed → "
+            f"**{stats['saved']} saved**, {stats['duplicate']} duplicates, "
+            f"{stats['skipped']} skipped, {stats['errors']} errors"
+        )
+    st.session_state[summary_key] = {
+        "totals": totals,
+        "per_file": per_file,
+        "outcome": outcome,
+    }
+    st.session_state[nonce_key] = int(st.session_state.get(nonce_key, 0)) + 1
+    st.rerun()
+
+
+def _render_claim_upload_summary(summary_key: str, clear_button_key: str) -> None:
+    last_summary = st.session_state.get(summary_key)
+    if not last_summary:
+        return
+    for line in last_summary.get("per_file", []):
+        st.success(line)
+    totals = last_summary.get("totals") or {}
+    st.info(
+        f"Upload summary: **{totals.get('saved', 0)} new records saved** to your library "
+        f"(from {totals.get('parsed', 0)} parsed segments). "
+        f"{totals.get('duplicate', 0)} were already in the library, "
+        f"{totals.get('skipped', 0)} did not pass narrative quality checks."
+    )
+    if st.button("Clear upload results", key=clear_button_key):
+        st.session_state.pop(summary_key, None)
+        st.rerun()
+
+
+def _render_claim_library_table(
+    df: pd.DataFrame,
+    *,
+    outcome: str,
+    metric_label: str,
+    empty_message: str,
+    purge_key: str,
+) -> None:
+    scoped = _claims_for_outcome(df, outcome)
+    useful_df = filter_useful_learned_claims(scoped)
+    if outcome == "declined" and not scoped.empty:
+        with_reason = scoped[
+            scoped.apply(lambda row: bool(_decline_reason_value(row.to_dict())), axis=1)
+        ]
+        if not with_reason.empty:
+            useful_df = pd.concat([useful_df, with_reason], ignore_index=True)
+            if "id" in useful_df.columns:
+                useful_df = useful_df.drop_duplicates(subset=["id"], keep="first")
+
+    hidden_junk = max(0, len(scoped) - len(useful_df))
+    st.metric(metric_label, len(useful_df))
+    if hidden_junk:
+        st.caption(
+            f"Hiding {hidden_junk} non-warranty or blank record(s) "
+            f"(loaner/rental, recalls, oil changes, admin lines, or missing narratives)."
+        )
+
+    if user_can_admin_write() and not scoped.empty:
+        if st.button("Remove junk from this library", key=purge_key):
+            removed = 0
+            for _, row in scoped.iterrows():
+                row_dict = row.to_dict()
+                if learned_claim_is_useful(row_dict):
+                    continue
+                if outcome == "declined" and _decline_reason_value(row_dict):
+                    continue
+                try:
+                    supabase.table("claims").delete().eq("id", int(row["id"])).execute()
+                    removed += 1
+                except Exception as e:
+                    st.warning(f"Could not remove claim {row.get('id')}: {e}")
+            st.success(f"Removed {removed} junk record(s) from the library.")
+            st.rerun()
+
+    if useful_df.empty:
+        st.info(empty_message)
+        return
+
+    display_cols = [
+        c
+        for c in [
+            "ro_number",
+            "reference" if outcome == "declined" else None,
+            "concern",
+            "cause",
+            "correction",
+            "labor_ops",
+            "parts",
+            "wam_reference",
+            "created_at",
+        ]
+        if c and c in useful_df.columns
+    ]
+    display_df = useful_df[display_cols] if display_cols else useful_df
+    if outcome == "declined" and "reference" in display_df.columns:
+        display_df = display_df.rename(columns={"reference": "decline_reason"})
+    st.dataframe(display_df, use_container_width=True)
+
+
+def _render_paid_claims_learning(all_claims: pd.DataFrame) -> None:
+    st.caption(
+        "Upload paid-claim PDFs from Dealer Connect. RO Shield reads all pages and builds a "
+        "**passed claim** library for the Narrative Gap Coach on Review."
+    )
+
+    if "paid_claim_upload_nonce" not in st.session_state:
+        st.session_state.paid_claim_upload_nonce = 0
+
+    files = st.file_uploader(
+        "Upload paid claim PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key=f"paid_claim_upload_{st.session_state.paid_claim_upload_nonce}",
+    )
+    if files:
+        _process_claim_pdf_upload(
+            files,
+            outcome="paid",
+            summary_key="claim_upload_last_summary_paid",
+            nonce_key="paid_claim_upload_nonce",
+        )
+
+    _render_claim_upload_summary("claim_upload_last_summary_paid", "clear_claim_upload_summary_paid")
+    _render_claim_library_table(
+        all_claims,
+        outcome="paid",
+        metric_label="Paid Claim Records",
+        empty_message="No paid claims in your library yet. Upload paid warranty claim PDFs from Dealer Connect.",
+        purge_key="purge_junk_paid_claims",
+    )
+
+
+def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
+    st.caption(
+        "Upload declined/returned claim PDFs from Dealer Connect. RO Shield extracts decline reasons "
+        "and warns on **Review** when a job looks similar to a past rejection."
+    )
+
+    if "declined_claim_upload_nonce" not in st.session_state:
+        st.session_state.declined_claim_upload_nonce = 0
+
+    files = st.file_uploader(
+        "Upload declined claim PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key=f"declined_claim_upload_{st.session_state.declined_claim_upload_nonce}",
+    )
+    if files:
+        _process_claim_pdf_upload(
+            files,
+            outcome="declined",
+            summary_key="claim_upload_last_summary_declined",
+            nonce_key="declined_claim_upload_nonce",
+        )
+
+    _render_claim_upload_summary("claim_upload_last_summary_declined", "clear_claim_upload_summary_declined")
+    _render_claim_library_table(
+        all_claims,
+        outcome="declined",
+        metric_label="Declined Claim Records",
+        empty_message=(
+            "No declined claims in your library yet. Upload declined/returned warranty claim PDFs "
+            "from Dealer Connect."
+        ),
+        purge_key="purge_junk_declined_claims",
+    )
+
+
 def render_claims():
-    st.header("Claim Learning Upload")
+    st.header("Claim Learning")
+    st.caption(
+        "Build two libraries from Dealer Connect: **paid claims** show what passed; "
+        "**declined claims** show what to avoid before submit."
+    )
+
     if st.button("Clear Claim Learning Cache"):
         try:
             st.cache_data.clear()
@@ -3330,8 +3637,9 @@ def render_claims():
                 del st.session_state[key]
 
         st.session_state.paid_claim_upload_nonce = 0
+        st.session_state.declined_claim_upload_nonce = 0
         st.success("Claim learning cache cleared. Refresh the app and re-upload claims.")
-    
+
     if st.button("Reprocess Existing Claims"):
         rows = supabase.table("claims").select("*").limit(10000).execute().data or []
         updated = 0
@@ -3355,6 +3663,8 @@ def render_claims():
                 "parts": fields.get("parts", ""),
                 "wam_reference": fields.get("wam_reference", ""),
             }
+            if _claim_status_value(row) == "declined":
+                update_data["reference"] = extract_decline_reason(story) or row.get("reference", "")
 
             try:
                 supabase.table("claims").update(update_data).eq("id", row["id"]).execute()
@@ -3364,98 +3674,18 @@ def render_claims():
 
         st.success(f"Reprocessed {updated} learned claim records.")
 
-    st.caption("Optional: upload paid-claim packets. RO Shield reads all pages and splits claim packets into learned claim records.")
-
     if PdfReader is None:
         st.error("PyPDF2 is not installed. Run: python3 -m pip install -r requirements.txt")
         return
 
-    if "paid_claim_upload_nonce" not in st.session_state:
-        st.session_state.paid_claim_upload_nonce = 0
+    all_claims = load_shared_claims()
+    paid_tab, declined_tab = st.tabs(["Paid Claims", "Declined Claims"])
 
-    files = st.file_uploader(
-        "Upload paid claim PDFs",
-        type=["pdf"],
-        accept_multiple_files=True,
-        key=f"paid_claim_upload_{st.session_state.paid_claim_upload_nonce}",
-    )
-    if files:
-        totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0}
-        per_file = []
-        for f in files:
-            pages = extract_pages(f)
-            claims = split_claims_from_pages(pages)
-            stats = save_learned_claims(f.name, claims)
-            for key in totals:
-                totals[key] += stats.get(key, 0)
-            per_file.append(
-                f"**{f.name}:** {len(pages)} pages → {stats['parsed']} parsed → "
-                f"**{stats['saved']} saved**, {stats['duplicate']} duplicates, "
-                f"{stats['skipped']} skipped, {stats['errors']} errors"
-            )
-        st.session_state.claim_upload_last_summary = {
-            "totals": totals,
-            "per_file": per_file,
-        }
-        st.session_state.paid_claim_upload_nonce += 1
-        st.rerun()
+    with paid_tab:
+        _render_paid_claims_learning(all_claims)
 
-    last_summary = st.session_state.get("claim_upload_last_summary")
-    if last_summary:
-        for line in last_summary.get("per_file", []):
-            st.success(line)
-        totals = last_summary.get("totals") or {}
-        st.info(
-            f"Upload summary: **{totals.get('saved', 0)} new records saved** to your library "
-            f"(from {totals.get('parsed', 0)} parsed segments). "
-            f"{totals.get('duplicate', 0)} were already in the library, "
-            f"{totals.get('skipped', 0)} did not pass narrative quality checks."
-        )
-        if st.button("Clear upload results", key="clear_claim_upload_summary"):
-            st.session_state.pop("claim_upload_last_summary", None)
-            st.rerun()
-
-    df = load_shared_claims()
-    useful_df = filter_useful_learned_claims(df)
-    hidden_junk = max(0, len(df) - len(useful_df))
-    st.metric("Learned Claim Records", len(useful_df))
-    if hidden_junk:
-        st.caption(
-            f"Hiding {hidden_junk} non-warranty or blank record(s) "
-            f"(loaner/rental, recalls, oil changes, admin lines, or missing narratives)."
-        )
-    if user_can_admin_write():
-        if st.button("Remove junk from library", key="purge_junk_learned_claims"):
-            removed = 0
-            for _, row in df.iterrows():
-                if learned_claim_is_useful(row.to_dict()):
-                    continue
-                try:
-                    supabase.table("claims").delete().eq("id", int(row["id"])).execute()
-                    removed += 1
-                except Exception as e:
-                    st.warning(f"Could not remove claim {row.get('id')}: {e}")
-            st.success(f"Removed {removed} junk record(s) from the library.")
-            st.rerun()
-    if not useful_df.empty:
-        display_cols = [
-            c
-            for c in [
-                "ro_number",
-                "vin",
-                "concern",
-                "cause",
-                "correction",
-                "labor_ops",
-                "parts",
-                "wam_reference",
-                "created_at",
-            ]
-            if c in useful_df.columns
-        ]
-        st.dataframe(useful_df[display_cols] if display_cols else useful_df, use_container_width=True)
-    elif not df.empty:
-        st.info("No useful learned claims to display yet. Upload paid claim PDFs with warranty narratives.")
+    with declined_tab:
+        _render_declined_claims_learning(all_claims)
 
 
 def render_metric_rows(rows: list[list], *, max_cols: int = 3) -> None:
