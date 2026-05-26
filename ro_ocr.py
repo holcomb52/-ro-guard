@@ -905,6 +905,7 @@ def _infer_job_flags(job: ParsedJob) -> dict[str, bool]:
         "sublet_repair": "SUBLET" in blob,
         "rental_involved": bool(re.search(r"LOANER|RENTAL", blob)),
         "warranty_add_on": bool(re.search(r"ADD-ON|ADD ON", blob)),
+        "alignment_involved": bool(re.search(r"\bALIGN(?:MENT)?\b|WHEEL ALIGN", blob)),
     }
 
 

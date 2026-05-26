@@ -1411,6 +1411,7 @@ JOB_MANUAL_TRIGGERS = {
     "rental_involved": ["rental", "loaner", "rental days"],
     "warranty_add_on": ["add-on", "add on", "manager approval", "authorization"],
     "parts_warranty": ["parts warranty", "mopar", "mopa", "original ro"],
+    "alignment_involved": ["alignment", "wheel alignment", "align vehicle", "four wheel alignment"],
 }
 
 # Section must contain one of these when the matching checkbox is checked.
@@ -1422,6 +1423,7 @@ TOPIC_STRONG_PHRASES = {
     "rental_involved": ["rental", "loaner", "rental vehicle"],
     "warranty_add_on": ["add-on", "add on", "manager approval", "authorization"],
     "parts_warranty": ["parts warranty", "mopar", "mopa", "original ro"],
+    "alignment_involved": ["alignment", "wheel alignment", "align vehicle", "four wheel alignment"],
 }
 
 
@@ -2176,6 +2178,11 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             hard, warn, audit_rules, "ac_evac_slip",
             "A/C repair requires EVAC/recharge slip.",
         )
+    if job.get("alignment_involved") and not job.get("alignment_report_attached"):
+        _add_audit_finding(
+            hard, warn, audit_rules, "alignment_report",
+            "Alignment requires printout report attached to the repair order.",
+        )
     if job.get("parts_warranty") and not job.get("mopa_original_ro"):
         _add_audit_finding(
             hard, warn, audit_rules, "parts_warranty_mopa",
@@ -2471,6 +2478,8 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
         "ac_evac_slip": bool(st.session_state.get(f"ac_slip_{j}", False)),
         "parts_warranty": bool(st.session_state.get(f"parts_warranty_{j}", False)),
         "mopa_original_ro": bool(st.session_state.get(f"mopa_{j}", False)),
+        "alignment_involved": bool(st.session_state.get(f"alignment_{j}", False)),
+        "alignment_report_attached": bool(st.session_state.get(f"alignment_report_{j}", False)),
     }
 
 
@@ -2622,6 +2631,7 @@ def _apply_ro_scan_to_form(import_data: dict):
         "warranty_add_on": "addon",
         "ac_repair": "ac",
         "parts_warranty": "parts_warranty",
+        "alignment_involved": "alignment",
     }
 
     for idx, job in enumerate(jobs, start=1):
@@ -3011,6 +3021,15 @@ def render_review():
                 oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
                 battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
                 battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
+                alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
+                alignment_report_attached = st.checkbox(
+                    "Alignment Report Attached to RO",
+                    key=f"alignment_report_{job_no}",
+                )
+                if alignment_involved and not alignment_report_attached:
+                    st.error(
+                        "Hard stop: alignment printout report must be attached to the repair order."
+                    )
 
             with c2:
                 sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
@@ -3074,6 +3093,7 @@ def render_review():
                 "ac_repair": ac_repair,
                 "ac_evac_slip": ac_evac_slip,
                 "parts_warranty": parts_warranty,
+                "alignment_involved": alignment_involved,
             }
             applicable_manual = find_applicable_manual_sections(preview_job)
             render_applicable_manual_sections(
@@ -3113,7 +3133,9 @@ def render_review():
                 "ac_repair": ac_repair,
                 "ac_evac_slip": ac_evac_slip,
                 "parts_warranty": parts_warranty,
-                "mopa_original_ro": mopa_original_ro
+                "mopa_original_ro": mopa_original_ro,
+                "alignment_involved": alignment_involved,
+                "alignment_report_attached": alignment_report_attached,
             })
 
     st.markdown("---")

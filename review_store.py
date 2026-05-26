@@ -295,6 +295,7 @@ DEFAULT_AUDIT_RULES = {
     "tech_time": {"enabled": True, "severity": "hard"},
     "battery_test_slip": {"enabled": True, "severity": "hard"},
     "ac_evac_slip": {"enabled": True, "severity": "hard"},
+    "alignment_report": {"enabled": True, "severity": "hard"},
     "parts_warranty_mopa": {"enabled": True, "severity": "hard"},
     "manual_guidance": {"enabled": True, "severity": "warn"},
 }
@@ -311,6 +312,7 @@ AUDIT_RULE_LABELS = {
     "tech_time": "Tech flagged time vs time allotted",
     "battery_test_slip": "Battery replacement — failed test slip/code",
     "ac_evac_slip": "A/C repair — EVAC/recharge slip",
+    "alignment_report": "Alignment — printout report attached to RO",
     "parts_warranty_mopa": "Parts warranty — MOPAR and original RO",
     "manual_guidance": "WAM / TSB guidance confirmation warning",
 }
