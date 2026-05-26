@@ -478,16 +478,109 @@ def claim_source_text(*chunks):
 
 LEARNED_CLAIM_NARRATIVE_TERMS = (
     "customer states",
-    "verified",
-    "found",
+    "customer concern",
+    "verified the customer",
+    "verified customer",
+    "verified concern",
+    "found that",
+    "found the",
+    "found ",
     "performed",
     "replaced",
     "repaired",
     "installed",
+    "removed and replaced",
+    "accessed and",
     "diagnosed",
-    "concern",
-    "correction",
+    "per tsb",
+    "per bulletin",
+    "correction:",
+    "cause:",
 )
+
+LEARNED_CLAIM_NON_WARRANTY_PATTERNS = (
+    r"\boil change\b",
+    r"\boil/filter\b",
+    r"\blube\b",
+    r"\bmaintenance only\b",
+    r"\bscheduled maintenance\b",
+    r"\brecall\b",
+    r"\bnhtsa\b",
+    r"\bcampaign\b",
+    r"\bloaner vehicle\b",
+    r"\bloaner car\b",
+    r"\bcustomer rental\b",
+    r"\brental agreement\b",
+    r"\brental day\b",
+    r"\bmessage level\b",
+    r"\bmessage code\b",
+    r"\bline message\b",
+    r"\bsr7\b",
+    r"\bclaim mc4\b",
+    r"\bno repair performed\b",
+    r"\bdeclined service\b",
+    r"\bgoodwill only\b",
+    r"\bdeductible amount\b",
+    r"\bnet amount\b",
+    r"\btotal labor\b",
+    r"\btotal part\b",
+)
+
+
+LEARNED_CLAIM_MAINTENANCE_PATTERNS = (
+    r"\boil change\b",
+    r"\boil/filter\b",
+    r"\blube\b",
+    r"\bscheduled maintenance\b",
+    r"\bmaintenance only\b",
+    r"\btire rotation\b",
+    r"\balignment only\b",
+)
+
+LEARNED_CLAIM_REPAIR_CONTEXT_TERMS = (
+    "check engine",
+    "mil ",
+    " dtc",
+    "no start",
+    "hard start",
+    "misfire",
+    "leak",
+    "noise",
+    "vibration",
+    "inop",
+    "inoperative",
+    "stall",
+    "transmission concern",
+    "engine concern",
+    " tsb",
+    "bulletin",
+    "sensor",
+    "module",
+    "pump",
+    "gasket",
+    "harness",
+    "switch",
+    "calibration",
+)
+
+
+def _learned_claim_is_maintenance_only(text: str) -> bool:
+    lower = str(text or "").lower()
+    if not any(re.search(pat, lower, re.I) for pat in LEARNED_CLAIM_MAINTENANCE_PATTERNS):
+        return False
+    return not any(term in lower for term in LEARNED_CLAIM_REPAIR_CONTEXT_TERMS)
+
+
+def _learned_claim_has_warranty_narrative(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(term in lower for term in LEARNED_CLAIM_NARRATIVE_TERMS)
+
+
+def _learned_claim_is_non_warranty_only(text: str) -> bool:
+    lower = str(text or "").lower()
+    if not any(re.search(pat, lower, re.I) for pat in LEARNED_CLAIM_NON_WARRANTY_PATTERNS):
+        return False
+    return not _learned_claim_has_warranty_narrative(lower)
 
 
 def learned_claim_narrative_text(record) -> str:
@@ -503,10 +596,18 @@ def learned_claim_narrative_text(record) -> str:
 
 
 def learned_claim_is_useful(record) -> bool:
-    text = learned_claim_narrative_text(record).strip()
-    lower = text.lower()
-    if len(lower) < 40:
+    concern = str(record.get("concern") or "").strip()
+    cause = str(record.get("cause") or "").strip()
+    correction = str(record.get("correction") or "").strip()
+    story = str(record.get("story") or record.get("content") or "").strip()
+
+    structured = claim_source_text(concern, cause, correction)
+    full_text = claim_source_text(concern, cause, correction, story)
+    lower = full_text.lower()
+
+    if len(structured) < 20 and len(story) < 80:
         return False
+
     compact = lower.replace(" ", "")
     if not compact or set(compact) <= {"_", "-", "."}:
         return False
@@ -523,17 +624,44 @@ def learned_claim_is_useful(record) -> bool:
         "vehicle description:",
         "thank you from the warranty contact center",
     )
-    if any(marker in lower for marker in junk_markers) and not any(
-        term in lower for term in LEARNED_CLAIM_NARRATIVE_TERMS
-    ):
+    if any(marker in lower for marker in junk_markers) and not _learned_claim_has_warranty_narrative(lower):
         return False
 
-    concern = str(record.get("concern") or "").strip()
-    cause = str(record.get("cause") or "").strip()
-    correction = str(record.get("correction") or "").strip()
-    has_structured = any(len(part) >= 12 for part in (concern, cause, correction))
-    has_story_terms = any(term in lower for term in LEARNED_CLAIM_NARRATIVE_TERMS)
-    return has_structured or (has_story_terms and len(lower) >= 60)
+    if _learned_claim_is_non_warranty_only(lower):
+        return False
+
+    if _learned_claim_is_maintenance_only(lower):
+        return False
+
+    # Need a real concern or correction line, not story-only PDF fragments.
+    primary_narrative = concern if len(concern) >= 20 else correction if len(correction) >= 20 else ""
+    if len(primary_narrative) < 20:
+        if len(story) < 100 or not _learned_claim_has_warranty_narrative(story):
+            return False
+        primary_narrative = story
+
+    if not _learned_claim_has_warranty_narrative(primary_narrative):
+        return False
+
+    if _learned_claim_is_non_warranty_only(primary_narrative):
+        return False
+
+    # Admin/loaner lines sometimes land in concern with no cause or correction.
+    if len(correction) < 15 and len(cause) < 15:
+        admin_only = (
+            "message level",
+            "message code",
+            "loaner",
+            "rental",
+            "sr7",
+            "line message",
+            "condition-1",
+        )
+        concern_lower = concern.lower()
+        if any(token in concern_lower for token in admin_only):
+            return False
+
+    return True
 
 
 def filter_useful_learned_claims(df: pd.DataFrame) -> pd.DataFrame:
@@ -3246,7 +3374,10 @@ def render_claims():
     hidden_junk = max(0, len(df) - len(useful_df))
     st.metric("Learned Claim Records", len(useful_df))
     if hidden_junk:
-        st.caption(f"Hiding {hidden_junk} blank or junk record(s) with no usable narrative.")
+        st.caption(
+            f"Hiding {hidden_junk} non-warranty or blank record(s) "
+            f"(loaner/rental, recalls, oil changes, admin lines, or missing narratives)."
+        )
     if user_can_admin_write():
         if st.button("Remove junk from library", key="purge_junk_learned_claims"):
             removed = 0
