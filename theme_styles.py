@@ -133,6 +133,77 @@ def metric_display_css() -> str:
     """
 
 
+def claim_learning_css(theme: str = "Dark") -> str:
+    """Green Paid / red Declined tabs and panel banners on Claim Learning."""
+    is_light = str(theme).lower() == "light"
+    paid_text = "#166534" if is_light else "#bbf7d0"
+    paid_muted = "#15803d" if is_light else "#86efac"
+    paid_bg = "rgba(220, 252, 231, 0.95)" if is_light else "rgba(22, 101, 52, 0.42)"
+    paid_border = "#22c55e" if is_light else "#4ade80"
+    declined_text = "#991b1b" if is_light else "#fecaca"
+    declined_muted = "#b91c1c" if is_light else "#fca5a5"
+    declined_bg = "rgba(254, 226, 226, 0.95)" if is_light else "rgba(127, 29, 29, 0.42)"
+    declined_border = "#ef4444" if is_light else "#f87171"
+    tab_scope = (
+        'div[data-testid="stVerticalBlock"]:has(.claim-learning-tabs-marker) '
+        'div[data-testid="stTabs"]'
+    )
+    return f"""
+    {tab_scope} [data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1) {{
+        color: {paid_muted} !important;
+        font-weight: 700 !important;
+    }}
+    {tab_scope} [data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1)[aria-selected="true"] {{
+        background: {paid_bg} !important;
+        color: {paid_text} !important;
+        border-bottom: 3px solid {paid_border} !important;
+        box-shadow: inset 0 -1px 0 {paid_border} !important;
+    }}
+    {tab_scope} [data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2) {{
+        color: {declined_muted} !important;
+        font-weight: 700 !important;
+    }}
+    {tab_scope} [data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2)[aria-selected="true"] {{
+        background: {declined_bg} !important;
+        color: {declined_text} !important;
+        border-bottom: 3px solid {declined_border} !important;
+        box-shadow: inset 0 -1px 0 {declined_border} !important;
+    }}
+    .claim-outcome-banner {{
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 0 0 14px 0;
+        border: 1px solid transparent;
+        font-size: 14px;
+        line-height: 1.45;
+    }}
+    .claim-outcome-banner strong {{
+        display: block;
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }}
+    .claim-outcome-banner--paid {{
+        background: {paid_bg};
+        border-color: {paid_border};
+        color: {paid_text};
+    }}
+    .claim-outcome-banner--declined {{
+        background: {declined_bg};
+        border-color: {declined_border};
+        color: {declined_text};
+    }}
+    div[data-testid="stVerticalBlock"]:has(.claim-panel-paid-marker) section[data-testid="stFileUploaderDropzone"] {{
+        border-color: {paid_border} !important;
+        background: {paid_bg} !important;
+    }}
+    div[data-testid="stVerticalBlock"]:has(.claim-panel-declined-marker) section[data-testid="stFileUploaderDropzone"] {{
+        border-color: {declined_border} !important;
+        background: {declined_bg} !important;
+    }}
+    """
+
+
 THEME_CSS = {
     "Dark": """
     .stApp {
