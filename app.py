@@ -1031,44 +1031,43 @@ def streamlit_cloud_chrome_allowed() -> bool:
         return True
     if not is_authenticated():
         return True
-    return normalize_email(auth_user_email()) in owners
+    email = normalize_email(auth_user_email())
+    if not email:
+        return True
+    return email in owners
 
 
-def _inject_streamlit_cloud_chrome_hide() -> None:
-    """Hide Streamlit Cloud Share/Manage chrome for non-owner sessions."""
+def _inject_streamlit_cloud_chrome_restore() -> None:
+    """Undo any prior hide scripts/styles so owners see Share again."""
     components.html(
         """
         <script>
         (function () {
-          function hideChrome(doc) {
+          function restoreChrome(doc) {
             if (!doc || !doc.body) return;
             doc.querySelectorAll(
               '[data-testid="stHeaderActionElements"], [data-testid="stToolbar"], [data-testid="stToolbarActions"], .stAppDeployButton, .stDeployButton'
             ).forEach(function (el) {
-              el.style.setProperty("display", "none", "important");
+              el.style.removeProperty("display");
             });
             doc.querySelectorAll("a, button, span, p, div").forEach(function (el) {
               var text = (el.textContent || "").trim();
               if (text === "Share" || text === "Manage app") {
                 var target = el.closest("a, button, [role='button']") || el;
-                target.style.setProperty("display", "none", "important");
-                if (target.parentElement && target.parentElement.childElementCount === 1) {
-                  target.parentElement.style.setProperty("display", "none", "important");
+                target.style.removeProperty("display");
+                if (target.parentElement) {
+                  target.parentElement.style.removeProperty("display");
                 }
               }
             });
           }
           function sweep() {
-            try { hideChrome(document); } catch (e) {}
-            try { hideChrome(window.parent.document); } catch (e) {}
+            try { restoreChrome(document); } catch (e) {}
+            try { restoreChrome(window.parent.document); } catch (e) {}
           }
           sweep();
-          try {
-            new MutationObserver(sweep).observe(document.documentElement, { childList: true, subtree: true });
-          } catch (e) {}
-          try {
-            new MutationObserver(sweep).observe(window.parent.document.documentElement, { childList: true, subtree: true });
-          } catch (e) {}
+          setTimeout(sweep, 250);
+          setTimeout(sweep, 1000);
         })();
         </script>
         """,
@@ -1082,9 +1081,10 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     if display_prefs:
         css += build_user_display_css(display_prefs, theme=theme)
     css += brand_color_lock_css(theme)
-    if not streamlit_cloud_chrome_allowed():
+    if streamlit_cloud_chrome_allowed():
+        _inject_streamlit_cloud_chrome_restore()
+    else:
         css = STREAMLIT_CHROME_HIDE_CSS + css
-        _inject_streamlit_cloud_chrome_hide()
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
