@@ -339,17 +339,30 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) section[data-testid="stSidebar"] {
         display: none !important;
     }
+    .stApp:has(.ro-login-active) section.main {
+        padding-top: 0 !important;
+    }
     .stApp:has(.ro-login-active) section.main .block-container {
         max-width: 1080px;
-        padding-top: 2rem;
-        padding-bottom: 2.5rem;
+        padding-top: 0.35rem;
+        padding-bottom: 1rem;
     }
     .stApp:has(.ro-login-active) header[data-testid="stHeader"] {
         background: transparent !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        visibility: hidden !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="stVerticalBlock"] {
+        gap: 0.35rem !important;
+    }
+    .stApp:has(.ro-login-active) div[data-testid="stHorizontalBlock"] {
+        gap: 0.85rem !important;
+        align-items: stretch !important;
     }
     .stApp:has(.ro-login-active) .login-brand-panel {
         position: relative;
-        min-height: 100%;
+        min-height: auto;
         padding: 0;
         border-radius: 18px;
         overflow: hidden;
@@ -361,11 +374,11 @@ THEME_CSS = {
         position: relative;
         z-index: 1;
         background: #ffffff;
-        padding: 22px 24px 18px;
+        padding: 16px 20px 14px;
         border-bottom: 1px solid #e2e8f0;
     }
     .stApp:has(.ro-login-active) .login-brand-dark {
-        padding: 22px 24px 20px;
+        padding: 16px 20px 14px;
         background: linear-gradient(180deg, #0b1424 0%, #060d18 100%);
     }
     .stApp:has(.ro-login-active) .login-brand-panel-compact .login-brand-dark {
@@ -374,8 +387,8 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) .login-brand-row {
         display: flex;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 12px;
+        gap: 12px;
+        margin-bottom: 8px;
     }
     .stApp:has(.ro-login-active) .login-logo-shield {
         width: 62px;
@@ -419,8 +432,8 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) .login-headline {
         position: relative;
         z-index: 1;
-        margin: 0 0 10px 0;
-        font-size: 26px;
+        margin: 0 0 6px 0;
+        font-size: 24px;
         font-weight: 800;
         line-height: 1.2;
         color: #f8fafc !important;
@@ -437,9 +450,9 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) .login-lede {
         position: relative;
         z-index: 1;
-        margin: 0 0 16px 0;
+        margin: 0 0 10px 0;
         color: #cbd5e1 !important;
-        font-size: 14px;
+        font-size: 13px;
         line-height: 1.55;
         max-width: 100%;
     }
@@ -447,14 +460,14 @@ THEME_CSS = {
         position: relative;
         z-index: 1;
         display: grid;
-        gap: 12px;
-        margin-bottom: 18px;
+        gap: 8px;
+        margin-bottom: 10px;
     }
     .stApp:has(.ro-login-active) .login-feature {
         display: flex;
         align-items: flex-start;
-        gap: 12px;
-        padding: 12px 14px;
+        gap: 10px;
+        padding: 8px 10px;
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.55);
         border: 1px solid rgba(96, 165, 250, 0.18);
@@ -486,8 +499,8 @@ THEME_CSS = {
         position: relative;
         z-index: 1;
         display: grid;
-        gap: 8px;
-        margin-bottom: 16px;
+        gap: 4px;
+        margin-bottom: 10px;
     }
     .stApp:has(.ro-login-active) .login-strapline span {
         display: block;
@@ -500,8 +513,8 @@ THEME_CSS = {
     .stApp:has(.ro-login-active) .login-bottom-bar {
         position: relative;
         z-index: 1;
-        margin-top: 8px;
-        padding: 12px 14px;
+        margin-top: 4px;
+        padding: 9px 12px;
         border-radius: 10px;
         text-align: center;
         font-size: 11px;
@@ -513,8 +526,8 @@ THEME_CSS = {
         box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
     }
     .stApp:has(.ro-login-active) .login-form-title {
-        margin: 0 0 4px 0;
-        font-size: 28px;
+        margin: 0 0 2px 0;
+        font-size: 24px;
         font-weight: 800;
         color: #0f172a !important;
         line-height: 1.1;
@@ -524,7 +537,7 @@ THEME_CSS = {
         background: #ffffff !important;
         border: 1px solid #cbd5e1 !important;
         border-radius: 18px !important;
-        padding: 22px 22px 16px !important;
+        padding: 16px 18px 12px !important;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35) !important;
     }
     .stApp:has(.ro-login-active) div[data-testid="column"]:has(.login-form-column-marker) h4,
@@ -596,10 +609,10 @@ THEME_CSS = {
     }
     .stApp:has(.ro-login-active) .login-footer-note {
         text-align: center;
-        margin-top: 18px;
+        margin-top: 8px;
         color: #94a3b8 !important;
-        font-size: 13px;
-        line-height: 1.55;
+        font-size: 12px;
+        line-height: 1.45;
     }
     """,
     "Light": """
