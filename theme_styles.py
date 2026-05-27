@@ -1702,3 +1702,103 @@ THEME_CSS = {
     }
     """,
 }
+
+
+def pricing_page_css(theme: str = "Dark") -> str:
+    """Pricing cards and ROI calculator chrome."""
+    key = "Light" if str(theme).lower() == "light" else "Dark"
+    if key == "Light":
+        card_bg = "rgba(255, 255, 255, .92)"
+        card_border = "rgba(29, 78, 216, .22)"
+        featured_border = "rgba(29, 78, 216, .55)"
+        text = "#0f172a"
+        muted = "#64748b"
+        accent = "#1d4ed8"
+        badge_bg = "rgba(29, 78, 216, .12)"
+    else:
+        card_bg = "rgba(7, 19, 34, .72)"
+        card_border = "rgba(62, 150, 255, .24)"
+        featured_border = "rgba(96, 165, 250, .55)"
+        text = "#f8fbff"
+        muted = "#94a3b8"
+        accent = "#60a5fa"
+        badge_bg = "rgba(96, 165, 250, .16)"
+
+    return f"""
+    .pricing-card {{
+        padding: 20px 18px 18px 18px;
+        border-radius: 18px;
+        background: {card_bg};
+        border: 1px solid {card_border};
+        min-height: 360px;
+        margin-bottom: 8px;
+        box-shadow: 0 12px 36px rgba(0,0,0,.18);
+    }}
+    .pricing-card-featured {{
+        border-color: {featured_border};
+        box-shadow: 0 16px 44px rgba(37, 99, 235, .18);
+    }}
+    .pricing-card-selected {{
+        outline: 2px solid {accent};
+        outline-offset: 2px;
+    }}
+    .pricing-badge {{
+        display: inline-block;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: {accent} !important;
+        background: {badge_bg};
+        border-radius: 999px;
+        padding: 4px 10px;
+        margin-bottom: 10px;
+    }}
+    .pricing-name {{
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: {text} !important;
+        margin-bottom: 4px;
+    }}
+    .pricing-tagline {{
+        color: {muted} !important;
+        font-size: 0.88rem;
+        line-height: 1.35;
+        margin-bottom: 14px;
+        min-height: 2.4em;
+    }}
+    .pricing-price {{
+        font-size: 2rem;
+        font-weight: 800;
+        color: {text} !important;
+        line-height: 1.1;
+        margin-bottom: 4px;
+    }}
+    .pricing-price span {{
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: {muted} !important;
+    }}
+    .pricing-annual {{
+        color: {muted} !important;
+        font-size: 0.82rem;
+        margin-bottom: 14px;
+    }}
+    .pricing-features {{
+        margin: 0;
+        padding-left: 1.1rem;
+        color: {muted} !important;
+        font-size: 0.88rem;
+        line-height: 1.55;
+    }}
+    .pricing-features li {{
+        margin-bottom: 4px;
+    }}
+    .pricing-contact-card {{
+        margin-top: 8px;
+    }}
+    .pricing-contact-card a {{
+        color: {accent} !important;
+        text-decoration: none;
+        font-weight: 600;
+    }}
+    """

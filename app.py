@@ -71,7 +71,9 @@ from theme_styles import (
     brand_color_lock_css,
     claim_learning_css,
     metric_display_css,
+    pricing_page_css,
 )
+from sales_pricing import render_pricing_roi_page
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -2018,6 +2020,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += brand_color_lock_css(theme)
     css += metric_display_css()
     css += claim_learning_css(theme)
+    css += pricing_page_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -4927,6 +4930,10 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
     st.caption("Advisor coaching areas will appear once reviews include advisor names and audit findings.")
 
 
+def render_pricing_roi():
+    render_pricing_roi_page(reviews_df=load_reviews())
+
+
 def render_roi_dashboard():
     st.header("ROI Dashboard")
     st.caption("Show the business value of RO Shield — dollars protected, quality trends, and team performance.")
@@ -6433,21 +6440,24 @@ def main():
 
     _render_app_workspace_header(appearance)
 
-    tabs = st.tabs(["Review", "ROI Dashboard", "Claim Learning", "Reporting", "Admin", "TSB / Bulletins", "WAM"])
-    with tabs[0]:
-        render_review()
-    with tabs[1]:
-        render_roi_dashboard()
-    with tabs[2]:
-        render_claims()
-    with tabs[3]:
-        render_reporting()
-    with tabs[4]:
-        render_admin()
-    with tabs[5]:
-        render_tsb_bulletins()
-    with tabs[6]:
-        render_wam()
+    tab_entries: list[tuple[str, callable]] = [
+        ("Review", render_review),
+        ("ROI Dashboard", render_roi_dashboard),
+    ]
+    if user_has_role("Manager"):
+        tab_entries.append(("Pricing & ROI", render_pricing_roi))
+    tab_entries.extend([
+        ("Claim Learning", render_claims),
+        ("Reporting", render_reporting),
+        ("Admin", render_admin),
+        ("TSB / Bulletins", render_tsb_bulletins),
+        ("WAM", render_wam),
+    ])
+
+    tabs = st.tabs([label for label, _ in tab_entries])
+    for tab, (_, render_fn) in zip(tabs, tab_entries):
+        with tab:
+            render_fn()
 
 if __name__ == "__main__":
     main()
