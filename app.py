@@ -394,6 +394,34 @@ def render_admin_author_field(authorized_names: list[str], *, key: str) -> str:
     )
 
 
+_GENERIC_PERSONNEL_NAMES = frozenset({"service manager", "manager", "platform admin"})
+
+
+def personnel_display_name(name: str, email: str = "") -> str:
+    """Show a real name in dropdowns — not placeholder text like 'Service Manager'."""
+    cleaned = str(name or "").strip()
+    if cleaned and cleaned.lower() not in _GENERIC_PERSONNEL_NAMES:
+        return cleaned
+    email = str(email or "").strip().lower()
+    if email and "@" in email:
+        local = email.split("@", 1)[0]
+        parts = re.split(r"[._+-]+", local)
+        derived = " ".join(p.capitalize() for p in parts if p)
+        if derived:
+            return derived
+    return cleaned or "Manager"
+
+
+def _personnel_display_names(df) -> list[str]:
+    if df is None or df.empty:
+        return []
+    names = [
+        personnel_display_name(row.get("name", ""), row.get("email", ""))
+        for _, row in df.iterrows()
+    ]
+    return sorted({n for n in names if n})
+
+
 def role_options(role, *, include_managers: bool = True):
     df = load_personnel()
     if df.empty:
@@ -402,8 +430,7 @@ def role_options(role, *, include_managers: bool = True):
     if include_managers and role in ("Advisor", "Technician", "Warranty Admin"):
         roles.add("Manager")
     df = df[df["role"].isin(roles) & (df["active"].astype(bool))]
-    names = sorted(df["name"].astype(str).unique().tolist())
-    return [""] + names
+    return [""] + _personnel_display_names(df)
 
 
 def review_personnel_names(primary_role: str) -> list[str]:
@@ -413,7 +440,7 @@ def review_personnel_names(primary_role: str) -> list[str]:
         return []
     roles = {primary_role, "Manager"}
     active = df[df["active"].astype(bool) & df["role"].isin(roles)]
-    return sorted(active["name"].astype(str).unique().tolist())
+    return _personnel_display_names(active)
 
 
 def service_manager_names() -> list[str]:
@@ -421,23 +448,22 @@ def service_manager_names() -> list[str]:
     if df.empty:
         return []
     active = df[df["active"].astype(bool) & (df["role"].astype(str) == "Manager")]
-    return sorted(active["name"].astype(str).unique().tolist())
+    return _personnel_display_names(active)
+
+
+def service_manager_selectbox_label() -> str:
+    """Dropdown title above the service manager field — the person's name when one manager."""
+    names = service_manager_names()
+    if len(names) == 1:
+        return names[0]
+    return "Manager"
 
 
 def service_manager_action_label(action: str) -> str:
-    """Use the manager's name on sign-off controls when Personnel has one on file."""
-    names = service_manager_names()
-    if names:
-        return f"{' / '.join(names)} {action}"
     return f"Service Manager {action}"
 
 
 def service_manager_signoff_phrase() -> str:
-    names = service_manager_names()
-    if len(names) == 1:
-        return names[0]
-    if names:
-        return " / ".join(names)
     return "Service Manager"
 
 
@@ -3911,6 +3937,17 @@ def render_review():
         warranty_list,
         key=f"warranty_admin_{st.session_state.form_version}"
     )
+
+    sm_names = service_manager_names()
+    if sm_names:
+        service_manager = st.selectbox(
+            service_manager_selectbox_label(),
+            sm_names,
+            key=f"service_manager_{st.session_state.form_version}",
+        )
+    else:
+        service_manager = ""
+        st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
  
     st.markdown("---")
     st.subheader("Warranty Job Documentation")
@@ -4270,6 +4307,7 @@ def render_review():
                 "advisor": advisor,
                 "technician": technician,
                 "warranty_admin": warranty_admin,
+                "manager": service_manager,
                 "score": final_score,
                 "status": status,
                 "total_claim_value": total_value,
