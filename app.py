@@ -41,7 +41,6 @@ from review_store import (
     AUDIT_RULE_LABELS,
     DEFAULT_AUDIT_RULES,
     active_rejection_reason_labels,
-    clear_all_reviews,
     compute_hard_stop_breakdown,
     compute_roi_metrics,
     finding_message,
@@ -141,6 +140,37 @@ def load_reviews():
     except Exception as e:
         st.warning(f"Review load failed: {e}")
         return pd.DataFrame()
+
+
+def clear_all_reviews() -> dict:
+    """Remove every saved review from Reporting."""
+    stats = {"removed": 0, "errors": 0, "method": ""}
+    if supabase is None:
+        return stats
+
+    try:
+        resp = supabase.rpc("clear_all_reviews", {}).execute()
+        if resp.data is not None:
+            stats["removed"] = int(resp.data)
+            stats["method"] = "rpc"
+            return stats
+    except Exception:
+        pass
+
+    try:
+        rows = supabase.table("reviews").select("id").execute().data or []
+        for row in rows:
+            try:
+                deleted = supabase.table("reviews").delete().eq("id", row["id"]).execute().data
+                if deleted:
+                    stats["removed"] += len(deleted)
+            except Exception:
+                stats["errors"] += 1
+        stats["method"] = "row_delete"
+    except Exception:
+        stats["errors"] += 1
+
+    return stats
 
 
 def save_bulletin(title, keywords, notes, **kwargs):
@@ -5577,7 +5607,7 @@ def render_reporting():
                     disabled=not confirm_clear,
                     key="clear_all_reviews_btn",
                 ):
-                    result = clear_all_reviews(supabase)
+                    result = clear_all_reviews()
                     if result["removed"] > 0:
                         st.success(f"Removed {result['removed']:,} review(s) from Reporting.")
                         st.rerun()
