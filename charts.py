@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import io
+import os
 from typing import Optional
 
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -25,7 +31,10 @@ COLORS = {
 def _prep_figure(figsize=None, *, compact: bool = False):
     if figsize is None:
         figsize = (4.2, 2.6) if compact else (5.5, 4.2)
-    plt.style.use("dark_background")
+    try:
+        plt.style.use("dark_background")
+    except (KeyError, OSError, ValueError):
+        pass
     fig, ax = plt.subplots(figsize=figsize, facecolor=COLORS["bg"])
     ax.set_facecolor(COLORS["bg"])
     fig.patch.set_facecolor(COLORS["bg"])
