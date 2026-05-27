@@ -5396,6 +5396,29 @@ def render_reporting_rejections(df: pd.DataFrame) -> None:
         st.dataframe(detail[detail_cols], use_container_width=True)
 
 
+def _style_avg_score_table(df: pd.DataFrame):
+    """Color-code avg_score: green 90+, yellow 80-89, red below 80."""
+    display = df.copy()
+    if "avg_score" in display.columns:
+        display["avg_score"] = pd.to_numeric(display["avg_score"], errors="coerce").round(1)
+
+    def _avg_score_color(val) -> str:
+        try:
+            score = float(val)
+        except (TypeError, ValueError):
+            return ""
+        if score >= 90:
+            return "background-color: #dcfce7; color: #166534; font-weight: 700"
+        if score >= 80:
+            return "background-color: #fef9c3; color: #854d0e; font-weight: 700"
+        return "background-color: #fee2e2; color: #991b1b; font-weight: 700"
+
+    styler = display.style
+    if "avg_score" in display.columns:
+        styler = styler.map(_avg_score_color, subset=["avg_score"])
+    return styler
+
+
 def render_reporting_team_performance(df: pd.DataFrame) -> None:
     st.caption("Rank advisors, technicians, and warranty admins by audit quality.")
     perf_df = df.copy()
@@ -5424,7 +5447,8 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
             st.dataframe(worst, use_container_width=True)
         with c2:
             st.markdown("### Best Performers")
-            st.dataframe(best, use_container_width=True)
+            st.caption("Avg score: green 90+, yellow 80–89, red below 80.")
+            st.dataframe(_style_avg_score_table(best), use_container_width=True)
 
     st.markdown("### Employee Scorecards")
     scorecard_role = st.selectbox(
