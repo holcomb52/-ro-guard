@@ -221,6 +221,7 @@ ALTER TABLE personnel ADD COLUMN IF NOT EXISTS employee_number TEXT;
 ALTER TABLE personnel ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
 ALTER TABLE personnel ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE personnel ADD COLUMN IF NOT EXISTS display_prefs JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE personnel ADD COLUMN IF NOT EXISTS roles JSONB DEFAULT '[]'::jsonb;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_personnel_email_unique
     ON personnel (lower(email))

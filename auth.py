@@ -9,6 +9,8 @@ from typing import Callable
 import streamlit as st
 import streamlit.components.v1 as components
 
+from personnel_roles import format_roles_display, parse_personnel_roles
+
 AUTH_SESSION_KEY = "supabase_auth_session"
 AUTH_USER_KEY = "supabase_auth_user"
 PASSWORD_RECOVERY_KEY = "password_recovery_pending"
@@ -116,7 +118,7 @@ def _store_auth_user(user) -> None:
 def clear_auth_session() -> None:
     for key in (AUTH_SESSION_KEY, AUTH_USER_KEY):
         st.session_state.pop(key, None)
-    for key in ("current_person_id", "current_person_name", "current_person_role"):
+    for key in ("current_person_id", "current_person_name", "current_person_role", "current_person_roles"):
         st.session_state.pop(key, None)
 
 
@@ -352,7 +354,7 @@ def lookup_personnel_by_email(supabase, email: str) -> dict | None:
     try:
         response = (
             supabase.table("personnel")
-            .select("id, name, role, email")
+            .select("id, name, role, roles, email")
             .eq("email", normalize_email(email))
             .eq("active", True)
             .limit(1)
@@ -381,13 +383,16 @@ def sync_personnel_identity(supabase) -> None:
 
     person = lookup_personnel_by_email(supabase, email)
     if person:
+        roles = parse_personnel_roles(person)
         st.session_state.current_person_id = person.get("id")
         st.session_state.current_person_name = str(person.get("name") or display_name or email)
-        st.session_state.current_person_role = str(person.get("role") or "")
+        st.session_state.current_person_roles = roles
+        st.session_state.current_person_role = format_roles_display(roles)
         return
 
     st.session_state.current_person_id = None
     st.session_state.current_person_name = display_name or email
+    st.session_state.current_person_roles = []
     st.session_state.current_person_role = ""
 
 
@@ -566,17 +571,22 @@ def render_sidebar_brand() -> None:
 
 def render_authenticated_sidebar(supabase) -> None:
     name = str(st.session_state.get("current_person_name") or auth_user_email() or "User")
-    role = str(st.session_state.get("current_person_role") or "").strip()
-    email = auth_user_email()
+    roles = st.session_state.get("current_person_roles") or []
+    if not roles:
+        legacy = str(st.session_state.get("current_person_role") or "").strip()
+        if legacy:
+            roles = [p.strip() for p in legacy.split(" · ")] if " · " in legacy else [legacy]
+    roles_text = format_roles_display(roles) if roles else ""
 
     st.sidebar.markdown("### Account")
     st.sidebar.markdown(f"**{name}**")
-    if role:
-        label = f"Role: **{role}**"
-        if role == "Admin":
+    if roles_text:
+        label = f"Roles: **{roles_text}**"
+        if "Admin" in roles:
             label += " (full access)"
         st.sidebar.caption(label)
-    elif email:
+    else:
+        email = auth_user_email()
         st.sidebar.caption(email)
         st.sidebar.caption(
             "No personnel role linked — ask a Manager to add your login email under Admin → Personnel."

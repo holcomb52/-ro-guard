@@ -73,6 +73,16 @@ from theme_styles import (
     metric_display_css,
     pricing_page_css,
 )
+from personnel_roles import (
+    ALL_PERSONNEL_ROLES,
+    DEALERSHIP_ROLES,
+    PLATFORM_ADMIN_ROLES,
+    format_roles_display,
+    normalize_roles_list,
+    parse_personnel_roles,
+    person_has_any_role,
+    primary_personnel_role,
+)
 from sales_pricing import render_pricing_roi_page
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
@@ -264,21 +274,34 @@ def load_personnel():
         return pd.DataFrame(columns=["name", "role", "email"])
 
 
-def add_person_shared(name, role, employee_number, email=""):
+def add_person_shared(name, roles, employee_number, email=""):
+    role_list = normalize_roles_list(roles)
+    if not role_list:
+        st.warning("Select at least one role.")
+        return
     try:
-        existing = supabase.table("personnel").select("id").eq("name", name).eq("role", role).execute()
+        email_clean = normalize_email(email)
+        if email_clean:
+            existing = (
+                supabase.table("personnel")
+                .select("id")
+                .eq("email", email_clean)
+                .execute()
+            )
+            if existing.data:
+                st.warning("Someone with this email is already on file — edit that person to add roles.")
+                return
 
-        if not existing.data:
-            payload = {
-                "name": name,
-                "employee_number": employee_number,
-                "role": role,
-                "active": True,
-            }
-            email_clean = normalize_email(email)
-            if email_clean:
-                payload["email"] = email_clean
-            supabase.table("personnel").insert(payload).execute()
+        payload = {
+            "name": name,
+            "employee_number": employee_number,
+            "roles": role_list,
+            "role": primary_personnel_role(role_list),
+            "active": True,
+        }
+        if email_clean:
+            payload["email"] = email_clean
+        supabase.table("personnel").insert(payload).execute()
 
     except Exception as e:
         st.warning(f"Personnel save failed: {e}")
@@ -293,23 +316,34 @@ def deactivate_person(pid):
 ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin", "Admin")
 PERSONNEL_ADMIN_ROLES = ("Manager", "Admin")
 CONTENT_ADMIN_ROLES = ("Manager", "Warranty Admin", "Admin")
-PLATFORM_ADMIN_ROLES = ("Admin",)
-DEALERSHIP_ROLES = ("Advisor", "Technician", "Warranty Admin", "Manager")
-ALL_PERSONNEL_ROLES = DEALERSHIP_ROLES + PLATFORM_ADMIN_ROLES
 
 
 def admin_write_names() -> list[str]:
     df = load_personnel()
     if df.empty:
         return []
-    return df[df["role"].isin(ADMIN_WRITE_ROLES)]["name"].astype(str).tolist()
+    mask = df.apply(lambda row: person_has_any_role(row, *ADMIN_WRITE_ROLES), axis=1)
+    return df.loc[mask, "name"].astype(str).tolist()
 
 
 def current_person_name() -> str:
     return str(st.session_state.get("current_person_name") or "").strip()
 
 
+def current_person_roles() -> list[str]:
+    roles = st.session_state.get("current_person_roles")
+    if isinstance(roles, list) and roles:
+        return normalize_roles_list(roles)
+    legacy = str(st.session_state.get("current_person_role") or "").strip()
+    if " · " in legacy:
+        return normalize_roles_list([p.strip() for p in legacy.split(" · ")])
+    return normalize_roles_list(legacy)
+
+
 def current_person_role() -> str:
+    roles = current_person_roles()
+    if roles:
+        return format_roles_display(roles)
     return str(st.session_state.get("current_person_role") or "").strip()
 
 
@@ -318,7 +352,8 @@ def is_signed_in() -> bool:
 
 
 def user_has_role(*roles: str) -> bool:
-    return current_person_role() in roles
+    mine = set(current_person_roles())
+    return bool(mine.intersection(roles))
 
 
 def user_is_platform_admin() -> bool:
@@ -347,13 +382,6 @@ def assignable_personnel_roles() -> list[str]:
     if user_is_platform_admin():
         roles.append("Admin")
     return roles
-
-
-def _role_select_index(role: str, options: list[str]) -> int:
-    role = str(role or "Advisor")
-    if role in options:
-        return options.index(role)
-    return 0
 
 
 def render_role_gate_message(required_roles: tuple[str, ...], action_label: str = "make changes"):
@@ -426,11 +454,14 @@ def role_options(role, *, include_managers: bool = True):
     df = load_personnel()
     if df.empty:
         return [""]
-    roles = {role}
+    allowed = {role}
     if include_managers and role in ("Advisor", "Technician", "Warranty Admin"):
-        roles.add("Manager")
-    df = df[df["role"].isin(roles) & (df["active"].astype(bool))]
-    return [""] + _personnel_display_names(df)
+        allowed.add("Manager")
+    mask = df["active"].astype(bool) & df.apply(
+        lambda row: bool(set(parse_personnel_roles(row)) & allowed),
+        axis=1,
+    )
+    return [""] + _personnel_display_names(df.loc[mask])
 
 
 def review_personnel_names(primary_role: str) -> list[str]:
@@ -438,17 +469,23 @@ def review_personnel_names(primary_role: str) -> list[str]:
     df = load_personnel()
     if df.empty:
         return []
-    roles = {primary_role, "Manager"}
-    active = df[df["active"].astype(bool) & df["role"].isin(roles)]
-    return _personnel_display_names(active)
+    allowed = {primary_role, "Manager"}
+    mask = df["active"].astype(bool) & df.apply(
+        lambda row: bool(set(parse_personnel_roles(row)) & allowed),
+        axis=1,
+    )
+    return _personnel_display_names(df.loc[mask])
 
 
 def service_manager_names() -> list[str]:
     df = load_personnel()
     if df.empty:
         return []
-    active = df[df["active"].astype(bool) & (df["role"].astype(str) == "Manager")]
-    return _personnel_display_names(active)
+    mask = df["active"].astype(bool) & df.apply(
+        lambda row: "Manager" in parse_personnel_roles(row),
+        axis=1,
+    )
+    return _personnel_display_names(df.loc[mask])
 
 
 def service_manager_selectbox_label() -> str:
@@ -5870,8 +5907,20 @@ def render_personnel_admin():
     st.header("Personnel")
     st.caption(
         "Manage advisors, technicians, warranty admins, managers, and platform admins. "
-        "The **Email** must match each person's Supabase login so roles apply after sign-in."
+        "Each person can hold **multiple roles** (e.g. Advisor + Warranty Admin). "
+        "The **Email** must match their Supabase login."
     )
+
+    def _personnel_display_table(frame):
+        if frame.empty:
+            return frame
+        show = frame.copy()
+        show["roles"] = show.apply(
+            lambda row: format_roles_display(parse_personnel_roles(row)),
+            axis=1,
+        )
+        cols = [c for c in ("name", "roles", "email", "employee_number", "id") if c in show.columns]
+        return show[cols] if cols else show
 
     df = load_personnel()
     if not user_can_manage_personnel():
@@ -5879,11 +5928,7 @@ def render_personnel_admin():
         if df.empty:
             st.info("No personnel added yet.")
         else:
-            display_cols = [
-                c for c in ("name", "role", "email", "employee_number", "id")
-                if c in df.columns
-            ]
-            st.dataframe(df[display_cols] if display_cols else df, use_container_width=True)
+            st.dataframe(_personnel_display_table(df), use_container_width=True)
         return
 
     with st.form("add_person"):
@@ -5891,13 +5936,19 @@ def render_personnel_admin():
         email = st.text_input("Email (login)", placeholder="you@dealership.com")
         employee_number = st.text_input("Employee Number")
         add_roles = assignable_personnel_roles()
-        role = st.selectbox("Role", add_roles)
+        selected_roles = st.multiselect(
+            "Roles (select all that apply)",
+            options=add_roles,
+            default=["Advisor"],
+        )
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
             if email.strip() and not is_valid_email(email):
                 st.error("Enter a valid email address, or leave email blank.")
+            elif not selected_roles:
+                st.error("Select at least one role.")
             else:
-                add_person_shared(name.strip(), role, employee_number, email)
+                add_person_shared(name.strip(), selected_roles, employee_number, email)
                 st.success("Person added.")
 
     df = load_personnel()
@@ -5910,8 +5961,8 @@ def render_personnel_admin():
     employee_names = df["name"].tolist()
     selected_employee = st.selectbox("Select Employee to Edit", employee_names)
     selected_row = df[df["name"] == selected_employee].iloc[0]
-    existing_role = str(selected_row.get("role", "Advisor") or "Advisor")
-    protected_admin = existing_role == "Admin" and not user_is_platform_admin()
+    existing_roles = parse_personnel_roles(selected_row)
+    protected_admin = "Admin" in existing_roles and not user_is_platform_admin()
 
     edit_name = st.text_input("Edit Name", value=selected_row.get("name", ""))
     edit_email = st.text_input(
@@ -5926,13 +5977,13 @@ def render_personnel_admin():
 
     if protected_admin:
         st.info("This account has the **Admin** role. Only another Admin can change it.")
-        edit_role = existing_role
+        edit_roles_selected = existing_roles
     else:
-        edit_roles = assignable_personnel_roles()
-        edit_role = st.selectbox(
-            "Edit Role",
-            edit_roles,
-            index=_role_select_index(existing_role, edit_roles),
+        edit_role_options = assignable_personnel_roles()
+        edit_roles_selected = st.multiselect(
+            "Roles (select all that apply)",
+            options=edit_role_options,
+            default=[r for r in existing_roles if r in edit_role_options] or ["Advisor"],
         )
 
     if st.button("Save Employee Changes"):
@@ -5940,11 +5991,15 @@ def render_personnel_admin():
             st.error("Only an Admin can modify another Admin account.")
         elif edit_email.strip() and not is_valid_email(edit_email):
             st.error("Enter a valid email address, or clear the email field.")
+        elif not edit_roles_selected:
+            st.error("Select at least one role.")
         else:
+            role_list = normalize_roles_list(edit_roles_selected)
             update_payload = {
                 "name": edit_name,
                 "employee_number": edit_employee_number,
-                "role": edit_role,
+                "roles": role_list,
+                "role": primary_personnel_role(role_list),
                 "email": normalize_email(edit_email) or None,
             }
             supabase.table("personnel").update(update_payload).eq("id", selected_row["id"]).execute()
@@ -5952,11 +6007,7 @@ def render_personnel_admin():
             st.success("Employee updated.")
             st.rerun()
 
-    display_cols = [
-        c for c in ("name", "role", "email", "employee_number", "id")
-        if c in df.columns
-    ]
-    st.dataframe(df[display_cols] if display_cols else df, use_container_width=True)
+    st.dataframe(_personnel_display_table(df), use_container_width=True)
     remove_id = st.number_input("Deactivate personnel ID", min_value=0, value=0, step=1)
     if st.button("Deactivate") and remove_id:
         deactivate_person(remove_id)
