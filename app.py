@@ -4735,6 +4735,7 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
             st.markdown(f"- {line}")
 
     c1, c2 = st.columns(2)
+    st.caption("Color bands match Team Performance: red = highest priority, yellow = moderate, green = lower.")
     with c1:
         st.markdown("**By Audit Rule**")
         if not rule_summary.empty:
@@ -4750,7 +4751,9 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
                 {"hard": "Hard Stop", "warn": "Warning"}
             )
             st.dataframe(
-                display_rules[["Audit Rule", "Type", "Count", "% of Findings"]],
+                _style_audit_rule_breakdown(
+                    display_rules[["Audit Rule", "Type", "Count", "% of Findings"]]
+                ),
                 use_container_width=True,
                 hide_index=True,
             )
@@ -4778,7 +4781,7 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
             advisor_pivot["Total"] = advisor_pivot.sum(axis=1)
             advisor_pivot = advisor_pivot.sort_values("Total", ascending=False).head(8)
             advisor_pivot = advisor_pivot.drop(columns=["Total"])
-            st.dataframe(advisor_pivot, use_container_width=True)
+            st.dataframe(_style_advisor_rule_pivot(advisor_pivot), use_container_width=True)
         else:
             st.caption("Advisor data will appear once reviews include advisor names.")
 
@@ -5396,6 +5399,93 @@ def render_reporting_rejections(df: pd.DataFrame) -> None:
         st.dataframe(detail[detail_cols], use_container_width=True)
 
 
+_SCORE_BAND_GREEN = "background-color: #dcfce7; color: #166534; font-weight: 700"
+_SCORE_BAND_YELLOW = "background-color: #fef9c3; color: #854d0e; font-weight: 700"
+_SCORE_BAND_RED = "background-color: #fee2e2; color: #991b1b; font-weight: 700"
+
+
+def _band_style_for_score(score: float) -> str:
+    if score >= 90:
+        return _SCORE_BAND_GREEN
+    if score >= 80:
+        return _SCORE_BAND_YELLOW
+    return _SCORE_BAND_RED
+
+
+def _band_style_for_severity_type(val) -> str:
+    text = str(val).lower()
+    if "hard" in text:
+        return _SCORE_BAND_RED
+    if "warn" in text:
+        return _SCORE_BAND_YELLOW
+    return ""
+
+
+def _band_style_for_count(val, *, high: float, mid: float) -> str:
+    try:
+        count = float(val)
+    except (TypeError, ValueError):
+        return ""
+    if count <= 0:
+        return ""
+    if count >= high:
+        return _SCORE_BAND_RED
+    if count >= mid:
+        return _SCORE_BAND_YELLOW
+    return _SCORE_BAND_GREEN
+
+
+def _style_audit_rule_breakdown(df: pd.DataFrame):
+    """Color-code audit rule table to match team performance score bands."""
+    display = df.copy()
+    if "% of Findings" in display.columns:
+        display["% of Findings"] = pd.to_numeric(display["% of Findings"], errors="coerce").round(1)
+
+    styler = display.style
+    if "Type" in display.columns:
+        styler = styler.map(_band_style_for_severity_type, subset=["Type"])
+
+    if "Count" in display.columns:
+        counts = pd.to_numeric(display["Count"], errors="coerce").fillna(0)
+        high = float(counts.max()) if len(counts) else 0
+        mid = high * 0.5 if high else 0
+        styler = styler.map(
+            lambda val: _band_style_for_count(val, high=high, mid=mid),
+            subset=["Count"],
+        )
+
+    if "% of Findings" in display.columns:
+        pcts = pd.to_numeric(display["% of Findings"], errors="coerce").fillna(0)
+        high = float(pcts.max()) if len(pcts) else 0
+        mid = high * 0.75 if high else 0
+        styler = styler.map(
+            lambda val: _band_style_for_count(val, high=high, mid=mid),
+            subset=["% of Findings"],
+        )
+
+    return styler
+
+
+def _style_advisor_rule_pivot(df: pd.DataFrame):
+    """Color-code advisor issue counts with the same red / yellow / green bands."""
+    display = df.copy()
+    numeric_cols = list(display.select_dtypes(include="number").columns)
+    if not numeric_cols:
+        return display.style
+
+    max_val = float(display[numeric_cols].max().max())
+    high = max_val if max_val > 0 else 1
+    mid = high * 0.5
+
+    styler = display.style
+    for col in numeric_cols:
+        styler = styler.map(
+            lambda val, h=high, m=mid: _band_style_for_count(val, high=h, mid=m),
+            subset=[col],
+        )
+    return styler
+
+
 def _style_avg_score_table(df: pd.DataFrame):
     """Color-code avg_score: green 90+, yellow 80-89, red below 80."""
     display = df.copy()
@@ -5407,11 +5497,7 @@ def _style_avg_score_table(df: pd.DataFrame):
             score = float(val)
         except (TypeError, ValueError):
             return ""
-        if score >= 90:
-            return "background-color: #dcfce7; color: #166534; font-weight: 700"
-        if score >= 80:
-            return "background-color: #fef9c3; color: #854d0e; font-weight: 700"
-        return "background-color: #fee2e2; color: #991b1b; font-weight: 700"
+        return _band_style_for_score(score)
 
     styler = display.style
     if "avg_score" in display.columns:
