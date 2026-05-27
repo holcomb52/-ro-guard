@@ -87,7 +87,7 @@ git push origin main
 
 Latest commit should include these files (not just `app.py`):
 
-- `auth.py`, `review_store.py`, `theme_styles.py`, `vin_recalls.py`, `ro_ocr.py`, `charts.py`, `pdf_reports.py`
+- `auth.py`, `review_store.py`, `theme_styles.py`, `vin_recalls.py`, `ro_ocr.py`, `ro_charts.py`, `pdf_reports.py`
 
 3. **Manage app** → **Activity** — wait for **Running** after the push.
 4. Hard-refresh the browser (Cmd+Shift+R).

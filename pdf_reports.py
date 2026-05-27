@@ -503,7 +503,7 @@ def build_roi_report_pdf(
     )
 
     try:
-        from charts import (
+        from ro_charts import (
             advisor_hard_stops_chart,
             audit_outcomes_pie,
             first_pass_pie,
@@ -607,7 +607,7 @@ def build_review_report_pdf(df, *, period_label: str = "All reviews") -> bytes:
     _summary_metrics_table(pdf, summary_metrics)
 
     try:
-        from charts import review_status_pie, score_distribution_chart
+        from ro_charts import review_status_pie, score_distribution_chart
 
         _section_title(pdf, "Charts")
         status_png = review_status_pie(data, compact=True)
