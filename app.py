@@ -71,6 +71,7 @@ from theme_styles import (
     brand_color_lock_css,
     claim_learning_css,
     metric_display_css,
+    multiselect_css,
     pricing_page_css,
 )
 from personnel_roles import (
@@ -2149,6 +2150,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += metric_display_css()
     css += claim_learning_css(theme)
     css += pricing_page_css(theme)
+    css += multiselect_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:

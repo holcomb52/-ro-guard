@@ -1802,3 +1802,97 @@ def pricing_page_css(theme: str = "Dark") -> str:
         font-weight: 600;
     }}
     """
+
+
+def multiselect_css(theme: str = "Dark") -> str:
+    """Role tags and chips on st.multiselect — readable, on-brand, not red/error styling."""
+    key = "Light" if str(theme).lower() == "light" else "Dark"
+    if key == "Light":
+        field_bg = "rgba(255, 255, 255, .96)"
+        field_border = "rgba(29, 78, 216, .45)"
+        label = "#0f172a"
+        tag_bg = "rgba(29, 78, 216, 0.14)"
+        tag_border = "rgba(29, 78, 216, 0.45)"
+        tag_text = "#1e3a8a"
+    else:
+        field_bg = "rgba(13, 30, 55, .96)"
+        field_border = "rgba(140, 200, 255, .70)"
+        label = "#f8fbff"
+        tag_bg = "rgba(37, 99, 235, 0.88)"
+        tag_border = "rgba(147, 197, 253, 0.55)"
+        tag_text = "#ffffff"
+
+    scope = (
+        'div[data-testid="stMultiSelect"], '
+        'section[data-testid="stForm"] div[data-testid="stMultiSelect"]'
+    )
+
+    return f"""
+    {scope} label {{
+        color: {label} !important;
+    }}
+    {scope} div[data-baseweb="select"] > div {{
+        background-color: {field_bg} !important;
+        border: 1px solid {field_border} !important;
+        min-height: 2.75rem !important;
+        padding: 6px 8px !important;
+        overflow: visible !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }}
+    {scope} div[data-baseweb="select"] > div > div {{
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+        overflow: visible !important;
+        max-width: 100% !important;
+    }}
+    {scope} span[data-baseweb="tag"] {{
+        display: inline-flex !important;
+        align-items: center !important;
+        background-color: {tag_bg} !important;
+        border: 1px solid {tag_border} !important;
+        border-radius: 8px !important;
+        color: {tag_text} !important;
+        -webkit-text-fill-color: {tag_text} !important;
+        padding: 4px 10px !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+        line-height: 1.25 !important;
+        box-shadow: none !important;
+    }}
+    {scope} span[data-baseweb="tag"] span,
+    {scope} span[data-baseweb="tag"] div {{
+        color: {tag_text} !important;
+        -webkit-text-fill-color: {tag_text} !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        white-space: nowrap !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }}
+    {scope} span[data-baseweb="tag"] svg,
+    {scope} span[data-baseweb="tag"] button,
+    {scope} span[data-baseweb="tag"] [role="button"] {{
+        color: {tag_text} !important;
+        fill: {tag_text} !important;
+        background: transparent !important;
+        border: none !important;
+        margin-left: 4px !important;
+        flex-shrink: 0 !important;
+    }}
+    {scope} div[data-baseweb="select"] input {{
+        color: {tag_text if key == "Dark" else label} !important;
+        -webkit-text-fill-color: {tag_text if key == "Dark" else label} !important;
+        background: transparent !important;
+        min-width: 3rem !important;
+        width: auto !important;
+        flex: 1 1 3rem !important;
+        margin: 0 !important;
+        padding: 2px 0 !important;
+        position: static !important;
+    }}
+    """
