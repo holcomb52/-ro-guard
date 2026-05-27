@@ -3902,7 +3902,7 @@ def render_review():
                 oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
                 oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
                 battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-                battery_test_slip = st.checkbox("Battery Test Slip", key=f"battery_slip_{job_no}")
+                battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
                 alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
                 alignment_report_attached = st.checkbox(
                     "Alignment Report Attached to RO",
