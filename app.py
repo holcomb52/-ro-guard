@@ -5444,7 +5444,8 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("### Top Offenders")
-            st.dataframe(worst, use_container_width=True)
+            st.caption("Avg score: green 90+, yellow 80–89, red below 80.")
+            st.dataframe(_style_avg_score_table(worst), use_container_width=True)
         with c2:
             st.markdown("### Best Performers")
             st.caption("Avg score: green 90+, yellow 80–89, red below 80.")
