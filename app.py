@@ -41,6 +41,7 @@ from review_store import (
     AUDIT_RULE_LABELS,
     DEFAULT_AUDIT_RULES,
     active_rejection_reason_labels,
+    clear_all_reviews,
     compute_hard_stop_breakdown,
     compute_roi_metrics,
     finding_message,
@@ -5557,6 +5558,36 @@ def render_reporting():
             migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
             st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
             st.rerun()
+
+    if user_can_admin_write():
+        review_count = len(load_reviews())
+        if review_count:
+            with st.expander("Manager tools — clear test data", expanded=False):
+                st.caption(
+                    f"{review_count:,} saved review(s) in Reporting. "
+                    "Use this before handing the app to your warranty administrator."
+                )
+                confirm_clear = st.checkbox(
+                    "Permanently delete all saved reviews from Reporting",
+                    key="confirm_clear_all_reviews",
+                )
+                if st.button(
+                    "Clear all reporting data",
+                    type="primary",
+                    disabled=not confirm_clear,
+                    key="clear_all_reviews_btn",
+                ):
+                    result = clear_all_reviews(supabase)
+                    if result["removed"] > 0:
+                        st.success(f"Removed {result['removed']:,} review(s) from Reporting.")
+                        st.rerun()
+                    elif result["errors"]:
+                        st.error(
+                            "Could not clear reviews. Run `docs/CLEAR_REPORTING.sql` in Supabase SQL Editor once, "
+                            "then retry."
+                        )
+                    else:
+                        st.info("No reviews to remove.")
 
     df = load_reviews()
     if df.empty:

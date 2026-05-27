@@ -89,8 +89,32 @@ CREATE POLICY "bulletins_write" ON bulletins
     FOR ALL USING (true) WITH CHECK (true);
 
 -- Optional: allow anon/authenticated app access (adjust for your security model)
--- ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Allow all for service role" ON reviews FOR ALL USING (true);
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "reviews_read" ON reviews;
+DROP POLICY IF EXISTS "reviews_write" ON reviews;
+
+CREATE POLICY "reviews_read" ON reviews
+    FOR SELECT USING (true);
+
+CREATE POLICY "reviews_write" ON reviews
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE OR REPLACE FUNCTION clear_all_reviews()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE cnt integer;
+BEGIN
+  DELETE FROM reviews;
+  GET DIAGNOSTICS cnt = ROW_COUNT;
+  RETURN cnt;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION clear_all_reviews() TO anon, authenticated;
 
 -- Dealer-wide settings (Smart Warranty level, etc.)
 CREATE TABLE IF NOT EXISTS dealer_settings (

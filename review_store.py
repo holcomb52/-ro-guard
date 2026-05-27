@@ -153,6 +153,37 @@ def load_reviews(supabase, limit: int = 5000) -> pd.DataFrame:
         raise
 
 
+def clear_all_reviews(supabase) -> dict:
+    """Remove every saved review from Reporting."""
+    stats = {"removed": 0, "errors": 0, "method": ""}
+    if supabase is None:
+        return stats
+
+    try:
+        resp = supabase.rpc("clear_all_reviews", {}).execute()
+        if resp.data is not None:
+            stats["removed"] = int(resp.data)
+            stats["method"] = "rpc"
+            return stats
+    except Exception:
+        pass
+
+    try:
+        rows = supabase.table("reviews").select("id").execute().data or []
+        for row in rows:
+            try:
+                deleted = supabase.table("reviews").delete().eq("id", row["id"]).execute().data
+                if deleted:
+                    stats["removed"] += len(deleted)
+            except Exception:
+                stats["errors"] += 1
+        stats["method"] = "row_delete"
+    except Exception:
+        stats["errors"] += 1
+
+    return stats
+
+
 def save_bulletin(
     supabase,
     title: str,
