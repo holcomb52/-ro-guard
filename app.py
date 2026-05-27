@@ -416,6 +416,31 @@ def review_personnel_names(primary_role: str) -> list[str]:
     return sorted(active["name"].astype(str).unique().tolist())
 
 
+def service_manager_names() -> list[str]:
+    df = load_personnel()
+    if df.empty:
+        return []
+    active = df[df["active"].astype(bool) & (df["role"].astype(str) == "Manager")]
+    return sorted(active["name"].astype(str).unique().tolist())
+
+
+def service_manager_action_label(action: str) -> str:
+    """Use the manager's name on sign-off controls when Personnel has one on file."""
+    names = service_manager_names()
+    if names:
+        return f"{' / '.join(names)} {action}"
+    return f"Service Manager {action}"
+
+
+def service_manager_signoff_phrase() -> str:
+    names = service_manager_names()
+    if len(names) == 1:
+        return names[0]
+    if names:
+        return " / ".join(names)
+    return "Service Manager"
+
+
 def extract_claim_fields(claim_text):
     import re
 
@@ -3089,9 +3114,10 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             )
 
     if job.get("warranty_add_on") and not job.get("manager_approval"):
+        manager_name = service_manager_signoff_phrase()
         _add_audit_finding(
             hard, warn, audit_rules, "warranty_add_on",
-            "Warranty add-on (W+) requires Service Manager sign-off.",
+            f"Warranty add-on (W+) requires {manager_name} sign-off.",
         )
 
     tech_flagged_time = float(job.get("tech_flagged_time") or 0)
@@ -4013,7 +4039,7 @@ def render_review():
                         f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
                     )
                 manager_signed_rental = st.checkbox(
-                    "Manager Signed Rental",
+                    service_manager_action_label("Signed Rental"),
                     key=f"rental_signed_{job_no}"
                 )
 
@@ -4023,11 +4049,13 @@ def render_review():
                     key=f"addon_{job_no}"
                 )
                 manager_approval = st.checkbox(
-                    "Service Manager Signed Off",
+                    service_manager_action_label("Signed Off"),
                     key=f"manager_approval_{job_no}"
                 )
                 if warranty_add_on and not manager_approval:
-                    st.error("Hard stop: W+ add-on requires Service Manager sign-off before submission.")
+                    st.error(
+                        f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
+                    )
                 ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
                 ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
                 parts_warranty = st.checkbox(
