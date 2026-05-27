@@ -572,7 +572,10 @@ def render_authenticated_sidebar(supabase) -> None:
     st.sidebar.markdown("### Account")
     st.sidebar.markdown(f"**{name}**")
     if role:
-        st.sidebar.caption(f"Role: **{role}**")
+        label = f"Role: **{role}**"
+        if role == "Admin":
+            label += " (full access)"
+        st.sidebar.caption(label)
     elif email:
         st.sidebar.caption(email)
         st.sidebar.caption(

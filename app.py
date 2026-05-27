@@ -290,9 +290,12 @@ def deactivate_person(pid):
         st.warning(f"Personnel deactivate failed: {e}")
 
 
-ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin")
-PERSONNEL_ADMIN_ROLES = ("Manager",)
-CONTENT_ADMIN_ROLES = ("Manager", "Warranty Admin")
+ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin", "Admin")
+PERSONNEL_ADMIN_ROLES = ("Manager", "Admin")
+CONTENT_ADMIN_ROLES = ("Manager", "Warranty Admin", "Admin")
+PLATFORM_ADMIN_ROLES = ("Admin",)
+DEALERSHIP_ROLES = ("Advisor", "Technician", "Warranty Admin", "Manager")
+ALL_PERSONNEL_ROLES = DEALERSHIP_ROLES + PLATFORM_ADMIN_ROLES
 
 
 def admin_write_names() -> list[str]:
@@ -318,6 +321,10 @@ def user_has_role(*roles: str) -> bool:
     return current_person_role() in roles
 
 
+def user_is_platform_admin() -> bool:
+    return user_has_role(*PLATFORM_ADMIN_ROLES)
+
+
 def user_can_admin_write() -> bool:
     return user_has_role(*ADMIN_WRITE_ROLES)
 
@@ -328,6 +335,25 @@ def user_can_manage_personnel() -> bool:
 
 def user_can_upload_library() -> bool:
     return user_has_role(*CONTENT_ADMIN_ROLES)
+
+
+def user_can_see_pricing() -> bool:
+    return user_is_platform_admin()
+
+
+def assignable_personnel_roles() -> list[str]:
+    """Roles the current user may assign when adding or editing personnel."""
+    roles = list(DEALERSHIP_ROLES)
+    if user_is_platform_admin():
+        roles.append("Admin")
+    return roles
+
+
+def _role_select_index(role: str, options: list[str]) -> int:
+    role = str(role or "Advisor")
+    if role in options:
+        return options.index(role)
+    return 0
 
 
 def render_role_gate_message(required_roles: tuple[str, ...], action_label: str = "make changes"):
@@ -368,12 +394,26 @@ def render_admin_author_field(authorized_names: list[str], *, key: str) -> str:
     )
 
 
-def role_options(role):
+def role_options(role, *, include_managers: bool = True):
     df = load_personnel()
     if df.empty:
         return [""]
-    df = df[(df["role"] == role) & (df["active"].astype(bool))]
-    return [""] + sorted(df["name"].astype(str).tolist())
+    roles = {role}
+    if include_managers and role in ("Advisor", "Technician", "Warranty Admin"):
+        roles.add("Manager")
+    df = df[df["role"].isin(roles) & (df["active"].astype(bool))]
+    names = sorted(df["name"].astype(str).unique().tolist())
+    return [""] + names
+
+
+def review_personnel_names(primary_role: str) -> list[str]:
+    """Names for Review tab dropdowns; Managers may fill any service role."""
+    df = load_personnel()
+    if df.empty:
+        return []
+    roles = {primary_role, "Manager"}
+    active = df[df["active"].astype(bool) & df["role"].isin(roles)]
+    return sorted(active["name"].astype(str).unique().tolist())
 
 
 def extract_claim_fields(claim_text):
@@ -3812,29 +3852,21 @@ def render_review():
     days_to_submit = (day_submitted - ro_invoiced).days
     st.metric("Days to Submit", days_to_submit)
 
-    personnel_df = load_personnel()
-
-    advisor_list = personnel_df[
-        personnel_df["role"] == "Advisor"
-    ]["name"].tolist()
+    advisor_list = review_personnel_names("Advisor")
 
     scan_advisor = st.session_state.pop("_ro_scan_advisor", None)
     matched_advisor = _match_personnel_name(scan_advisor, advisor_list) if scan_advisor else None
     if matched_advisor:
         st.session_state[f"advisor_{st.session_state.form_version}"] = matched_advisor
 
-    tech_list = personnel_df[
-        personnel_df["role"] == "Technician"
-    ]["name"].tolist()
+    tech_list = review_personnel_names("Technician")
 
     scan_technician = st.session_state.pop("_ro_scan_technician", None)
     matched_technician = _match_personnel_name(scan_technician, tech_list) if scan_technician else None
     if matched_technician:
         st.session_state[f"technician_{st.session_state.form_version}"] = matched_technician
 
-    warranty_list = personnel_df[
-        personnel_df["role"] == "Warranty Admin"
-    ]["name"].tolist()
+    warranty_list = review_personnel_names("Warranty Admin")
 
     advisor = st.selectbox(
         "Advisor",
@@ -5771,7 +5803,7 @@ def render_reporting():
 def render_personnel_admin():
     st.header("Personnel")
     st.caption(
-        "Manage advisors, technicians, warranty admins, and managers. "
+        "Manage advisors, technicians, warranty admins, managers, and platform admins. "
         "The **Email** must match each person's Supabase login so roles apply after sign-in."
     )
 
@@ -5792,7 +5824,8 @@ def render_personnel_admin():
         name = st.text_input("Name")
         email = st.text_input("Email (login)", placeholder="you@dealership.com")
         employee_number = st.text_input("Employee Number")
-        role = st.selectbox("Role", ["Advisor", "Technician", "Warranty Admin", "Manager"])
+        add_roles = assignable_personnel_roles()
+        role = st.selectbox("Role", add_roles)
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
             if email.strip() and not is_valid_email(email):
@@ -5811,6 +5844,8 @@ def render_personnel_admin():
     employee_names = df["name"].tolist()
     selected_employee = st.selectbox("Select Employee to Edit", employee_names)
     selected_row = df[df["name"] == selected_employee].iloc[0]
+    existing_role = str(selected_row.get("role", "Advisor") or "Advisor")
+    protected_admin = existing_role == "Admin" and not user_is_platform_admin()
 
     edit_name = st.text_input("Edit Name", value=selected_row.get("name", ""))
     edit_email = st.text_input(
@@ -5823,16 +5858,21 @@ def render_personnel_admin():
         value=str(selected_row.get("employee_number", "")),
     )
 
-    edit_role = st.selectbox(
-        "Edit Role",
-        ["Advisor", "Technician", "Warranty Admin", "Manager"],
-        index=["Advisor", "Technician", "Warranty Admin", "Manager"].index(
-            selected_row.get("role", "Advisor")
-        ),
-    )
+    if protected_admin:
+        st.info("This account has the **Admin** role. Only another Admin can change it.")
+        edit_role = existing_role
+    else:
+        edit_roles = assignable_personnel_roles()
+        edit_role = st.selectbox(
+            "Edit Role",
+            edit_roles,
+            index=_role_select_index(existing_role, edit_roles),
+        )
 
     if st.button("Save Employee Changes"):
-        if edit_email.strip() and not is_valid_email(edit_email):
+        if protected_admin:
+            st.error("Only an Admin can modify another Admin account.")
+        elif edit_email.strip() and not is_valid_email(edit_email):
             st.error("Enter a valid email address, or clear the email field.")
         else:
             update_payload = {
@@ -5861,23 +5901,29 @@ def render_admin():
     st.header("Admin")
     st.caption(
         "Dealership settings, audit rules, rejection reasons, and personnel. "
-        "Admin saves require a linked Manager or Warranty Admin account."
+        "Saves require a linked **Manager**, **Warranty Admin**, or **Admin** account."
     )
 
-    admin_tabs = st.tabs([
+    admin_tab_labels = [
         "Smart Warranty",
         "Audit Rules",
         "Rejection Reasons",
         "Personnel",
-    ])
-    with admin_tabs[0]:
-        render_smart_warranty_admin()
-    with admin_tabs[1]:
-        render_audit_rules_admin()
-    with admin_tabs[2]:
-        render_rejection_reason_library_admin()
-    with admin_tabs[3]:
-        render_personnel_admin()
+    ]
+    admin_tab_fns = [
+        render_smart_warranty_admin,
+        render_audit_rules_admin,
+        render_rejection_reason_library_admin,
+        render_personnel_admin,
+    ]
+    if user_can_see_pricing():
+        admin_tab_labels.append("Pricing & ROI")
+        admin_tab_fns.append(render_pricing_roi)
+
+    admin_tabs = st.tabs(admin_tab_labels)
+    for tab, render_fn in zip(admin_tabs, admin_tab_fns):
+        with tab:
+            render_fn()
 
 
 def render_tsb_bulletins():
@@ -6443,16 +6489,12 @@ def main():
     tab_entries: list[tuple[str, callable]] = [
         ("Review", render_review),
         ("ROI Dashboard", render_roi_dashboard),
-    ]
-    if user_has_role("Manager"):
-        tab_entries.append(("Pricing & ROI", render_pricing_roi))
-    tab_entries.extend([
         ("Claim Learning", render_claims),
         ("Reporting", render_reporting),
         ("Admin", render_admin),
         ("TSB / Bulletins", render_tsb_bulletins),
         ("WAM", render_wam),
-    ])
+    ]
 
     tabs = st.tabs([label for label, _ in tab_entries])
     for tab, (_, render_fn) in zip(tabs, tab_entries):
