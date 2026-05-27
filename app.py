@@ -2041,48 +2041,6 @@ def extract_pdf_document_text(file) -> tuple[list[str], str]:
     return pages, "\n\n".join(pages)
 
 
-def detect_claim_pdf_outcome(document_text: str) -> str:
-    """Guess whether a Dealer Connect claim PDF is paid or declined/rejected."""
-    flat = re.sub(r"\s+", " ", str(document_text or "")).strip()
-    if len(flat) < 40:
-        return "unknown"
-
-    lower = flat.lower()
-    declined = 0
-    paid = 0
-
-    if re.search(r"status\s*:\s*reject", lower):
-        declined += 4
-    if "global claim acknowledgement" in lower and re.search(r"\breject", lower):
-        declined += 3
-    if re.search(r"message code information", lower):
-        declined += 3
-    if re.search(
-        r"dealer correctable message codes|authorization required message codes",
-        lower,
-    ):
-        declined += 2
-    if extract_message_code_reasons(document_text):
-        declined += 3
-
-    if re.search(r"status\s*:\s*paid", lower):
-        paid += 4
-    if re.search(r"status\s*:\s*approv", lower):
-        paid += 3
-    if re.search(r"claim\s+paid|payment\s+amount|paid\s+amount|amount\s+paid", lower):
-        paid += 2
-
-    if declined >= 3 and declined > paid:
-        return "declined"
-    if paid >= 3 and paid > declined:
-        return "paid"
-    if declined >= 2 and paid == 0:
-        return "declined"
-    if paid >= 2 and declined == 0:
-        return "paid"
-    return "unknown"
-
-
 def is_acknowledgement_servlet_export(document_text: str) -> bool:
     return bool(re.search(r"global claim acknowledgement", str(document_text or ""), re.I))
 
@@ -4228,37 +4186,10 @@ def render_review():
    
 
 def _process_claim_pdf_upload(files, *, outcome: str, summary_key: str, nonce_key: str) -> None:
-    totals = {
-        "parsed": 0,
-        "saved": 0,
-        "duplicate": 0,
-        "skipped": 0,
-        "errors": 0,
-        "updated": 0,
-        "blocked": 0,
-    }
+    totals = {"parsed": 0, "saved": 0, "duplicate": 0, "skipped": 0, "errors": 0, "updated": 0}
     per_file = []
     pdf_diagnostics: list[str] = []
     for f in files:
-        _, probe_text = extract_pdf_document_text(f)
-        detected = detect_claim_pdf_outcome(probe_text)
-        if outcome == "paid" and detected == "declined":
-            totals["blocked"] += 1
-            pdf_diagnostics.append(
-                f"BLOCKED:{f.name}: This PDF looks like a **declined/rejected** claim. "
-                "Upload it on the **Declined / Rejected Claims** tab (red), not here."
-            )
-            per_file.append(f"**{f.name}:** blocked — declined claim belongs on the red tab")
-            continue
-        if outcome == "declined" and detected == "paid":
-            totals["blocked"] += 1
-            pdf_diagnostics.append(
-                f"BLOCKED:{f.name}: This PDF looks like a **paid/approved** claim. "
-                "Upload it on the **Paid Claims** tab (green), not here."
-            )
-            per_file.append(f"**{f.name}:** blocked — paid claim belongs on the green tab")
-            continue
-
         if outcome == "declined":
             claims, document_text, pdf_info = prepare_declined_pdf_claims(f)
             page_count = pdf_info.get("page_count", 0)
@@ -4307,23 +4238,15 @@ def _render_claim_upload_summary(summary_key: str, clear_button_key: str) -> Non
     if not last_summary:
         return
     for line in last_summary.get("per_file", []):
-        if "blocked" in line.lower():
-            st.error(line)
-        else:
-            st.success(line)
+        st.success(line)
     for line in last_summary.get("diagnostics", []):
-        if str(line).startswith("BLOCKED:"):
-            st.error(str(line)[8:])
-        else:
-            st.warning(line)
+        st.warning(line)
     totals = last_summary.get("totals") or {}
-    blocked = totals.get("blocked", 0)
     st.info(
         f"Upload summary: **{totals.get('saved', 0)} new records saved** to your library "
         f"(from {totals.get('parsed', 0)} parsed segments). "
         f"{totals.get('duplicate', 0)} were already in the library, "
         f"{totals.get('skipped', 0)} did not pass narrative quality checks."
-        + (f" **{blocked} file(s) blocked** — wrong tab for paid vs declined." if blocked else "")
     )
     if st.button("Clear upload results", key=clear_button_key):
         st.session_state.pop(summary_key, None)
@@ -4453,7 +4376,7 @@ def _render_paid_claims_learning(all_claims: pd.DataFrame) -> None:
         <span class="claim-panel-paid-marker" aria-hidden="true"></span>
         <div class="claim-outcome-banner claim-outcome-banner--paid">
             <strong>Paid Claims</strong>
-            Upload approved/paid warranty claim PDFs only. Declined or rejected exports belong on the red tab.
+            Build your passed-claim library for the Narrative Gap Coach on Review.
         </div>
         """,
         unsafe_allow_html=True,
@@ -4495,7 +4418,7 @@ def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
         <span class="claim-panel-declined-marker" aria-hidden="true"></span>
         <div class="claim-outcome-banner claim-outcome-banner--declined">
             <strong>Declined / Rejected Claims</strong>
-            Upload declined, returned, or rejected warranty claim PDFs only. Paid exports belong on the green tab.
+            Build your rejection library — message codes, WAM references, and decline reasons for Review alerts.
         </div>
         """,
         unsafe_allow_html=True,
