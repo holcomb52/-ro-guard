@@ -59,7 +59,8 @@ from review_store import (
     save_audit_rules,
     save_bulletin as persist_bulletin,
     save_rejection_reason_library,
-    save_review as persist_review,
+    find_review_id_for_update,
+    save_or_update_review as persist_save_or_update_review,
     save_smart_warranty_settings,
     smart_warranty_punch_exempt,
     update_review_outcome,
@@ -124,14 +125,50 @@ DB_PATH = Path("ro_shield_final.db")
 # =========================
 # DATABASE (Supabase = source of truth for reviews, claims, personnel, WAM)
 # =========================
-def save_review(data):
-    try:
-        persist_review(supabase, data)
+def _active_review_id_key(form_version: int) -> str:
+    return f"active_review_id_{form_version}"
+
+
+def _active_review_ro_key(form_version: int) -> str:
+    return f"active_review_ro_{form_version}"
+
+
+def _active_review_vin_key(form_version: int) -> str:
+    return f"active_review_vin_{form_version}"
+
+
+def _resolve_session_review_id(form_version: int, ro_number: str, vin: str) -> int | None:
+    review_id = st.session_state.get(_active_review_id_key(form_version))
+    if not review_id:
+        return None
+    tracked_ro = str(st.session_state.get(_active_review_ro_key(form_version), "") or "").strip()
+    tracked_vin = str(st.session_state.get(_active_review_vin_key(form_version), "") or "").strip()
+    if tracked_ro != str(ro_number or "").strip() or tracked_vin != str(vin or "").strip():
+        for key in (
+            _active_review_id_key(form_version),
+            _active_review_ro_key(form_version),
+            _active_review_vin_key(form_version),
+        ):
+            st.session_state.pop(key, None)
+        return None
+    return int(review_id)
+
+
+def _review_will_update(form_version: int, ro_number: str, vin: str) -> bool:
+    if _resolve_session_review_id(form_version, ro_number, vin):
         return True
+    if not str(ro_number or "").strip():
+        return False
+    return find_review_id_for_update(supabase, ro_number, vin) is not None
+
+
+def save_review(data, *, review_id: int | None = None):
+    try:
+        return persist_save_or_update_review(supabase, data, review_id=review_id)
     except Exception as e:
         st.error(f"Review save failed: {e}")
         st.caption("If this is your first deploy, run docs/SUPABASE_SCHEMA.sql in Supabase SQL Editor.")
-        return False
+        return {"ok": False, "review_id": None, "created": False}
 
 
 def load_reviews():
@@ -3662,6 +3699,12 @@ def render_review():
             fv = st.session_state.form_version
             st.session_state.pop(f"vin_recall_result_{fv}", None)
             st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+            for key in (
+                _active_review_id_key(fv),
+                _active_review_ro_key(fv),
+                _active_review_vin_key(fv),
+            ):
+                st.session_state.pop(key, None)
             st.session_state.form_version += 1
             st.session_state.pop("_ro_scan_advisor", None)
             st.session_state.pop("_ro_scan_technician", None)
@@ -4035,8 +4078,21 @@ def render_review():
     if sign_in_required:
         st.warning("Sign in with your dealership account before running the audit.")
 
+    fv = st.session_state.form_version
+    will_update_review = _review_will_update(fv, ro_number, vin)
+    save_button_label = (
+        "Update Review + Re-run Audit"
+        if will_update_review
+        else "Run Audit + Save Review"
+    )
+    if will_update_review and not _resolve_session_review_id(fv, ro_number, vin):
+        st.caption(
+            "A review for this RO is already on file — saving will update that record, "
+            "not create a duplicate."
+        )
+
     if st.button(
-        "Run Audit + Save Review",
+        save_button_label,
         type="primary",
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
@@ -4164,8 +4220,18 @@ def render_review():
                 **_vin_recall_save_fields(st.session_state.form_version, vin),
             }
 
-            if save_review(report_payload):
-                st.success("Review saved to Reporting (Supabase).")
+            session_review_id = _resolve_session_review_id(fv, ro_number, vin)
+            save_result = save_review(report_payload, review_id=session_review_id)
+            if save_result.get("ok"):
+                saved_review_id = save_result.get("review_id")
+                if saved_review_id:
+                    st.session_state[_active_review_id_key(fv)] = int(saved_review_id)
+                    st.session_state[_active_review_ro_key(fv)] = str(ro_number or "").strip()
+                    st.session_state[_active_review_vin_key(fv)] = str(vin or "").strip()
+                if save_result.get("created"):
+                    st.success("Review saved to Reporting (Supabase).")
+                else:
+                    st.success("Review updated in Reporting — no duplicate was created.")
 
             try:
                 audit_pdf = build_audit_report_pdf(report_payload)

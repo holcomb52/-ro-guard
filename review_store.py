@@ -84,15 +84,101 @@ def normalize_review_record(data: dict) -> dict:
     return record
 
 
-def save_review(supabase, data: dict) -> bool:
-    if supabase is None:
-        return False
+def is_pending_outcome(first_pass_paid, rejected) -> bool:
     try:
-        record = normalize_review_record(data)
-        supabase.table("reviews").insert(record).execute()
-        return True
-    except Exception:
-        raise
+        fp = int(float(first_pass_paid or 0))
+    except (TypeError, ValueError):
+        fp = 0
+    try:
+        rej = int(float(rejected or 0))
+    except (TypeError, ValueError):
+        rej = 0
+    return not fp and not rej
+
+
+def _parse_created_at(value) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def find_review_id_for_update(supabase, ro_number: str, vin: str = "") -> int | None:
+    """Return an existing review id to update instead of inserting a duplicate."""
+    ro_number = str(ro_number or "").strip()
+    if not ro_number or supabase is None:
+        return None
+
+    rows = (
+        supabase.table("reviews")
+        .select("id, vin, first_pass_paid, rejected, created_at")
+        .eq("ro_number", ro_number)
+        .order("created_at", desc=True)
+        .limit(20)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        return None
+
+    vin_clean = str(vin or "").strip()
+    today_utc = datetime.now(timezone.utc).date()
+
+    def _vin_matches(row_vin: str) -> bool:
+        row_vin = str(row_vin or "").strip()
+        if not vin_clean or not row_vin:
+            return True
+        return row_vin == vin_clean
+
+    for row in rows:
+        if not _vin_matches(row.get("vin", "")):
+            continue
+        if is_pending_outcome(row.get("first_pass_paid"), row.get("rejected")):
+            return int(row["id"])
+
+    for row in rows:
+        if not _vin_matches(row.get("vin", "")):
+            continue
+        created = _parse_created_at(row.get("created_at"))
+        if created and created.astimezone(timezone.utc).date() == today_utc:
+            return int(row["id"])
+
+    return None
+
+
+def save_or_update_review(supabase, data: dict, *, review_id: int | None = None) -> dict:
+    """Insert a new review, or update an existing one when review_id / RO match applies."""
+    if supabase is None:
+        return {"ok": False, "review_id": None, "created": False}
+
+    record = normalize_review_record(data)
+    ro = record.get("ro_number", "")
+    vin = record.get("vin", "")
+
+    target_id = review_id or find_review_id_for_update(supabase, ro, vin)
+    if target_id:
+        patch = dict(record)
+        patch.pop("created_at", None)
+        supabase.table("reviews").update(patch).eq("id", int(target_id)).execute()
+        return {"ok": True, "review_id": int(target_id), "created": False}
+
+    resp = supabase.table("reviews").insert(record).execute()
+    new_id = None
+    if resp.data:
+        new_id = int(resp.data[0]["id"])
+    return {"ok": True, "review_id": new_id, "created": True}
+
+
+def save_review(supabase, data: dict) -> bool:
+    """Legacy insert-only save — prefer save_or_update_review for new code."""
+    result = save_or_update_review(supabase, data)
+    return bool(result.get("ok"))
 
 
 def review_outcome_label(first_pass_paid, rejected) -> str:
