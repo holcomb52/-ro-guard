@@ -385,6 +385,35 @@ def assignable_personnel_roles() -> list[str]:
     return roles
 
 
+def _pick_personnel_roles(
+    options: list[str],
+    default: list[str],
+    *,
+    key_prefix: str,
+    disabled: bool = False,
+) -> list[str]:
+    """Checkbox-based role picker — avoids broken multiselect tag styling."""
+    st.markdown("**Roles (select all that apply)**")
+    if disabled:
+        locked = normalize_roles_list(default)
+        if locked:
+            st.caption(format_roles_display(locked))
+        return locked
+
+    defaults = set(normalize_roles_list(default))
+    picked: list[str] = []
+    columns = st.columns(2 if len(options) > 1 else 1)
+    for idx, role in enumerate(options):
+        with columns[idx % len(columns)]:
+            if st.checkbox(
+                role,
+                value=role in defaults,
+                key=f"{key_prefix}_{role}",
+            ):
+                picked.append(role)
+    return normalize_roles_list(picked)
+
+
 def render_role_gate_message(required_roles: tuple[str, ...], action_label: str = "make changes"):
     roles_text = " or ".join(required_roles)
     who = current_person_name() or "—"
@@ -5938,10 +5967,10 @@ def render_personnel_admin():
         email = st.text_input("Email (login)", placeholder="you@dealership.com")
         employee_number = st.text_input("Employee Number")
         add_roles = assignable_personnel_roles()
-        selected_roles = st.multiselect(
-            "Roles (select all that apply)",
-            options=add_roles,
-            default=["Advisor"],
+        selected_roles = _pick_personnel_roles(
+            add_roles,
+            ["Advisor"] if "Advisor" in add_roles else add_roles[:1],
+            key_prefix="add_person_roles",
         )
         submitted = st.form_submit_button("Add Person")
         if submitted and name.strip():
@@ -5979,14 +6008,14 @@ def render_personnel_admin():
 
     if protected_admin:
         st.info("This account has the **Admin** role. Only another Admin can change it.")
-        edit_roles_selected = existing_roles
-    else:
-        edit_role_options = assignable_personnel_roles()
-        edit_roles_selected = st.multiselect(
-            "Roles (select all that apply)",
-            options=edit_role_options,
-            default=[r for r in existing_roles if r in edit_role_options] or ["Advisor"],
-        )
+
+    edit_role_options = assignable_personnel_roles()
+    edit_roles_selected = _pick_personnel_roles(
+        edit_role_options,
+        existing_roles,
+        key_prefix=f"edit_person_roles_{selected_row['id']}",
+        disabled=protected_admin,
+    )
 
     if st.button("Save Employee Changes"):
         if protected_admin:
