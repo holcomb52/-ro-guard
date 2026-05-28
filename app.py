@@ -4,7 +4,7 @@ import html
 import json
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -4857,16 +4857,39 @@ def render_metric_rows(rows: list[list], *, max_cols: int = 3) -> None:
                     col.metric(str(label), str(value))
 
 
+def _default_report_date_range(
+    data_min: date | None = None,
+    data_max: date | None = None,
+) -> tuple[date, date]:
+    """Month-to-date default, clamped to available review history when needed."""
+    today = date.today()
+    start = today.replace(day=1)
+    end = today
+    if data_max and end > data_max:
+        end = data_max
+    if data_min and start < data_min:
+        start = data_min
+    if start > end and data_min:
+        start = data_min
+    if data_max and end < start:
+        end = data_max
+    return start, end
+
+
 def _filter_reviews_by_date(df, key_prefix="report"):
     if df.empty or "created_at" not in df.columns:
         return df
     df = normalize_reviews_dataframe(df)
     min_d = df["created_at"].min().date()
     max_d = df["created_at"].max().date()
+    default_start, default_end = _default_report_date_range(min_d, max_d)
     date_range = st.date_input(
         "Report Date Range",
-        value=(min_d, max_d),
+        value=(default_start, default_end),
+        min_value=min_d,
+        max_value=max(max_d, date.today()),
         key=f"{key_prefix}_date_range",
+        help="Defaults to month-to-date. Change either date for a custom range.",
     )
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
