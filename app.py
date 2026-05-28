@@ -4869,14 +4869,15 @@ def _filter_reviews_by_date(df, key_prefix="report"):
     df = normalize_reviews_dataframe(df)
     min_d = df["created_at"].min().date()
     max_d = df["created_at"].max().date()
-    date_key = f"{key_prefix}_report_date_mtd"
-    if date_key not in st.session_state:
-        st.session_state[date_key] = _default_report_date_range()
+    mtd_start, mtd_end = _default_report_date_range()
+    picker_min = min(min_d, mtd_start)
+    picker_max = max(max_d, mtd_end)
     date_range = st.date_input(
         "Report Date Range",
-        min_value=min_d,
-        max_value=max(max_d, date.today()),
-        key=date_key,
+        value=(mtd_start, mtd_end),
+        min_value=picker_min,
+        max_value=picker_max,
+        key=f"{key_prefix}_report_date_mtd_v2",
         help="Defaults to month-to-date. Change either date for a custom range.",
     )
     if isinstance(date_range, tuple) and len(date_range) == 2:
