@@ -4857,23 +4857,10 @@ def render_metric_rows(rows: list[list], *, max_cols: int = 3) -> None:
                     col.metric(str(label), str(value))
 
 
-def _default_report_date_range(
-    data_min: date | None = None,
-    data_max: date | None = None,
-) -> tuple[date, date]:
-    """Month-to-date default, clamped to available review history when needed."""
+def _default_report_date_range() -> tuple[date, date]:
+    """Calendar month-to-date (1st of current month through today)."""
     today = date.today()
-    start = today.replace(day=1)
-    end = today
-    if data_max and end > data_max:
-        end = data_max
-    if data_min and start < data_min:
-        start = data_min
-    if start > end and data_min:
-        start = data_min
-    if data_max and end < start:
-        end = data_max
-    return start, end
+    return today.replace(day=1), today
 
 
 def _filter_reviews_by_date(df, key_prefix="report"):
@@ -4882,13 +4869,14 @@ def _filter_reviews_by_date(df, key_prefix="report"):
     df = normalize_reviews_dataframe(df)
     min_d = df["created_at"].min().date()
     max_d = df["created_at"].max().date()
-    default_start, default_end = _default_report_date_range(min_d, max_d)
+    date_key = f"{key_prefix}_report_date_mtd"
+    if date_key not in st.session_state:
+        st.session_state[date_key] = _default_report_date_range()
     date_range = st.date_input(
         "Report Date Range",
-        value=(default_start, default_end),
         min_value=min_d,
         max_value=max(max_d, date.today()),
-        key=f"{key_prefix}_date_range",
+        key=date_key,
         help="Defaults to month-to-date. Change either date for a custom range.",
     )
     if isinstance(date_range, tuple) and len(date_range) == 2:
