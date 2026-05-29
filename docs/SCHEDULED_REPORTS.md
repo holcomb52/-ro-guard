@@ -61,6 +61,7 @@ After pushing to GitHub, open **Actions** → **Scheduled RO Guard reports** →
    - Enable the schedule
    - **Save**
 3. Click **Send daily reports now** (or monthly/yearly) to verify SMTP before automation
+4. To stop automation for a frequency, open that section’s **Cancel scheduling** box, check **Cancel all scheduled … emails**, and click **Confirm cancel**
 
 Run `docs/EMAIL_SCHEDULES_REPORT_FLAGS.sql` once if the table was created before report checkboxes were added.
 

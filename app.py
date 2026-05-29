@@ -70,6 +70,7 @@ from theme_styles import (
     THEME_CSS,
     brand_color_lock_css,
     claim_learning_css,
+    expander_css,
     metric_display_css,
     multiselect_css,
     pricing_page_css,
@@ -2247,6 +2248,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
         css += build_user_display_css(display_prefs, theme=theme)
     css += brand_color_lock_css(theme)
     css += metric_display_css()
+    css += expander_css(theme)
     css += claim_learning_css(theme)
     css += pricing_page_css(theme)
     css += multiselect_css(theme)

@@ -197,6 +197,39 @@ def upsert_email_schedule(
     supabase.table("email_schedules").upsert(payload, on_conflict="frequency").execute()
 
 
+def cancel_email_schedule(
+    supabase,
+    *,
+    frequency: str,
+    updated_by: str = "",
+) -> bool:
+    """Turn off automated sends for one frequency; keep recipient and report settings."""
+    if supabase is None:
+        raise RuntimeError("Supabase is not configured.")
+    frequency = str(frequency or "").strip().lower()
+    if frequency not in SCHEDULE_FREQUENCIES:
+        raise ValueError(f"Unsupported frequency: {frequency}")
+
+    existing = next(
+        (row for row in load_email_schedules(supabase) if row.get("frequency") == frequency),
+        None,
+    )
+    if not existing or not existing.get("enabled"):
+        return False
+
+    include_reporting, include_roi = schedule_report_flags(existing)
+    upsert_email_schedule(
+        supabase,
+        frequency=frequency,
+        recipients=str(existing.get("recipients") or ""),
+        enabled=False,
+        include_reporting=include_reporting,
+        include_roi=include_roi,
+        updated_by=updated_by,
+    )
+    return True
+
+
 def report_period_for_frequency(frequency: str, reference: date | None = None) -> tuple[date, date, str]:
     ref = reference or date.today()
     frequency = str(frequency or "").strip().lower()

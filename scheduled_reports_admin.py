@@ -21,6 +21,7 @@ from scheduled_reports import (
     send_schedule_report,
     smtp_config_status,
     upsert_email_schedule,
+    cancel_email_schedule,
 )
 
 ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin", "Admin")
@@ -223,3 +224,51 @@ def render_scheduled_reports_admin(supabase) -> None:
                                 )
                             except Exception as exc:
                                 st.error(format_smtp_send_error(exc, load_smtp_config()))
+
+            st.divider()
+            with st.container(border=True):
+                st.markdown(f"**Cancel {label.lower()} scheduling**")
+                schedule_active = bool(existing.get("enabled"))
+                if schedule_active:
+                    parsed_active = parse_recipient_list(str(existing.get("recipients") or ""))
+                    recipient_note = (
+                        f" to {len(parsed_active)} recipient(s)"
+                        if parsed_active
+                        else ""
+                    )
+                    st.warning(
+                        f"Automated {label.lower()} emails are **on**{recipient_note}. "
+                        "Use the box below to stop them."
+                    )
+                else:
+                    st.caption(f"No automated {label.lower()} emails are scheduled.")
+
+                confirm_cancel = st.checkbox(
+                    f"Cancel all scheduled {label.lower()} emails",
+                    value=False,
+                    key=f"schedule_cancel_confirm_{frequency}",
+                    disabled=not schedule_active,
+                )
+                if st.button(
+                    f"Confirm cancel {label.lower()} emails",
+                    key=f"schedule_cancel_{frequency}",
+                    disabled=not schedule_active,
+                ):
+                    if not confirm_cancel:
+                        st.error("Check the box above to confirm cancellation.")
+                    else:
+                        try:
+                            cancelled = cancel_email_schedule(
+                                supabase,
+                                frequency=frequency,
+                                updated_by=updated_by,
+                            )
+                            if cancelled:
+                                st.session_state[f"schedule_enabled_{frequency}"] = False
+                                st.session_state[f"schedule_cancel_confirm_{frequency}"] = False
+                                st.success(f"All automated {label.lower()} emails cancelled.")
+                                st.rerun()
+                            else:
+                                st.info(f"No active {label.lower()} schedule to cancel.")
+                        except Exception as exc:
+                            st.error(f"Could not cancel schedule: {exc}")

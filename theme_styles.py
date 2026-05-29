@@ -133,6 +133,73 @@ def metric_display_css() -> str:
     """
 
 
+def expander_css(theme: str = "Dark") -> str:
+    """Expander headers/content — fixes white summary bar in dark mode."""
+    is_light = str(theme).lower() == "light"
+    if is_light:
+        surface = "var(--rg-surface, #dde8f2)"
+        surface_hover = "var(--rg-surface-hover, #d2e0ed)"
+        surface_inner = "var(--rg-surface-input, #e8f0f8)"
+        border = "var(--rg-border, #b6c7da)"
+        text = "#0f172a"
+        muted = "#475569"
+        icon = "#1d4ed8"
+    else:
+        surface = "rgba(7, 19, 34, .86)"
+        surface_hover = "rgba(13, 30, 55, .96)"
+        surface_inner = "rgba(7, 19, 34, .62)"
+        border = "rgba(62, 150, 255, .28)"
+        text = "#f8fbff"
+        muted = "#d6e8ff"
+        icon = "#93c5fd"
+
+    scope = "details[data-testid='stExpander']"
+    summary = f"{scope} > summary, {scope} summary"
+    return f"""
+    {scope} {{
+        background: {surface} !important;
+        border: 1px solid {border} !important;
+        border-radius: 14px !important;
+        overflow: hidden;
+    }}
+    {summary} {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        border: none !important;
+        border-radius: 14px 14px 0 0 !important;
+    }}
+    {summary}:hover,
+    {summary}:focus,
+    {summary}:active {{
+        background: {surface_hover} !important;
+        background-color: {surface_hover} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+    }}
+    {scope} [data-testid="stExpanderDetails"] {{
+        background: {surface_inner} !important;
+        border-top: 1px solid {border} !important;
+    }}
+    {scope} p,
+    {scope} label,
+    {scope} span,
+    {scope} div[data-testid="stMarkdownContainer"] {{
+        color: {text} !important;
+    }}
+    {scope} div[data-testid="stCaptionContainer"] p {{
+        color: {muted} !important;
+    }}
+    {scope} [data-testid="stExpanderToggleIcon"],
+    {scope} summary svg,
+    {scope} summary [data-testid="stIconMaterial"] {{
+        color: {icon} !important;
+        fill: {icon} !important;
+    }}
+    """
+
+
 def claim_learning_css(theme: str = "Dark") -> str:
     """Green Paid / red Declined tabs and panel banners on Claim Learning."""
     is_light = str(theme).lower() == "light"
@@ -1587,11 +1654,6 @@ THEME_CSS = {
         background-color: var(--rg-surface-input) !important;
         color: #0f172a !important;
         border: 1px solid var(--rg-border) !important;
-    }
-    details[data-testid="stExpander"] {
-        background: var(--rg-surface) !important;
-        border: 1px solid var(--rg-border) !important;
-        border-radius: 14px !important;
     }
     section[data-testid="stForm"] {
         background: transparent !important;
