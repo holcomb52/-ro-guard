@@ -136,8 +136,16 @@ else:
     supabase = None
 
 st.set_page_config(page_title="RO Shield", layout="wide", initial_sidebar_state="expanded")
-if "form_version" not in st.session_state:
-    st.session_state.form_version = 0
+
+
+def _ensure_review_form_session() -> None:
+    if "form_version" not in st.session_state:
+        st.session_state.form_version = 0
+    if "job_count" not in st.session_state:
+        st.session_state.job_count = 1
+
+
+_ensure_review_form_session()
 
 DB_PATH = Path("ro_shield_final.db")
 
@@ -3715,37 +3723,24 @@ def _format_jobs_for_dealer_connect(jobs: list[dict]) -> str:
     return "\n\n".join(blocks).strip()
 
 
-def _inject_clipboard_copy(text: str) -> None:
-    if not str(text or "").strip():
+def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
+    """Selectable narratives box — reliable copy on Mac and Windows."""
+    clip = _format_jobs_for_dealer_connect(jobs)
+    if not clip:
+        st.caption("Add concern, cause, or correction above to export for Dealer Connect.")
         return
-    payload = json.dumps(text)
-    components.html(
-        f"""
-        <script>
-        (function () {{
-          const text = {payload};
-          const doc = window.parent.document;
-          if (navigator.clipboard && navigator.clipboard.writeText) {{
-            navigator.clipboard.writeText(text).catch(function () {{}});
-            return;
-          }}
-          const ta = doc.createElement("textarea");
-          ta.value = text;
-          ta.setAttribute("readonly", "");
-          ta.style.position = "fixed";
-          ta.style.left = "-9999px";
-          doc.body.appendChild(ta);
-          ta.select();
-          try {{
-            doc.execCommand("copy");
-          }} catch (e) {{}}
-          doc.body.removeChild(ta);
-        }})();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
+
+    with st.expander("Dealer Connect narratives — select and copy", expanded=False):
+        st.caption(
+            "Click the box below, press **⌘A** then **⌘C** (Mac) or **Ctrl+A** then **Ctrl+C** (Windows), "
+            "then paste into Dealer Connect."
+        )
+        st.text_area(
+            "Narratives for Dealer Connect",
+            value=clip,
+            height=min(260, 100 + clip.count("\n") * 20),
+            key=f"dc_narratives_select_{st.session_state.form_version}",
+        )
 
 
 def compute_live_audit_summary(
@@ -4608,14 +4603,13 @@ def render_pending_claims():
 
 
 def render_review():
+    _ensure_review_form_session()
+
     pending_review = st.session_state.pop("_pending_review_load", None)
     if pending_review is not None:
         _apply_saved_review_to_form(pending_review, st.session_state.form_version)
 
     _render_review_open_claims_strip()
-
-    if clip_text := st.session_state.pop("_pending_clipboard_copy", None):
-        _inject_clipboard_copy(clip_text)
 
     with st.expander(
         "Scan Repair Order & Invoice",
@@ -4857,25 +4851,8 @@ def render_review():
         )
         jobs.append(job)
 
-    copy_note_col, copy_btn_col = st.columns([3.2, 1.3], vertical_alignment="center")
-    with copy_note_col:
-        st.caption(
-            "Ready to submit? Copy formatted **Concern / Cause / Correction** text for paste into Dealer Connect."
-        )
-    with copy_btn_col:
-        if st.button(
-            "Copy for Dealer Connect",
-            key="copy_narratives_dealer_connect",
-            use_container_width=True,
-            help="Copy all job narratives to your clipboard.",
-        ):
-            clip = _format_jobs_for_dealer_connect(jobs)
-            if clip:
-                st.session_state["_pending_clipboard_copy"] = clip
-                st.toast("Narratives copied — paste into Dealer Connect.", icon="📋")
-                st.rerun()
-            else:
-                st.warning("Add concern, cause, or correction text first.")
+    st.markdown("**Dealer Connect**")
+    _render_dealer_connect_narratives_export(jobs)
 
     st.markdown("---")
 
@@ -7266,6 +7243,7 @@ def main():
 
     sync_personnel_identity(supabase)
     run_soft_refresh_if_requested(supabase)
+    _ensure_review_form_session()
     configure_streamlit_toolbar()
 
     render_sidebar_brand()
