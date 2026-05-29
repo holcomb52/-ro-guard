@@ -3170,18 +3170,18 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
                 "Pencil Wrench Correction: proper operation was not verified after repair.",
             )
 
-    if job.get("oil_leak"):
+    oil_leak = bool(job.get("oil_leak"))
+    oil_dye_billed = bool(job.get("oil_dye_billed"))
+    if oil_leak and not oil_dye_billed:
         _add_audit_finding(
             hard, warn, audit_rules, "oil_leak",
-            "Oil leak selected: confirm oil dye is billed and narrative states dye was used.",
+            "Oil leak repair requires oil dye billed.",
         )
-        if not job.get("oil_dye_billed"):
-            _add_audit_finding(hard, warn, audit_rules, "oil_leak", "Oil leak repair requires oil dye billed.")
-        if "dye" not in text:
-            _add_audit_finding(
-                hard, warn, audit_rules, "oil_leak",
-                "Oil leak narrative must state dye was used to locate the leak.",
-            )
+    elif oil_dye_billed and not oil_leak:
+        _add_audit_finding(
+            hard, warn, audit_rules, "oil_leak",
+            "Oil dye billed but Oil Leak is not selected.",
+        )
 
     if job.get("sublet_repair"):
         _add_audit_finding(
