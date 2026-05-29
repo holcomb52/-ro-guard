@@ -1268,6 +1268,187 @@ def format_recommendation_list(value, empty_label):
     return "\n".join(f"• {item}" for item in items)
 
 
+def _parse_labor_op_entries(labor_ops: str) -> list[tuple[str, str]]:
+    """Return (op_code, time_str) pairs from a stored labor_ops field."""
+    raw = str(labor_ops or "").strip()
+    if not raw:
+        return []
+
+    chunks = re.split(r"[;\n]+", raw)
+    if len(chunks) == 1:
+        chunks = re.split(r",(?=\s*\d{7,8})", raw)
+
+    entries: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        matched = re.match(
+            r"(\d{7,8}[A-Z]{0,2})\s*(?:\(([\d.]+)\s*h?\))?",
+            chunk,
+            re.I,
+        )
+        if matched:
+            op = matched.group(1).upper()
+            time_str = (matched.group(2) or "").strip()
+        else:
+            fallback = re.search(r"\b(\d{7,8}[A-Z]{0,2})\b", chunk, re.I)
+            if not fallback:
+                continue
+            op = fallback.group(1).upper()
+            time_str = ""
+        if op in seen:
+            continue
+        seen.add(op)
+        entries.append((op, time_str))
+    return entries
+
+
+def _common_labor_time(times: list[str]) -> str:
+    cleaned = [t.strip() for t in times if str(t or "").strip()]
+    if not cleaned:
+        return ""
+    return max(set(cleaned), key=cleaned.count)
+
+
+def _collect_paid_labor_op_suggestions(
+    job: dict,
+    *,
+    limit_matches: int = 5,
+    max_ops: int = 10,
+) -> tuple[list[dict], list[dict]]:
+    """Rank labor ops from similar paid claims for a review job."""
+    similar = find_similar_paid_claims(job, limit=limit_matches)
+    if not similar:
+        return [], []
+
+    op_stats: dict[str, dict] = {}
+    for match in similar:
+        labor = str(enrich_paid_claim_match(match).get("labor_ops") or "").strip()
+        if not labor:
+            continue
+        score = int(match.get("score") or 0)
+        ro_number = str(match.get("ro_number") or "").strip()
+        for op_code, time_str in _parse_labor_op_entries(labor):
+            key = op_code.upper()
+            if key not in op_stats:
+                op_stats[key] = {
+                    "op_code": op_code,
+                    "count": 0,
+                    "best_score": 0,
+                    "best_ro": "",
+                    "times": [],
+                }
+            entry = op_stats[key]
+            entry["count"] += 1
+            if time_str:
+                entry["times"].append(time_str)
+            if score >= entry["best_score"]:
+                entry["best_score"] = score
+                entry["best_ro"] = ro_number
+
+    ranked = sorted(
+        op_stats.values(),
+        key=lambda row: (-int(row["count"]), -int(row["best_score"]), row["op_code"]),
+    )
+    return ranked[:max_ops], similar
+
+
+def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
+    """Surface labor ops from similar paid claims for Dealer Connect entry."""
+    fv = st.session_state.form_version
+    eligible_jobs: list[dict] = []
+    for job in jobs:
+        narrative = claim_source_text(
+            job.get("concern"),
+            job.get("cause"),
+            job.get("correction"),
+        )
+        if len(narrative.strip()) >= 20:
+            eligible_jobs.append(job)
+
+    with st.expander("Labor ops that paid — copy into Dealer Connect", expanded=True):
+        st.caption(
+            "Labor operations from similar **paid claims** in your library — start here before "
+            "searching OEM labor catalogs."
+        )
+        if not eligible_jobs:
+            st.info("Enter concern, cause, or correction above to suggest labor ops from paid claims.")
+            return
+
+        multi = len(eligible_jobs) > 1
+        found_any = False
+        for job in eligible_jobs:
+            job_no = int(job.get("job_no") or 1)
+            suggestions, similar = _collect_paid_labor_op_suggestions(job)
+
+            if multi:
+                st.markdown(f"**Job {job_no}**")
+
+            if not similar:
+                st.info(
+                    "No similar paid claims yet. Upload paid warranty PDFs on **Claim Learning** "
+                    "to build your labor op library."
+                )
+                if multi and job != eligible_jobs[-1]:
+                    st.markdown("---")
+                continue
+
+            if not suggestions:
+                best = enrich_paid_claim_match(similar[0])
+                st.warning(
+                    f"Similar paid claim **{best.get('ro_number', 'on file')}** "
+                    f"({similar[0].get('score', 0)}% match) has no labor ops parsed. "
+                    "Re-upload paid Dealer Connect PDFs that include labor operation lines."
+                )
+                if multi and job != eligible_jobs[-1]:
+                    st.markdown("---")
+                continue
+
+            found_any = True
+            best = enrich_paid_claim_match(similar[0])
+            st.caption(
+                f"Best match: **{best.get('ro_number', 'Paid claim')}** · "
+                f"**{similar[0].get('score', 0)}%** similar repair"
+            )
+
+            for idx, suggestion in enumerate(suggestions):
+                op_code = str(suggestion["op_code"])
+                time_hint = _common_labor_time(suggestion.get("times") or [])
+                detail_parts: list[str] = []
+                if time_hint:
+                    detail_parts.append(f"**{time_hint}h** paid time")
+                count = int(suggestion.get("count") or 0)
+                if count > 1:
+                    detail_parts.append(f"on **{count}** similar paid claims")
+                elif suggestion.get("best_ro"):
+                    detail_parts.append(f"paid RO **{suggestion['best_ro']}**")
+
+                label_col, copy_col = st.columns([5, 1.4])
+                with label_col:
+                    st.markdown(
+                        f"**{op_code}**"
+                        + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
+                    )
+                with copy_col:
+                    _dealer_connect_copy_button(
+                        op_code,
+                        label=op_code,
+                        element_id=f"lop_copy_j{job_no}_{op_code}_{fv}_{idx}",
+                    )
+
+            if len(similar) > 1:
+                others = len(similar) - 1
+                st.caption(f"+ {others} more similar paid claim(s) checked for labor ops.")
+
+            if multi and job != eligible_jobs[-1]:
+                st.markdown("---")
+
+        if not found_any and len(eligible_jobs) == 1:
+            pass
+
+
 def enrich_paid_claim_match(match):
     """Fill labor_ops, parts, and WAM from full claim text when DB fields are empty."""
     source = claim_source_text(
@@ -3689,6 +3870,7 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
         "concern": str(st.session_state.get(f"concern_{j}_{fv}", "") or ""),
         "cause": str(st.session_state.get(f"cause_{j}_{fv}", "") or ""),
         "correction": str(st.session_state.get(f"correction_{j}_{fv}", "") or ""),
+        "operation_code": str(st.session_state.get(f"operation_code_{j}", "") or "").strip(),
         "tech_flagged_time": float(st.session_state.get(f"tech_time_{j}", 0) or 0),
         "time_allotted": float(st.session_state.get(f"allotted_{j}", 0) or 0),
         "claim_value": float(st.session_state.get(f"claim_value_{j}", 0) or 0),
@@ -3717,6 +3899,138 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
 def _dealer_connect_narrative_height(text: str, *, min_h: int = 72, max_h: int = 220) -> int:
     lines = max(1, str(text or "").count("\n") + 1)
     return min(max_h, min_h + max(0, lines - 1) * 20)
+
+
+def _format_dc_copy_number(value: float | int | str) -> str:
+    """Format hours or dollars for Dealer Connect copy fields."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value or "").strip()
+    if abs(number - round(number)) < 0.001:
+        return str(int(round(number))) if number == int(number) else f"{number:.2f}".rstrip("0").rstrip(".")
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _render_dealer_connect_copy_row(
+    *,
+    label: str,
+    value: str,
+    element_id: str,
+) -> None:
+    text = str(value or "").strip()
+    if not text:
+        return
+    head_col, copy_col = st.columns([5, 1.4])
+    with head_col:
+        st.markdown(f"**{label}** · `{text}`")
+    with copy_col:
+        _dealer_connect_copy_button(
+            text,
+            label=label,
+            element_id=element_id,
+        )
+
+
+def _render_dealer_connect_job_lines_export(
+    jobs: list[dict],
+    *,
+    ro_number: str,
+    vin: str,
+) -> None:
+    """Per-job labor op, times, and claim value from invoice / RO scan."""
+    fv = st.session_state.form_version
+    ro_clean = str(ro_number or "").strip()
+    vin_clean = str(vin or "").strip()
+
+    line_jobs: list[dict] = []
+    for job in jobs:
+        job_no = int(job.get("job_no") or len(line_jobs) + 1)
+        operation_code = str(job.get("operation_code") or "").strip()
+        tech_time = float(job.get("tech_flagged_time") or 0)
+        allotted = float(job.get("time_allotted") or 0)
+        claim_value = float(job.get("claim_value") or 0)
+        if operation_code or tech_time or allotted or claim_value:
+            line_jobs.append(
+                {
+                    "job_no": job_no,
+                    "operation_code": operation_code,
+                    "tech_flagged_time": tech_time,
+                    "time_allotted": allotted,
+                    "claim_value": claim_value,
+                }
+            )
+
+    if not line_jobs and not ro_clean and not vin_clean:
+        st.caption(
+            "Scan the **Final Invoice** above to auto-fill labor operation codes and times for Dealer Connect."
+        )
+        return
+
+    with st.expander("Job line details — copy into Dealer Connect", expanded=True):
+        st.caption(
+            "Labor operation, times, and claim value from the scanned invoice / RO — paste into the "
+            "matching Dealer Connect job line."
+        )
+        if ro_clean or vin_clean:
+            header_cols = st.columns(2)
+            with header_cols[0]:
+                if ro_clean:
+                    _render_dealer_connect_copy_row(
+                        label="RO",
+                        value=ro_clean,
+                        element_id=f"dc_ro_{fv}",
+                    )
+            with header_cols[1]:
+                if vin_clean:
+                    _render_dealer_connect_copy_row(
+                        label="VIN",
+                        value=vin_clean,
+                        element_id=f"dc_vin_{fv}",
+                    )
+            if line_jobs:
+                st.markdown("---")
+
+        if not line_jobs:
+            st.info(
+                "No labor operation or times imported yet. Upload the **Final Invoice** on the scan panel "
+                "and click **Scan & Fill Form**."
+            )
+            return
+
+        multi = len(line_jobs) > 1
+        for job in line_jobs:
+            job_no = job["job_no"]
+            if multi:
+                st.markdown(f"**Job {job_no}**")
+
+            if job.get("operation_code"):
+                _render_dealer_connect_copy_row(
+                    label="Labor operation",
+                    value=str(job["operation_code"]),
+                    element_id=f"dc_op_j{job_no}_fv{fv}",
+                )
+            if float(job.get("tech_flagged_time") or 0) > 0:
+                _render_dealer_connect_copy_row(
+                    label="Tech flagged time",
+                    value=_format_dc_copy_number(job["tech_flagged_time"]),
+                    element_id=f"dc_tech_j{job_no}_fv{fv}",
+                )
+            if float(job.get("time_allotted") or 0) > 0:
+                _render_dealer_connect_copy_row(
+                    label="Time allotted",
+                    value=_format_dc_copy_number(job["time_allotted"]),
+                    element_id=f"dc_allotted_j{job_no}_fv{fv}",
+                )
+            if float(job.get("claim_value") or 0) > 0:
+                _render_dealer_connect_copy_row(
+                    label="Claim value",
+                    value=_format_dc_copy_number(job["claim_value"]),
+                    element_id=f"dc_claim_j{job_no}_fv{fv}",
+                )
+
+            if multi and job != line_jobs[-1]:
+                st.markdown("---")
 
 
 def _dealer_connect_copy_button(text: str, *, label: str, element_id: str) -> None:
@@ -4061,6 +4375,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         st.session_state[f"tech_time_{job_no}"] = 0.0
         st.session_state[f"allotted_{job_no}"] = 0.0
         st.session_state[f"claim_value_{job_no}"] = 0.0
+        st.session_state[f"operation_code_{job_no}"] = ""
         st.session_state[f"rental_days_{job_no}"] = 0
         st.session_state[f"concern_{job_no}_{fv}"] = ""
         st.session_state[f"cause_{job_no}_{fv}"] = ""
@@ -4073,6 +4388,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         st.session_state[f"tech_time_{idx}"] = float(job.get("tech_flagged_time") or 0)
         st.session_state[f"allotted_{idx}"] = float(job.get("time_allotted") or 0)
         st.session_state[f"claim_value_{idx}"] = float(job.get("claim_value") or 0)
+        st.session_state[f"operation_code_{idx}"] = str(job.get("operation_code") or "").strip()
         st.session_state[f"rental_days_{idx}"] = int(float(job.get("rental_days") or 0))
         for src, dest in _JOB_CHECKBOX_FIELDS:
             st.session_state[f"{dest}_{idx}"] = _truthy_flag(job.get(src))
@@ -4272,6 +4588,8 @@ def _apply_ro_scan_to_form(import_data: dict):
             st.session_state[f"allotted_{idx}"] = float(job["time_allotted"])
         if job.get("claim_value"):
             st.session_state[f"claim_value_{idx}"] = float(job["claim_value"])
+        if job.get("operation_code"):
+            st.session_state[f"operation_code_{idx}"] = str(job["operation_code"]).strip()
         for src, dest in checkbox_map.items():
             if job.get(src):
                 st.session_state[f"{dest}_{idx}"] = True
@@ -4503,6 +4821,11 @@ def _render_review_job_panel(
             step=1.0,
             key=f"claim_value_{job_no}",
         )
+    operation_code = st.text_input(
+        "Labor operation code",
+        key=f"operation_code_{job_no}",
+        help="Auto-filled from invoice scan — edit if needed before copying to Dealer Connect.",
+    )
 
     st.markdown("**Warranty checks**")
     c1, c2 = st.columns(2)
@@ -4606,6 +4929,7 @@ def _render_review_job_panel(
         "concern": concern,
         "cause": cause,
         "correction": correction,
+        "operation_code": str(operation_code or "").strip(),
         "tech_flagged_time": tech_flagged_time,
         "time_allotted": time_allotted,
         "claim_value": claim_value,
@@ -4971,6 +5295,8 @@ def render_review():
         jobs.append(job)
 
     st.markdown("**Dealer Connect**")
+    _render_paid_labor_op_helper(jobs)
+    _render_dealer_connect_job_lines_export(jobs, ro_number=ro_number, vin=vin)
     _render_dealer_connect_narratives_export(jobs)
 
     st.markdown("---")
