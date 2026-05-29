@@ -1359,16 +1359,13 @@ def _collect_paid_labor_op_suggestions(
 
 @contextmanager
 def _dealer_connect_section(title: str, panel_class: str):
-    """Bordered Dealer Connect panel — avoids expander white boxes in dark theme."""
-    st.markdown(
-        f'<div class="dealer-connect-section-title">{html.escape(title)}</div>',
-        unsafe_allow_html=True,
-    )
+    """Bordered Dealer Connect panel — title inside panel to avoid white gap blocks."""
     with st.container(border=True):
         st.markdown(
             f'<div class="dealer-connect-panel {panel_class}"></div>',
             unsafe_allow_html=True,
         )
+        st.markdown(f"##### {title}")
         yield
 
 
@@ -1398,7 +1395,7 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
     ):
         st.caption(
             "Labor operations from similar **paid claims** in your library. "
-            "Use the **copy icon** on each op code before searching OEM labor catalogs."
+            "Click a value block, then **⌘C** / **Ctrl+C** to copy."
         )
         if not eligible_jobs:
             _dc_note_info(
@@ -1454,7 +1451,10 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
                     f"**{op_code}**"
                     + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
                 )
-                st.code(op_code, language=None)
+                st.markdown(
+                    f'<div class="dc-copy-value">{html.escape(op_code)}</div>',
+                    unsafe_allow_html=True,
+                )
 
             if len(similar) > 1:
                 others = len(similar) - 1
@@ -3929,12 +3929,15 @@ def _format_dc_copy_number(value: float | int | str) -> str:
 
 
 def _render_dealer_connect_copy_field(*, label: str, value: str) -> None:
-    """Label + native Streamlit code block (built-in copy icon, no iframe)."""
+    """Label + dark selectable value block (no st.code white boxes)."""
     text = str(value or "").strip()
     if not text:
         return
     st.markdown(f"**{label}**")
-    st.code(text, language=None)
+    st.markdown(
+        f'<div class="dc-copy-value">{html.escape(text)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_dealer_connect_job_lines_export(
@@ -3977,7 +3980,7 @@ def _render_dealer_connect_job_lines_export(
     ):
         st.caption(
             "Labor operation, times, and claim value from the scanned invoice / RO. "
-            "Use the **copy icon** on each block, then paste into the matching Dealer Connect job line."
+            "Click a value block, then **⌘C** / **Ctrl+C** to paste into Dealer Connect."
         )
         if ro_clean or vin_clean:
             header_cols = st.columns(2, gap="medium")

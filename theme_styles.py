@@ -457,13 +457,6 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     job_wrap = f'{scope} div[data-testid="stVerticalBlockBorderWrapper"]:has(.dealer-connect-job-line)'
     job_bg = "rgba(7, 19, 34, .72)" if not is_light else "var(--rg-surface-hover, #d2e0ed)"
     return f"""
-    {scope} .dealer-connect-section-title {{
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: {code_text} !important;
-        margin: 16px 0 8px 0 !important;
-        line-height: 1.3;
-    }}
     {panel_wrap} {{
         background: {panel_bg} !important;
         background-color: {panel_bg} !important;
@@ -475,6 +468,13 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     {panel_wrap} > div {{
         background: transparent !important;
         background-color: transparent !important;
+    }}
+    {panel_wrap} h5 {{
+        color: {code_text} !important;
+        margin: 0 0 10px 0 !important;
+        padding: 0 !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
     }}
     {job_wrap} {{
         background: {job_bg} !important;
@@ -503,26 +503,21 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         font-size: 0.9rem;
         line-height: 1.45;
     }}
-    {scope} [data-testid="stCodeBlock"] {{
-        margin: 0 0 10px 0 !important;
-        background: transparent !important;
-    }}
-    {scope} [data-testid="stCodeBlock"] pre {{
+    {scope} .dc-copy-value {{
+        margin: 0 0 10px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
         background: {code_bg} !important;
-        background-color: {code_bg} !important;
-        border: 1px solid {code_border} !important;
-        border-radius: 10px !important;
+        border: 1px solid {code_border};
         color: {code_text} !important;
-        padding: 10px 12px !important;
-        margin: 0 !important;
-        font-size: 0.92rem !important;
-        line-height: 1.45 !important;
-        white-space: pre-wrap !important;
-        word-break: break-word !important;
-    }}
-    {scope} [data-testid="stCodeBlock"] code {{
-        color: {code_text} !important;
-        background: transparent !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.92rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: all;
+        -webkit-user-select: all;
+        cursor: text;
     }}
     {scope} div[data-testid="stCaptionContainer"] p {{
         color: {label_muted} !important;
