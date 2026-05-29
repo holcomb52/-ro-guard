@@ -66,6 +66,13 @@ def format_recipient_list(emails: list[str]) -> str:
     return ", ".join(parse_recipient_list(", ".join(emails)))
 
 
+def _normalize_smtp_host(host: str) -> str:
+    cleaned = str(host or "").strip().strip('"').strip("'")
+    if ":" in cleaned:
+        cleaned = cleaned.split(":", 1)[0].strip()
+    return cleaned
+
+
 def load_smtp_config() -> dict | None:
     def _get(name: str, default: str = "") -> str:
         value = os.getenv(name, default).strip()
@@ -78,7 +85,7 @@ def load_smtp_config() -> dict | None:
         except Exception:
             return default
 
-    host = _get("REPORT_SMTP_HOST")
+    host = _normalize_smtp_host(_get("REPORT_SMTP_HOST"))
     user = _get("REPORT_SMTP_USER")
     password = _get("REPORT_SMTP_PASSWORD")
     if not host or not user or not password:
@@ -243,6 +250,22 @@ def build_reporting_pdf_for_schedule(
     scoped = filter_reviews_for_period(df, start, end)
     pdf_bytes = build_review_report_pdf(scoped, period_label=period_label)
     return pdf_bytes, period_label, len(scoped)
+
+
+def format_smtp_send_error(exc: Exception, config: dict | None = None) -> str:
+    message = str(exc)
+    host = (config or {}).get("host") or "unknown"
+    if "Name or service not known" in message or "Errno -2" in message:
+        return (
+            f"Cannot reach mail server `{host}`. In Streamlit Secrets, set "
+            "`REPORT_SMTP_HOST = \"smtp.gmail.com\"` exactly (no port, no typos, no extra quotes)."
+        )
+    if "535" in message or "Authentication unsuccessful" in message:
+        return (
+            "SMTP login failed. For Gmail, use a 16-character **app password** "
+            "(not your normal Gmail password) in `REPORT_SMTP_PASSWORD`."
+        )
+    return message
 
 
 def send_report_email(

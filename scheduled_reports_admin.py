@@ -10,8 +10,10 @@ from scheduled_reports import (
     FREQUENCY_LABELS,
     SCHEDULE_FREQUENCIES,
     format_recipient_list,
+    format_smtp_send_error,
     load_email_schedules,
     load_manager_emails,
+    load_smtp_config,
     parse_recipient_list,
     report_period_for_frequency,
     send_schedule_report,
@@ -159,4 +161,4 @@ def render_scheduled_reports_admin(supabase) -> None:
                                     f"({result['review_count']} review(s) in {result['period_label']})."
                                 )
                             except Exception as exc:
-                                st.error(f"Test send failed: {exc}")
+                                st.error(format_smtp_send_error(exc, load_smtp_config()))
