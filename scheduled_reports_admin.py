@@ -8,6 +8,7 @@ from auth import auth_user_email
 from scheduled_reports import (
     FREQUENCY_HELP,
     FREQUENCY_LABELS,
+    REPORT_TYPE_LABELS,
     SCHEDULE_FREQUENCIES,
     format_recipient_list,
     format_smtp_send_error,
@@ -16,6 +17,7 @@ from scheduled_reports import (
     load_smtp_config,
     parse_recipient_list,
     report_period_for_frequency,
+    schedule_report_flags,
     send_schedule_report,
     smtp_config_status,
     upsert_email_schedule,
@@ -44,10 +46,42 @@ def _current_person_name() -> str:
     return str(st.session_state.get("current_person_name") or "").strip()
 
 
+def _schedule_form_values(existing: dict, frequency: str) -> tuple[bool, bool]:
+    include_reporting, include_roi = schedule_report_flags(existing)
+    return (
+        st.checkbox(
+            REPORT_TYPE_LABELS["reporting"],
+            value=include_reporting,
+            key=f"schedule_reporting_{frequency}",
+        ),
+        st.checkbox(
+            REPORT_TYPE_LABELS["roi"],
+            value=include_roi,
+            key=f"schedule_roi_{frequency}",
+        ),
+    )
+
+
+def _validate_schedule_form(
+    *,
+    enabled: bool,
+    recipients: str,
+    include_reporting: bool,
+    include_roi: bool,
+    sending: bool,
+) -> str | None:
+    parsed = parse_recipient_list(recipients)
+    if (enabled or sending) and not parsed:
+        return "Add at least one valid recipient email."
+    if (enabled or sending) and not include_reporting and not include_roi:
+        return "Select at least one report to email."
+    return None
+
+
 def render_scheduled_reports_admin(supabase) -> None:
     st.header("Scheduled Reports")
     st.caption(
-        "Emails the **Reporting** and **ROI** summary PDFs on a daily, monthly, or yearly schedule. "
+        "Choose recipients and which PDFs to email on a daily, monthly, or yearly schedule. "
         "Requires REPORT_SMTP_* secrets and the GitHub Actions workflow (see docs/SCHEDULED_REPORTS.md)."
     )
 
@@ -81,17 +115,22 @@ def render_scheduled_reports_admin(supabase) -> None:
             start, end, preview_label = report_period_for_frequency(frequency)
             st.caption(f"Next automated run covers: **{preview_label}** ({start} → {end}).")
 
-            enabled = st.checkbox(
-                f"Enable {label.lower()} emails",
-                value=bool(existing.get("enabled")),
-                key=f"schedule_enabled_{frequency}",
-            )
             recipients = st.text_area(
                 "Recipients (comma-separated)",
                 value=str(existing.get("recipients") or ""),
                 placeholder="manager@dealership.com, warranty@dealership.com",
                 key=f"schedule_recipients_{frequency}",
             )
+
+            st.markdown("**Reports to include**")
+            include_reporting, include_roi = _schedule_form_values(existing, frequency)
+
+            enabled = st.checkbox(
+                f"Enable {label.lower()} emails",
+                value=bool(existing.get("enabled")),
+                key=f"schedule_enabled_{frequency}",
+            )
+
             cols = st.columns(2)
             with cols[0]:
                 if st.button("Use manager emails", key=f"schedule_mgr_{frequency}"):
@@ -114,9 +153,15 @@ def render_scheduled_reports_admin(supabase) -> None:
             action_cols = st.columns(2)
             with action_cols[0]:
                 if st.button(f"Save {label.lower()} schedule", key=f"schedule_save_{frequency}"):
-                    parsed = parse_recipient_list(recipients)
-                    if enabled and not parsed:
-                        st.error("Add at least one valid recipient email, or disable this schedule.")
+                    form_error = _validate_schedule_form(
+                        enabled=enabled,
+                        recipients=recipients,
+                        include_reporting=include_reporting,
+                        include_roi=include_roi,
+                        sending=False,
+                    )
+                    if form_error:
+                        st.error(form_error)
                     else:
                         try:
                             upsert_email_schedule(
@@ -124,6 +169,8 @@ def render_scheduled_reports_admin(supabase) -> None:
                                 frequency=frequency,
                                 recipients=recipients,
                                 enabled=enabled,
+                                include_reporting=include_reporting,
+                                include_roi=include_roi,
                                 updated_by=updated_by,
                             )
                             st.success(f"{label} schedule saved.")
@@ -131,13 +178,20 @@ def render_scheduled_reports_admin(supabase) -> None:
                         except Exception as exc:
                             st.error(f"Could not save schedule: {exc}")
             with action_cols[1]:
-                if st.button(f"Send test now", key=f"schedule_test_{frequency}"):
+                send_label = f"Send {label.lower()} reports now"
+                if st.button(send_label, key=f"schedule_test_{frequency}"):
                     if not smtp_ok:
                         st.error("Configure REPORT_SMTP_* secrets before sending.")
                     else:
-                        parsed = parse_recipient_list(recipients)
-                        if not parsed:
-                            st.error("Add at least one valid recipient email.")
+                        form_error = _validate_schedule_form(
+                            enabled=enabled,
+                            recipients=recipients,
+                            include_reporting=include_reporting,
+                            include_roi=include_roi,
+                            sending=True,
+                        )
+                        if form_error:
+                            st.error(form_error)
                         else:
                             try:
                                 upsert_email_schedule(
@@ -145,20 +199,26 @@ def render_scheduled_reports_admin(supabase) -> None:
                                     frequency=frequency,
                                     recipients=recipients,
                                     enabled=enabled,
+                                    include_reporting=include_reporting,
+                                    include_roi=include_roi,
                                     updated_by=updated_by,
                                 )
+                                parsed = parse_recipient_list(recipients)
                                 result = send_schedule_report(
                                     supabase,
                                     {
                                         "frequency": frequency,
                                         "recipients": format_recipient_list(parsed),
                                         "enabled": enabled,
+                                        "include_reporting": include_reporting,
+                                        "include_roi": include_roi,
                                     },
                                     record_send=False,
                                 )
+                                reports = ", ".join(result.get("reports_sent") or [])
                                 st.success(
-                                    f"Test email sent to {', '.join(result['recipients'])} "
-                                    f"with Reporting + ROI PDFs ({result['review_count']} review(s) in "
+                                    f"Email sent to {', '.join(result['recipients'])} "
+                                    f"with {reports} ({result['review_count']} review(s) in "
                                     f"{result['period_label']})."
                                 )
                             except Exception as exc:

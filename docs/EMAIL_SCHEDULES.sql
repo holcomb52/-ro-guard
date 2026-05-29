@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS email_schedules (
     report_type TEXT NOT NULL DEFAULT 'reporting' CHECK (report_type IN ('reporting')),
     recipients TEXT NOT NULL DEFAULT '',
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    include_reporting BOOLEAN NOT NULL DEFAULT TRUE,
+    include_roi BOOLEAN NOT NULL DEFAULT TRUE,
     last_sent_at TIMESTAMPTZ,
     last_error TEXT,
     updated_by TEXT

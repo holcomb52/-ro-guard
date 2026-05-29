@@ -57,9 +57,12 @@ After pushing to GitHub, open **Actions** → **Scheduled RO Guard reports** →
 1. Open **Admin → Scheduled Reports**
 2. For each frequency (Daily / Monthly / Yearly):
    - Add recipient emails (or click **Use manager emails**)
+   - Check **Reporting summary PDF** and/or **ROI dashboard PDF**
    - Enable the schedule
    - **Save**
-3. Click **Send test now** to verify SMTP before enabling automation
+3. Click **Send daily reports now** (or monthly/yearly) to verify SMTP before automation
+
+Run `docs/EMAIL_SCHEDULES_REPORT_FLAGS.sql` once if the table was created before report checkboxes were added.
 
 ## Manual run (local)
 

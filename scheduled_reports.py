@@ -19,6 +19,11 @@ from review_store import compute_roi_metrics, load_reviews, normalize_reviews_da
 SCHEDULE_FREQUENCIES = ("daily", "monthly", "yearly")
 REPORT_TYPES = ("reporting", "roi")
 
+REPORT_TYPE_LABELS = {
+    "reporting": "Reporting summary PDF",
+    "roi": "ROI dashboard PDF",
+}
+
 DEFAULT_ROI_REWORK_PCT = 0.40
 DEFAULT_ROI_MINUTES_SAVED = 15.0
 DEFAULT_ROI_HOURLY_RATE = 38.0
@@ -156,12 +161,22 @@ def load_manager_emails(supabase) -> list[str]:
     return sorted(emails)
 
 
+def schedule_report_flags(schedule: dict | None) -> tuple[bool, bool]:
+    """Which PDFs to attach for this schedule row."""
+    schedule = schedule or {}
+    if "include_reporting" in schedule or "include_roi" in schedule:
+        return bool(schedule.get("include_reporting")), bool(schedule.get("include_roi"))
+    return True, False
+
+
 def upsert_email_schedule(
     supabase,
     *,
     frequency: str,
     recipients: str,
     enabled: bool,
+    include_reporting: bool = True,
+    include_roi: bool = False,
     updated_by: str = "",
 ) -> None:
     if supabase is None:
@@ -174,6 +189,8 @@ def upsert_email_schedule(
         "report_type": "reporting",
         "recipients": format_recipient_list(parse_recipient_list(recipients)),
         "enabled": bool(enabled),
+        "include_reporting": bool(include_reporting),
+        "include_roi": bool(include_roi),
         "updated_at": _utc_now_iso(),
         "updated_by": str(updated_by or "").strip() or None,
     }
@@ -342,6 +359,35 @@ def _safe_filename(label: str) -> str:
     return f"RO_Shield_{cleaned}.pdf"
 
 
+def build_schedule_attachments(
+    supabase,
+    frequency: str,
+    *,
+    include_reporting: bool,
+    include_roi: bool,
+    reference: date | None = None,
+) -> tuple[list[tuple[bytes, str]], str, int]:
+    if not include_reporting and not include_roi:
+        raise ValueError("Select at least one report to email.")
+
+    start, end, period_label = report_period_for_frequency(frequency, reference)
+    df = normalize_reviews_dataframe(load_reviews(supabase))
+    scoped = filter_reviews_for_period(df, start, end)
+    review_count = len(scoped)
+    period_slug = period_label.replace(" — ", "_").replace(" ", "_")
+    attachments: list[tuple[bytes, str]] = []
+
+    if include_reporting:
+        reporting_pdf = build_review_report_pdf(scoped, period_label=period_label)
+        attachments.append((reporting_pdf, _safe_filename(f"Review_{period_slug}")))
+
+    if include_roi:
+        roi_pdf = build_roi_pdf_for_schedule(scoped, period_label=period_label)
+        attachments.append((roi_pdf, _safe_filename(f"ROI_{period_slug}")))
+
+    return attachments, period_label, review_count
+
+
 def send_schedule_report(
     supabase,
     schedule: dict,
@@ -354,25 +400,28 @@ def send_schedule_report(
     if not recipients:
         raise ValueError("Add at least one recipient email for this schedule.")
 
-    pdf_bytes, period_label, review_count, scoped = build_reporting_pdf_for_schedule(
+    include_reporting, include_roi = schedule_report_flags(schedule)
+    attachments, period_label, review_count = build_schedule_attachments(
         supabase,
         frequency,
+        include_reporting=include_reporting,
+        include_roi=include_roi,
         reference=reference,
     )
-    roi_pdf = build_roi_pdf_for_schedule(scoped, period_label=period_label)
-    period_slug = period_label.replace(" — ", "_").replace(" ", "_")
-    attachments = [
-        (pdf_bytes, _safe_filename(f"Review_{period_slug}")),
-        (roi_pdf, _safe_filename(f"ROI_{period_slug}")),
-    ]
+
+    report_names = []
+    if include_reporting:
+        report_names.append("Reporting summary")
+    if include_roi:
+        report_names.append("ROI dashboard summary")
+
     subject = f"RO Shield — {period_label}"
     body = (
         f"{period_label}\n\n"
         f"Reviews in period: {review_count}\n"
         f"Attached PDFs:\n"
-        f"- Reporting summary\n"
-        f"- ROI dashboard summary\n\n"
-        "— RO Shield (automated report)\n"
+        + "".join(f"- {name}\n" for name in report_names)
+        + "\n— RO Shield (automated report)\n"
     )
     send_report_email(
         recipients=recipients,
@@ -395,6 +444,7 @@ def send_schedule_report(
         "period_label": period_label,
         "review_count": review_count,
         "recipients": recipients,
+        "reports_sent": report_names,
     }
 
 
