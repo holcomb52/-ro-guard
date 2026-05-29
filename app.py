@@ -78,6 +78,7 @@ from theme_styles import (
     multiselect_css,
     pricing_page_css,
     review_open_claims_strip_css,
+    vin_recall_alert_css,
 )
 from personnel_roles import (
     ALL_PERSONNEL_ROLES,
@@ -2301,6 +2302,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += audit_result_panel_css(theme)
     css += review_open_claims_strip_css(theme)
     css += expander_css(theme)
+    css += vin_recall_alert_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -3442,14 +3444,58 @@ def _is_vin_recall_acknowledged(form_version: int, vin_clean: str) -> bool:
     return bool(ack.get("acknowledged"))
 
 
+def _vin_recall_skip_fetch_key(form_version: int) -> str:
+    return f"vin_recall_skip_fetch_{form_version}"
+
+
+def _restore_saved_recall_state(review: dict, form_version: int) -> None:
+    """Reuse recall results from a saved review — no new NHTSA lookup on re-open."""
+    fv = int(form_version)
+    vin_clean = normalize_vin(str(review.get("vin") or ""))
+    if len(vin_clean) < 11:
+        return
+
+    recall_key = f"vin_recall_result_{fv}"
+    count = int(review.get("vin_recall_count") or 0)
+    campaigns = [
+        c.strip() for c in str(review.get("vin_recall_campaigns") or "").split(",") if c.strip()
+    ]
+    recalls = [{"campaign": c, "component": ""} for c in campaigns]
+    if count > len(recalls):
+        recalls.extend({"campaign": "Campaign", "component": ""} for _ in range(count - len(recalls)))
+
+    st.session_state[f"vin_recall_tracked_vin_{fv}"] = vin_clean
+    st.session_state[_vin_recall_skip_fetch_key(fv)] = True
+    st.session_state[recall_key] = {
+        "ok": True,
+        "vin": vin_clean,
+        "recall_count": count,
+        "recalls": recalls[:count] if count else [],
+        "vehicle": {},
+        "from_saved_review": True,
+    }
+    if _truthy_flag(review.get("vin_recall_acknowledged")):
+        st.session_state[_vin_recall_ack_key(fv, vin_clean)] = {
+            "acknowledged": True,
+            "acknowledged_at": "",
+        }
+
+
 def _ensure_vin_recall_lookup(vin: str, form_version: int) -> dict | None:
-    """Auto-fetch NHTSA recalls when the VIN is long enough."""
+    """Auto-fetch NHTSA recalls when the VIN is long enough (initial entry only)."""
     vin_clean = normalize_vin(vin)
     recall_key = f"vin_recall_result_{form_version}"
     tracked_vin_key = f"vin_recall_tracked_vin_{form_version}"
+    skip_key = _vin_recall_skip_fetch_key(form_version)
 
     if len(vin_clean) < 11:
         return None
+
+    if st.session_state.get(skip_key):
+        tracked = st.session_state.get(tracked_vin_key)
+        if tracked == vin_clean:
+            return st.session_state.get(recall_key)
+        st.session_state.pop(skip_key, None)
 
     if st.session_state.get(tracked_vin_key) != vin_clean:
         st.session_state[recall_key] = _cached_vin_recall_lookup(vin_clean)
@@ -3489,90 +3535,13 @@ def _review_job_text_from_session(form_version: int, job_count: int) -> str:
     return " ".join(parts)
 
 
-@st.dialog("VIN Recall & Campaign Notice", width="large")
-def _recall_acknowledgment_dialog(recall_result: dict, form_version: int):
-    vehicle = recall_result.get("vehicle") or {}
-    recalls = list(recall_result.get("recalls") or [])[:10]
-    vin_clean = recall_result.get("vin") or ""
-
-    vehicle_label = " ".join(
-        p for p in (
-            vehicle.get("model_year"),
-            vehicle.get("make"),
-            vehicle.get("model"),
-            vehicle.get("trim"),
-        )
-        if p
-    )
-
-    st.warning(
-        f"**{vehicle_label}** has **{recall_result.get('recall_count', 0)}** NHTSA recall campaign(s) on file "
-        "for this vehicle configuration."
-    )
-    st.markdown(
-        "This is **not a hard stop** — many campaigns may not have parts available yet. "
-        "You must acknowledge this notice to continue with the claim, then verify completion status in "
-        "**OASIS / wiTECH / DealerCONNECT**."
-    )
-    st.caption(recall_result.get("disclaimer", ""))
-
-    for recall in recalls:
-        flags = []
-        if recall.get("park_it"):
-            flags.append("Park It")
-        if recall.get("park_outside"):
-            flags.append("Park Outside")
-        if recall.get("ota"):
-            flags.append("OTA")
-        flag_text = f" · {' / '.join(flags)}" if flags else ""
-        st.markdown(f"**{recall.get('campaign', 'Campaign')}** — {recall.get('component', '')}{flag_text}")
-        if recall.get("summary"):
-            st.caption(recall.get("summary")[:280] + ("…" if len(recall.get("summary", "")) > 280 else ""))
-
-    remaining = int(recall_result.get("recall_count") or 0) - len(recalls)
-    if remaining > 0:
-        st.caption(f"+ {remaining} additional campaign(s) listed in the recall panel below.")
-
-    if st.button("I acknowledge — continue with this claim", type="primary", use_container_width=True):
-        st.session_state[_vin_recall_ack_key(form_version, vin_clean)] = {
-            "acknowledged": True,
-            "acknowledged_at": datetime.now().isoformat(timespec="seconds"),
-        }
-        st.rerun()
-
-
-def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
-    recall_key = f"vin_recall_result_{form_version}"
-    vin_clean = normalize_vin(vin)
-
-    st.markdown("### VIN Recall & Campaign Check")
-    st.caption(
-        "Recalls are checked automatically when a VIN is entered or scanned. "
-        "Verify open/completed status in **OASIS / wiTECH / DealerCONNECT** before submit."
-    )
-
-    if len(vin_clean) < 11:
-        st.info("Enter or scan the full VIN — recall lookup runs automatically.")
-        return
-
-    tracked_vin_key = f"vin_recall_tracked_vin_{form_version}"
-    needs_fetch = st.session_state.get(tracked_vin_key) != vin_clean
-    if needs_fetch:
-        with st.spinner("Checking NHTSA recalls for this VIN…"):
-            result = _ensure_vin_recall_lookup(vin, form_version)
-    else:
-        result = _ensure_vin_recall_lookup(vin, form_version)
-
-    if not result:
-        return
-
-    if not result.get("ok"):
-        st.error(result.get("error") or "Recall lookup failed.")
-        return
-
-    if result.get("recall_count", 0) > 0 and not _is_vin_recall_acknowledged(form_version, vin_clean):
-        _recall_acknowledgment_dialog(result, form_version)
-
+def _render_recall_details_body(
+    result: dict,
+    *,
+    form_version: int,
+    job_count: int,
+    vin_clean: str,
+) -> None:
     vehicle = result.get("vehicle") or {}
     recalls = list(result.get("recalls") or [])
     job_text = _review_job_text_from_session(form_version, job_count)
@@ -3588,43 +3557,36 @@ def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
         )
         if p
     )
+    if vehicle_label:
+        st.markdown(f"**{vehicle_label}** · {result.get('recall_count', 0)} campaign(s) on file")
+    elif result.get("from_saved_review"):
+        st.caption("Recall data from the saved review — verify current status in OASIS / wiTECH.")
 
-    if result.get("recall_count", 0) > 0:
-        if _is_vin_recall_acknowledged(form_version, vin_clean):
-            st.success(
-                f"**{vehicle_label}** · {result.get('recall_count', 0)} recall campaign(s) on file · "
-                "**Acknowledged**"
-            )
-        else:
-            st.warning(
-                f"**{vehicle_label}** · {result.get('recall_count', 0)} recall campaign(s) on file · "
-                "**Acknowledgment required** (see popup)"
-            )
-    else:
-        st.success(f"**{vehicle_label}** · No NHTSA recalls returned for this configuration.")
+    st.caption(
+        "Verify open/completed status in **OASIS / wiTECH / DealerCONNECT** before submit."
+    )
+    if result.get("disclaimer"):
+        st.caption(result.get("disclaimer"))
 
     if result.get("critical_count"):
-        st.error(
-            f"{result.get('critical_count')} campaign(s) flagged **Park It / Park Outside** — "
-            "verify immediately in OASIS."
+        st.markdown(
+            f'<div class="vin-recall-critical-note">'
+            f"{result.get('critical_count')} campaign(s) flagged "
+            f"<strong>Park It / Park Outside</strong> — verify immediately."
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
     related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
     if related:
-        st.warning(
-            f"**{len(related)} recall(s) may relate to this repair** based on the job narrative — "
-            "confirm whether the campaign applies and is complete."
+        st.markdown(
+            f'<div class="vin-recall-match-note">{len(related)} recall(s) may relate to this '
+            f"repair based on the job narrative.</div>",
+            unsafe_allow_html=True,
         )
-    elif job_text.strip() and result.get("recall_count", 0) > 0:
-        st.caption("No strong narrative match to a listed recall — still verify VIN status in OASIS.")
-
-    st.caption(result.get("disclaimer", ""))
-
-    if result.get("recall_count", 0) <= 0:
-        return
 
     show_recalls = related[:5] if related else recalls[:8]
-    for idx, recall in enumerate(show_recalls):
+    for recall in show_recalls:
         campaign = recall.get("campaign") or "Campaign"
         component = recall.get("component") or "Component not listed"
         flags = []
@@ -3634,27 +3596,79 @@ def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
             flags.append("Park Outside")
         if recall.get("ota"):
             flags.append("OTA")
-        flag_text = f" · **{' / '.join(flags)}**" if flags else ""
-
-        rel_score = recall.get("relevance_score", 0)
-        rel_note = ""
-        if rel_score >= 12:
-            hits = ", ".join(recall.get("relevance_hits") or [])
-            rel_note = f" · Possible repair match ({hits})" if hits else " · Possible repair match"
-
-        with st.expander(f"{campaign} — {component}{flag_text}", expanded=idx == 0 and rel_score >= 12):
-            if recall.get("report_date"):
-                st.caption(f"Report date: {recall['report_date']}{rel_note}")
-            if recall.get("summary"):
-                st.markdown(f"**Summary:** {recall['summary']}")
-            if recall.get("consequence"):
-                st.markdown(f"**Risk:** {recall['consequence']}")
-            if recall.get("remedy"):
-                st.markdown(f"**Remedy:** {recall['remedy']}")
+        flag_text = f" · {' / '.join(flags)}" if flags else ""
+        st.markdown(f"**{campaign}** — {component}{flag_text}")
+        if recall.get("summary"):
+            st.caption(recall.get("summary")[:320])
 
     remaining = len(recalls) - len(show_recalls)
     if remaining > 0:
-        st.caption(f"+ {remaining} additional recall(s) on file for this vehicle configuration.")
+        st.caption(f"+ {remaining} additional campaign(s) on file.")
+
+    if not _is_vin_recall_acknowledged(form_version, vin_clean):
+        if st.button(
+            "I acknowledge — continue with this claim",
+            type="primary",
+            use_container_width=True,
+            key=f"vin_recall_ack_{form_version}_{vin_clean}",
+        ):
+            st.session_state[_vin_recall_ack_key(form_version, vin_clean)] = {
+                "acknowledged": True,
+                "acknowledged_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            st.rerun()
+    else:
+        st.caption("Recall notice acknowledged for this claim.")
+
+
+def _vin_recall_details_open_key(form_version: int, vin_clean: str) -> str:
+    return f"recall_details_open_{form_version}_{vin_clean}"
+
+
+def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
+    vin_clean = normalize_vin(vin)
+    if len(vin_clean) < 11:
+        return
+
+    tracked_vin_key = f"vin_recall_tracked_vin_{form_version}"
+    needs_fetch = (
+        not st.session_state.get(_vin_recall_skip_fetch_key(form_version))
+        and st.session_state.get(tracked_vin_key) != vin_clean
+    )
+    if needs_fetch:
+        with st.spinner("Checking NHTSA recalls…"):
+            result = _ensure_vin_recall_lookup(vin, form_version)
+    else:
+        result = _ensure_vin_recall_lookup(vin, form_version)
+
+    if not result or not result.get("ok"):
+        return
+
+    if int(result.get("recall_count") or 0) <= 0:
+        return
+
+    if _is_vin_recall_acknowledged(form_version, vin_clean):
+        return
+
+    details_key = _vin_recall_details_open_key(form_version, vin_clean)
+    st.markdown('<div class="vin-recall-alert-wrap"></div>', unsafe_allow_html=True)
+    if st.button(
+        "Open recall on file — Click to see recall details",
+        key=f"vin_recall_toggle_{form_version}_{vin_clean}",
+        use_container_width=True,
+    ):
+        st.session_state[details_key] = not st.session_state.get(details_key, False)
+        st.rerun()
+
+    if st.session_state.get(details_key):
+        with st.container(border=True):
+            st.markdown('<div class="vin-recall-details-panel"></div>', unsafe_allow_html=True)
+            _render_recall_details_body(
+                result,
+                form_version=form_version,
+                job_count=job_count,
+                vin_clean=vin_clean,
+            )
 
 
 def _vin_recall_blocks_audit(form_version: int, vin: str) -> bool:
@@ -3962,6 +3976,8 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         for src, dest in _JOB_CHECKBOX_FIELDS:
             st.session_state[f"{dest}_{idx}"] = _truthy_flag(job.get(src))
 
+    _restore_saved_recall_state(review, fv)
+
 
 def _open_review_for_editing(review_id: int) -> bool:
     review = _load_review_by_id(int(review_id))
@@ -3972,6 +3988,7 @@ def _open_review_for_editing(review_id: int) -> bool:
     fv = st.session_state.form_version
     st.session_state.pop(f"vin_recall_result_{fv}", None)
     st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+    st.session_state.pop(_vin_recall_skip_fetch_key(fv), None)
     st.session_state.pop("ro_scan_summary", None)
 
     # Apply on the next run at the top of render_review — before job_count widgets exist.
@@ -4623,6 +4640,7 @@ def render_review():
             fv = st.session_state.form_version
             st.session_state.pop(f"vin_recall_result_{fv}", None)
             st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+            st.session_state.pop(_vin_recall_skip_fetch_key(fv), None)
             for key in (
                 _active_review_id_key(fv),
                 _active_review_ro_key(fv),
@@ -4858,10 +4876,7 @@ def render_review():
 
     recall_audit_block = _vin_recall_blocks_audit(st.session_state.form_version, vin)
     if recall_audit_block:
-        st.warning(
-            "This VIN has recall campaign(s) on file. Acknowledge the recall notice in the popup "
-            "before running the audit."
-        )
+        st.caption("Open the recall alert above and acknowledge before running the audit.")
 
     sign_in_required = not is_signed_in()
     if sign_in_required:

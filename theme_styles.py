@@ -336,6 +336,92 @@ def review_open_claims_strip_css(theme: str = "Dark") -> str:
     """
 
 
+def vin_recall_alert_css(theme: str = "Dark") -> str:
+    """Red recall alert button + dark details panel on Review."""
+    is_light = str(theme).lower() == "light"
+    if is_light:
+        panel_bg = "var(--rg-surface, #dde8f2)"
+        panel_border = "var(--rg-border, #b6c7da)"
+        text = "#0f172a"
+        match_bg = "rgba(254, 243, 199, 0.95)"
+        match_border = "#f59e0b"
+        match_text = "#92400e"
+        critical_bg = "rgba(254, 226, 226, 0.95)"
+        critical_border = "#ef4444"
+        critical_text = "#991b1b"
+    else:
+        panel_bg = "rgba(7, 19, 34, .92)"
+        panel_border = "rgba(252, 165, 165, 0.35)"
+        text = "#f8fbff"
+        match_bg = "rgba(120, 53, 15, 0.45)"
+        match_border = "#f59e0b"
+        match_text = "#fcd34d"
+        critical_bg = "rgba(127, 29, 29, 0.55)"
+        critical_border = "#f87171"
+        critical_text = "#fecaca"
+
+    btn_scope = 'div[data-testid="stVerticalBlock"]:has(.vin-recall-alert-wrap)'
+    panel_scope = 'div[data-testid="stVerticalBlockBorderWrapper"]:has(.vin-recall-details-panel)'
+
+    return f"""
+    {btn_scope} div.stButton > button {{
+        background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%) !important;
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: 1px solid #fca5a5 !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        min-height: 2.75rem !important;
+        box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
+    }}
+    {btn_scope} div.stButton > button:hover {{
+        background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%) !important;
+        border-color: #ffffff !important;
+        color: #ffffff !important;
+    }}
+    {panel_scope} {{
+        background: {panel_bg} !important;
+        border-color: {panel_border} !important;
+        border-radius: 14px !important;
+        margin-top: 8px !important;
+        margin-bottom: 10px !important;
+    }}
+    {panel_scope} p,
+    {panel_scope} label,
+    {panel_scope} span,
+    {panel_scope} div[data-testid="stMarkdownContainer"],
+    {panel_scope} div[data-testid="stMarkdownContainer"] p {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+    }}
+    {panel_scope} div[data-testid="stCaptionContainer"] p {{
+        color: {text} !important;
+        opacity: 0.82;
+    }}
+    .vin-recall-match-note {{
+        margin: 8px 0 10px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: {match_bg};
+        border: 1px solid {match_border};
+        color: {match_text} !important;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }}
+    .vin-recall-critical-note {{
+        margin: 8px 0 10px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: {critical_bg};
+        border: 1px solid {critical_border};
+        color: {critical_text} !important;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }}
+    """
+
+
 def claim_learning_css(theme: str = "Dark") -> str:
     """Green Paid / red Declined tabs and panel banners on Claim Learning."""
     is_light = str(theme).lower() == "light"
