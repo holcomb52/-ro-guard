@@ -76,6 +76,7 @@ from theme_styles import (
     metric_display_css,
     multiselect_css,
     pricing_page_css,
+    review_open_claims_strip_css,
 )
 from personnel_roles import (
     ALL_PERSONNEL_ROLES,
@@ -2289,6 +2290,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += pricing_page_css(theme)
     css += multiselect_css(theme)
     css += audit_result_panel_css(theme)
+    css += review_open_claims_strip_css(theme)
     css += expander_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
@@ -3950,6 +3952,111 @@ def _pending_claims_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return pending.drop(columns=["status_rank"], errors="ignore")
 
 
+def _next_pending_review_row(pending: pd.DataFrame) -> dict | None:
+    if pending.empty or "id" not in pending.columns:
+        return None
+    loaded_id = st.session_state.get("loaded_review_id")
+    for _, row in pending.iterrows():
+        row_id = int(row["id"])
+        if loaded_id is not None and row_id == int(loaded_id):
+            continue
+        return row.to_dict()
+    return pending.iloc[0].to_dict()
+
+
+def _pending_claim_counts(pending: pd.DataFrame) -> tuple[int, int, int]:
+    if pending.empty:
+        return 0, 0, 0
+    status = pending.get("status", pd.Series(dtype=str)).astype(str)
+    total = len(pending)
+    hard_stop = int(status.str.contains("DO NOT SUBMIT", na=False).sum())
+    needs_review = int(status.str.contains("NEEDS REVIEW", na=False).sum())
+    return total, hard_stop, needs_review
+
+
+def _render_review_open_claims_strip() -> None:
+    """Queue summary at the top of Review — open claims without switching tabs."""
+    df = load_reviews()
+    pending = _pending_claims_dataframe(df)
+    loaded_ro = str(st.session_state.get("loaded_review_ro") or "").strip()
+    total, hard_stop, needs_review = _pending_claim_counts(pending)
+
+    strip_col, btn_col = st.columns([4.6, 1.1], vertical_alignment="center")
+
+    with strip_col:
+        if pending.empty:
+            st.markdown(
+                """
+<div class="review-open-claims-strip review-open-claims-strip--clear">
+<div class="review-open-claims-strip__title">Open claims queue</div>
+<div class="review-open-claims-strip__clear">All saved reviews have a recorded OEM outcome.</div>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            parts = [f"<strong>{total}</strong> open claim{'s' if total != 1 else ''}"]
+            if hard_stop:
+                parts.append(
+                    f'<span class="review-open-claims-strip__stop">{hard_stop} DO NOT SUBMIT</span>'
+                )
+            if needs_review:
+                parts.append(
+                    f'<span class="review-open-claims-strip__warn">{needs_review} NEEDS REVIEW</span>'
+                )
+            meta = " · ".join(parts)
+            edit_line = ""
+            if loaded_ro:
+                others = max(0, total - 1)
+                if others:
+                    edit_line = (
+                        f'<div class="review-open-claims-strip__meta">'
+                        f'Editing <span class="review-open-claims-strip__edit">RO {html.escape(loaded_ro)}</span>'
+                        f" · {others} other open claim{'s' if others != 1 else ''} waiting"
+                        f"</div>"
+                    )
+                else:
+                    edit_line = (
+                        f'<div class="review-open-claims-strip__meta">'
+                        f'Editing <span class="review-open-claims-strip__edit">RO {html.escape(loaded_ro)}</span>'
+                        f" · last open claim in queue"
+                        f"</div>"
+                    )
+            st.markdown(
+                f"""
+<div class="review-open-claims-strip">
+<div class="review-open-claims-strip__title">Open claims queue</div>
+<div class="review-open-claims-strip__meta">{meta}</div>
+{edit_line}
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with btn_col:
+        st.markdown('<div class="review-open-claims-strip-btn-slot"></div>', unsafe_allow_html=True)
+        if not pending.empty:
+            next_row = _next_pending_review_row(pending)
+            next_ro = str((next_row or {}).get("ro_number") or "").strip()
+            loaded_id = st.session_state.get("loaded_review_id")
+            next_id = int((next_row or {}).get("id") or 0)
+            same_ro = loaded_id is not None and next_id == int(loaded_id)
+            label = "Reload RO" if same_ro else "Open next"
+            help_text = (
+                f"Reload RO {next_ro} in this form"
+                if same_ro
+                else f"Open RO {next_ro} for editing"
+            )
+            if st.button(
+                label,
+                key="review_open_claims_strip_btn",
+                use_container_width=True,
+                help=help_text,
+            ):
+                if next_row and _open_review_for_editing(int(next_row["id"])):
+                    st.rerun()
+
+
 def _apply_ro_scan_to_form(import_data: dict):
     fv = st.session_state.form_version
     jobs = import_data.get("jobs") or []
@@ -4447,12 +4554,7 @@ def render_review():
     if pending_review is not None:
         _apply_saved_review_to_form(pending_review, st.session_state.form_version)
 
-    loaded_ro = str(st.session_state.get("loaded_review_ro") or "").strip()
-    if loaded_ro:
-        st.info(
-            f"Editing saved **RO {loaded_ro}**. Update the form below and click "
-            "**Update Review + Re-run Audit** when finished."
-        )
+    _render_review_open_claims_strip()
 
     with st.expander(
         "Scan Repair Order & Invoice",

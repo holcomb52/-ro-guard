@@ -261,6 +261,81 @@ def audit_result_panel_css(theme: str = "Dark") -> str:
     """
 
 
+def review_open_claims_strip_css(theme: str = "Dark") -> str:
+    """Open-claims queue strip on the Review tab."""
+    is_light = str(theme).lower() == "light"
+    if is_light:
+        bg = "rgba(255, 255, 255, 0.92)"
+        border = "var(--rg-border, #b6c7da)"
+        text = "#0f172a"
+        muted = "#475569"
+        accent = "#1d4ed8"
+        clear_bg = "rgba(220, 252, 231, 0.85)"
+        clear_border = "#22c55e"
+        clear_text = "#166534"
+        warn_text = "#b45309"
+        stop_text = "#b91c1c"
+    else:
+        bg = "rgba(7, 19, 34, .88)"
+        border = "rgba(62, 150, 255, .28)"
+        text = "#f8fbff"
+        muted = "#94a3b8"
+        accent = "#93c5fd"
+        clear_bg = "rgba(22, 101, 52, 0.35)"
+        clear_border = "#4ade80"
+        clear_text = "#bbf7d0"
+        warn_text = "#fcd34d"
+        stop_text = "#fca5a5"
+
+    return f"""
+    .review-open-claims-strip {{
+        border-radius: 14px;
+        border: 1px solid {border};
+        background: {bg};
+        padding: 12px 16px;
+        margin: 0 0 14px 0;
+        line-height: 1.45;
+    }}
+    .review-open-claims-strip--clear {{
+        background: {clear_bg};
+        border-color: {clear_border};
+    }}
+    .review-open-claims-strip__title {{
+        color: {text} !important;
+        font-size: 0.98rem;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }}
+    .review-open-claims-strip__meta {{
+        color: {muted} !important;
+        font-size: 0.88rem;
+    }}
+    .review-open-claims-strip__meta strong {{
+        color: {text} !important;
+        font-weight: 700;
+    }}
+    .review-open-claims-strip__stop {{
+        color: {stop_text} !important;
+        font-weight: 700;
+    }}
+    .review-open-claims-strip__warn {{
+        color: {warn_text} !important;
+        font-weight: 700;
+    }}
+    .review-open-claims-strip__clear {{
+        color: {clear_text} !important;
+        font-weight: 600;
+    }}
+    .review-open-claims-strip__edit {{
+        color: {accent} !important;
+        font-weight: 700;
+    }}
+    div[data-testid="column"]:has(.review-open-claims-strip-btn-slot) div.stButton {{
+        margin-top: 0.15rem;
+    }}
+    """
+
+
 def claim_learning_css(theme: str = "Dark") -> str:
     """Green Paid / red Declined tabs and panel banners on Claim Learning."""
     is_light = str(theme).lower() == "light"
