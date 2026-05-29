@@ -1386,7 +1386,10 @@ def _collapsible_section(
     """Collapsible review / Dealer Connect block with optional applicable-content marker."""
     label = _collapsible_section_label(title, applicable_hint)
     anchor_classes = ["dc-expander-anchor"]
-    if anchor_class:
+    for token in str(marker_class or "").split():
+        if token and token not in anchor_classes:
+            anchor_classes.append(token)
+    if anchor_class and anchor_class not in anchor_classes:
         anchor_classes.append(anchor_class)
     if applicable_hint:
         anchor_classes.append("dc-expander-applicable")
@@ -1395,10 +1398,6 @@ def _collapsible_section(
         unsafe_allow_html=True,
     )
     with st.expander(label, expanded=expanded):
-        st.markdown(
-            f'<div class="{marker_class}" aria-hidden="true"></div>',
-            unsafe_allow_html=True,
-        )
         if applicable_hint:
             st.markdown(
                 '<div class="review-collapsible-applicable" aria-hidden="true"></div>',
@@ -2643,6 +2642,37 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
         """,
         height=0,
         width=0,
+    )
+
+
+def _inject_dealer_connect_expander_header_fix(theme: str = "Dark") -> None:
+    """Late CSS so Dealer Connect expander headers stay dark before hover on Streamlit Cloud."""
+    is_light = str(theme).lower() == "light"
+    bg = "var(--rg-surface-card, #f4f8fc)" if is_light else "rgba(7, 19, 34, .92)"
+    text = "#0f172a" if is_light else "#f8fbff"
+    st.markdown(
+        f"""
+        <style>
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary,
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"][open] > summary,
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary:not(:hover) {{
+            background: {bg} !important;
+            background-color: {bg} !important;
+            background-image: none !important;
+            color: {text} !important;
+            -webkit-text-fill-color: {text} !important;
+        }}
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary *,
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"],
+        .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"] p {{
+            color: {text} !important;
+            -webkit-text-fill-color: {text} !important;
+            background: transparent !important;
+            background-color: transparent !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -5479,6 +5509,7 @@ def render_review():
             vin=vin,
             expand_all=dc_expand_all,
         )
+        _inject_dealer_connect_expander_header_fix(st.session_state.get("appearance", "Dark"))
 
     st.markdown("---")
 

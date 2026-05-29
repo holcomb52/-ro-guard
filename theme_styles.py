@@ -175,6 +175,7 @@ def expander_css(theme: str = "Dark") -> str:
     {summary} {{
         background: {surface} !important;
         background-color: {surface} !important;
+        background-image: none !important;
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
         border: none !important;
@@ -184,10 +185,18 @@ def expander_css(theme: str = "Dark") -> str:
     {scope}[open] > summary {{
         background: {surface} !important;
         background-color: {surface} !important;
+        background-image: none !important;
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
         border-radius: 14px 14px 0 0 !important;
         opacity: 1 !important;
+    }}
+    {scope}[open] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        background-image: none !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
     }}
     {summary}:hover,
     {summary}:focus,
@@ -239,7 +248,12 @@ def expander_css(theme: str = "Dark") -> str:
         overflow: hidden !important;
         pointer-events: none !important;
     }}
-    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] {{
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-labor-ops) + div[data-testid="stElementContainer"] details[data-testid="stExpander"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-job-lines) + div[data-testid="stElementContainer"] details[data-testid="stExpander"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-gap-coach) + div[data-testid="stElementContainer"] details[data-testid="stExpander"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-manual-tsb) + div[data-testid="stElementContainer"] details[data-testid="stExpander"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-declined-alert) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] {{
         background: {surface} !important;
         background-color: {surface} !important;
         border: 1px solid {border} !important;
@@ -248,9 +262,15 @@ def expander_css(theme: str = "Dark") -> str:
         overflow: hidden;
     }}
     .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary,
-    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"][open] > summary,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible),
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-labor-ops) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-labor-ops) + div[data-testid="stElementContainer"] details[data-testid="stExpander"][open] > summary,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-job-lines) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-anchor-job-lines) + div[data-testid="stElementContainer"] details[data-testid="stExpander"][open] > summary {{
         background: {surface} !important;
         background-color: {surface} !important;
+        background-image: none !important;
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
         opacity: 1 !important;
@@ -271,6 +291,26 @@ def expander_css(theme: str = "Dark") -> str:
         box-shadow: inset 3px 0 0 {"#16a34a" if is_light else "#3ecf8e"} !important;
         background: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
         background-color: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
+        background-image: none !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+    }}
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary,
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"][open] > summary,
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        background-image: none !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+    }}
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary *,
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"],
+    .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"] p {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        background: transparent !important;
+        background-color: transparent !important;
     }}
     """
 
@@ -586,6 +626,7 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     {scope} details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
         background: {panel_bg} !important;
         background-color: {panel_bg} !important;
+        background-image: none !important;
         color: {code_text} !important;
         -webkit-text-fill-color: {code_text} !important;
         font-weight: 700 !important;
@@ -605,7 +646,13 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         background-color: transparent !important;
         opacity: 1 !important;
     }}
-    {scope} details[data-testid="stExpander"][open] > summary {{
+    {scope} details[data-testid="stExpander"][open] > summary,
+    {scope} details[data-testid="stExpander"][open] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        background-image: none !important;
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
         border-radius: 14px 14px 0 0 !important;
         border-bottom: 1px solid {panel_border} !important;
     }}
@@ -689,7 +736,10 @@ def review_collapsible_css(theme: str = "Dark") -> str:
     code_text = "#0f172a" if is_light else "#f8fbff"
     highlight_bg = "rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"
     accent_green = "#16a34a" if is_light else "#3ecf8e"
-    scope = 'div[data-testid="stVerticalBlock"]:has(.review-job-coaching-marker)'
+    scope = (
+        'div[data-testid="stVerticalBlock"]:has(.review-job-coaching-marker), '
+        'div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
+    )
     return f"""
     {scope} details[data-testid="stExpander"]:has(.review-collapsible) {{
         background: {panel_bg} !important;
@@ -699,9 +749,12 @@ def review_collapsible_css(theme: str = "Dark") -> str:
         margin-bottom: 12px !important;
         overflow: hidden;
     }}
-    {scope} details[data-testid="stExpander"]:has(.review-collapsible) > summary {{
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) > summary,
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible)[open] > summary,
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible)[open] > summary:not(:hover) {{
         background: {panel_bg} !important;
         background-color: {panel_bg} !important;
+        background-image: none !important;
         color: {code_text} !important;
         -webkit-text-fill-color: {code_text} !important;
         font-weight: 700 !important;
