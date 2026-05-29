@@ -4099,6 +4099,219 @@ def _render_ro_scanner(theme: str | None = None):
 # SCREENS
 # =========================
 
+
+def _review_job_tab_label(
+    form_version: int,
+    job_no: int,
+    *,
+    smart_warranty_time_exempt: bool,
+    audit_rules: dict,
+) -> str:
+    job = _build_job_from_session(form_version, job_no)
+    hard, warn, _ = audit_job(
+        job,
+        bool(st.session_state.get("time_bypass", False)),
+        smart_warranty_time_exempt=smart_warranty_time_exempt,
+        audit_rules=audit_rules,
+    )
+    if hard:
+        return f"Job {job_no} · Stop"
+    if warn:
+        return f"Job {job_no} · Review"
+    return f"Job {job_no} · OK"
+
+
+def _render_review_job_panel(
+    job_no: int,
+    *,
+    form_version: int,
+    smart_warranty_time_exempt: bool,
+    rental_dollars_per_day: float,
+    collapse_extras: bool,
+) -> tuple[dict, bool, str]:
+    """Render one warranty job on the Review tab."""
+    fv = form_version
+    time_bypass = False
+    time_bypass_user = ""
+
+    st.markdown("**Narratives**")
+    concern = st.text_area("Concern", key=f"concern_{job_no}_{fv}", height=72)
+    cause = st.text_area("Cause", key=f"cause_{job_no}_{fv}", height=72)
+    correction = st.text_area("Correction", key=f"correction_{job_no}_{fv}", height=72)
+
+    if job_no == 1:
+        if smart_warranty_time_exempt:
+            st.caption(
+                "Time punch validation waived — Smart Warranty Plus/Premium (no manual bypass needed)."
+            )
+        elif user_can_admin_write():
+            time_bypass = st.checkbox(
+                "Bypass Tech Flagged Time / Time Allotted Validation",
+                key="time_bypass",
+            )
+            if time_bypass:
+                time_bypass_user = current_person_name()
+                st.caption(f"Bypass will be recorded under **{time_bypass_user}**.")
+        else:
+            st.caption(
+                "Time punch bypass requires a linked **Manager** or **Warranty Admin** account."
+            )
+
+    st.markdown("**Times & claim value**")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        tech_flagged_time = st.number_input(
+            "Tech flagged time",
+            min_value=0.0,
+            value=0.0,
+            step=0.1,
+            key=f"tech_time_{job_no}",
+        )
+    with c2:
+        time_allotted = st.number_input(
+            "Time allotted",
+            min_value=0.0,
+            value=0.0,
+            step=0.1,
+            key=f"allotted_{job_no}",
+        )
+    with c3:
+        claim_value = st.number_input(
+            "Claim value",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            key=f"claim_value_{job_no}",
+        )
+
+    st.markdown("**Warranty checks**")
+    c1, c2 = st.columns(2)
+    with c1:
+        oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
+        oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
+        battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
+        battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
+        alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
+        alignment_report_attached = st.checkbox(
+            "Alignment Report Attached to RO",
+            key=f"alignment_report_{job_no}",
+        )
+        sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
+        sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
+        sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
+        sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
+    with c2:
+        rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
+        rental_days = st.number_input(
+            "Rental days billed",
+            min_value=0,
+            value=0,
+            step=1,
+            key=f"rental_days_{job_no}",
+        )
+        if rental_dollars_per_day > 0:
+            rental_total = float(rental_days or 0) * rental_dollars_per_day
+            st.caption(
+                f"**Rental total:** ${rental_total:,.2f} "
+                f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
+            )
+        manager_signed_rental = st.checkbox(
+            service_manager_action_label("Signed Rental"),
+            key=f"rental_signed_{job_no}",
+        )
+        warranty_add_on = st.checkbox("Warranty Add-On (W+)", key=f"addon_{job_no}")
+        manager_approval = st.checkbox(
+            service_manager_action_label("Signed Off"),
+            key=f"manager_approval_{job_no}",
+        )
+        ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
+        ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
+        parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
+        mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
+
+    if alignment_involved and not alignment_report_attached:
+        st.error("Hard stop: alignment printout report must be attached to the repair order.")
+    if warranty_add_on and not manager_approval:
+        st.error(
+            f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
+        )
+
+    preview_job = {
+        "concern": concern,
+        "cause": cause,
+        "correction": correction,
+        "oil_leak": oil_leak,
+        "oil_dye_billed": oil_dye_billed,
+        "battery_replacement": battery_replacement,
+        "battery_test_slip": battery_test_slip,
+        "sublet_repair": sublet_repair,
+        "rental_involved": rental_involved,
+        "warranty_add_on": warranty_add_on,
+        "ac_repair": ac_repair,
+        "ac_evac_slip": ac_evac_slip,
+        "parts_warranty": parts_warranty,
+        "alignment_involved": alignment_involved,
+    }
+    current_job_preview = {
+        "concern": concern,
+        "cause": cause,
+        "correction": correction,
+    }
+
+    extras_label = "Coaching, WAM & claim references"
+    if collapse_extras:
+        with st.expander(extras_label, expanded=False):
+            applicable_manual = find_applicable_manual_sections(preview_job)
+            render_applicable_manual_sections(
+                applicable_manual,
+                key_prefix=f"live_manual_{job_no}_{fv}",
+            )
+            similar_claims = find_similar_paid_claims(current_job_preview)
+            render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
+            similar_declined = find_similar_declined_claims(current_job_preview)
+            render_declined_claim_alert(current_job_preview, similar_declined)
+    else:
+        applicable_manual = find_applicable_manual_sections(preview_job)
+        render_applicable_manual_sections(
+            applicable_manual,
+            key_prefix=f"live_manual_{job_no}_{fv}",
+        )
+        similar_claims = find_similar_paid_claims(current_job_preview)
+        render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
+        similar_declined = find_similar_declined_claims(current_job_preview)
+        render_declined_claim_alert(current_job_preview, similar_declined)
+
+    job = {
+        "job_no": str(job_no),
+        "concern": concern,
+        "cause": cause,
+        "correction": correction,
+        "tech_flagged_time": tech_flagged_time,
+        "time_allotted": time_allotted,
+        "claim_value": claim_value,
+        "oil_leak": oil_leak,
+        "oil_dye_billed": oil_dye_billed,
+        "battery_replacement": battery_replacement,
+        "battery_test_slip": battery_test_slip,
+        "sublet_repair": sublet_repair,
+        "sublet_vin": sublet_vin,
+        "sublet_mileage": sublet_mileage,
+        "sublet_notes": sublet_notes,
+        "rental_involved": rental_involved,
+        "rental_days": rental_days,
+        "manager_signed_rental": manager_signed_rental,
+        "warranty_add_on": warranty_add_on,
+        "manager_approval": manager_approval,
+        "ac_repair": ac_repair,
+        "ac_evac_slip": ac_evac_slip,
+        "parts_warranty": parts_warranty,
+        "mopa_original_ro": mopa_original_ro,
+        "alignment_involved": alignment_involved,
+        "alignment_report_attached": alignment_report_attached,
+    }
+    return job, time_bypass, time_bypass_user
+
+
 def render_pending_claims():
     st.header("Pending Claims")
     st.caption(
@@ -4199,7 +4412,11 @@ def render_review():
             "**Update Review + Re-run Audit** when finished."
         )
 
-    _render_ro_scanner()
+    with st.expander(
+        "Scan Repair Order & Invoice",
+        expanded=bool(st.session_state.get("ro_scan_summary")),
+    ):
+        _render_ro_scanner()
 
     _, next_col = st.columns([5, 1])
     with next_col:
@@ -4232,13 +4449,12 @@ def render_review():
     rental_dollars_per_day = float(audit_rules["thresholds"].get("rental_dollars_per_day", 0) or 0)
 
     if smart_warranty_time_exempt:
-        st.success(
-            f"Smart Warranty **{sw_level.title()}** — time punch validation is not required for this dealership "
-            "(Plus/Premium benefit). No bypass will be recorded on saved reviews."
+        st.caption(
+            f"Smart Warranty **{sw_level.title()}** — time punch validation waived (Plus/Premium)."
         )
     else:
         st.caption(
-            f"Smart Warranty level: **Base** — tech flagged time vs. time allotted validation applies."
+            f"Smart Warranty **Base** — tech flagged time vs. time allotted validation applies."
         )
 
     job_count = st.number_input(
@@ -4247,19 +4463,24 @@ def render_review():
         max_value=10,
         value=st.session_state.job_count,
         step=1,
-        key="job_count"
+        key="job_count",
     )
+    multi_job = int(job_count) > 1
+    fv = st.session_state.form_version
 
-    ro_number = st.text_input("RO Number", key=f"ro_number_{st.session_state.form_version}")
-    vin = st.text_input("VIN", key=f"vin_{st.session_state.form_version}")
-    ro_invoiced = st.date_input(
-        "RO Invoiced / Closed Date",
-        key=f"ro_invoiced_{st.session_state.form_version}"
-    )
-    day_submitted = st.date_input(
-        "Day Submitted",
-        key=f"day_submitted_{st.session_state.form_version}"
-    )
+    ro_col1, ro_col2 = st.columns(2)
+    with ro_col1:
+        ro_number = st.text_input("RO Number", key=f"ro_number_{fv}")
+        ro_invoiced = st.date_input(
+            "RO Invoiced / Closed Date",
+            key=f"ro_invoiced_{fv}",
+        )
+    with ro_col2:
+        vin = st.text_input("VIN", key=f"vin_{fv}")
+        day_submitted = st.date_input(
+            "Day Submitted",
+            key=f"day_submitted_{fv}",
+        )
 
     render_vin_recall_panel(vin, st.session_state.form_version, job_count)
 
@@ -4317,7 +4538,7 @@ def render_review():
             st.error("Choose **either** First-Pass Paid **or** Rejected — not both.")
 
     days_to_submit = (day_submitted - ro_invoiced).days
-    st.metric("Days to Submit", days_to_submit)
+    st.caption(f"Days to submit: **{days_to_submit}**")
 
     advisor_list = review_personnel_names("Advisor")
 
@@ -4347,36 +4568,38 @@ def render_review():
     loaded_warranty = st.session_state.pop("_loaded_review_warranty_admin", None)
     matched_warranty = _match_personnel_name(loaded_warranty, warranty_list) if loaded_warranty else None
     if matched_warranty:
-        st.session_state[f"warranty_admin_{st.session_state.form_version}"] = matched_warranty
+        st.session_state[f"warranty_admin_{fv}"] = matched_warranty
 
-    advisor = st.selectbox(
-        "Advisor",
-        advisor_list,
-        key=f"advisor_{st.session_state.form_version}"
-    )
-
-    technician = st.selectbox(
-        "Technician",
-        tech_list,
-        key=f"technician_{st.session_state.form_version}"
-    )
-
-    warranty_admin = st.selectbox(
-        "Warranty Admin",
-        warranty_list,
-        key=f"warranty_admin_{st.session_state.form_version}"
-    )
+    person_col1, person_col2, person_col3 = st.columns(3)
+    with person_col1:
+        advisor = st.selectbox(
+            "Advisor",
+            advisor_list,
+            key=f"advisor_{fv}",
+        )
+    with person_col2:
+        technician = st.selectbox(
+            "Technician",
+            tech_list,
+            key=f"technician_{fv}",
+        )
+    with person_col3:
+        warranty_admin = st.selectbox(
+            "Warranty Admin",
+            warranty_list,
+            key=f"warranty_admin_{fv}",
+        )
 
     sm_names = service_manager_names()
     if sm_names:
         loaded_manager = st.session_state.pop("_loaded_review_service_manager", None)
         matched_manager = _match_personnel_name(loaded_manager, sm_names) if loaded_manager else None
         if matched_manager:
-            st.session_state[f"service_manager_{st.session_state.form_version}"] = matched_manager
+            st.session_state[f"service_manager_{fv}"] = matched_manager
         service_manager = st.selectbox(
             service_manager_selectbox_label(),
             sm_names,
-            key=f"service_manager_{st.session_state.form_version}",
+            key=f"service_manager_{fv}",
         )
     else:
         st.session_state.pop("_loaded_review_service_manager", None)
@@ -4384,220 +4607,50 @@ def render_review():
         st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
  
     st.markdown("---")
-    st.subheader("Warranty Job Documentation")
+    st.subheader("Warranty Jobs")
+    if multi_job:
+        st.caption(
+            "Use the tabs below to work one job at a time. **Stop / Review / OK** shows each job's live audit status."
+        )
 
     jobs = []
     time_bypass = False
     time_bypass_user = ""
+    collapse_extras = multi_job
 
-    for i in range(int(job_count)):
-        job_no = i + 1
-
-        with st.expander(f"Job {job_no}", expanded=True):
-            st.subheader(f"Job {job_no} Documentation")
-
-            concern = st.text_area(
-                "Concern",
-                key=f"concern_{job_no}_{st.session_state.form_version}"
-
+    if multi_job:
+        job_numbers = list(range(1, int(job_count) + 1))
+        tab_labels = [
+            _review_job_tab_label(
+                fv,
+                job_no,
+                smart_warranty_time_exempt=smart_warranty_time_exempt,
+                audit_rules=audit_rules,
             )
-
-            cause = st.text_area(
-             "Cause",
-             key=f"cause_{job_no}_{st.session_state.form_version}"
-            )
-
-            correction = st.text_area(
-            "Correction",
-            key=f"correction_{job_no}_{st.session_state.form_version}"
-                
-            )
-
-            st.button(
-                f"Use Suggested Narrative - Job {job_no}",
-                key=f"use_suggested_{job_no}"
-            )
-
-            if job_no == 1:
-                if smart_warranty_time_exempt:
-                    st.caption(
-                        "Time punch validation waived — Smart Warranty Plus/Premium (no manual bypass needed)."
-                    )
-                elif user_can_admin_write():
-                    time_bypass = st.checkbox(
-                        "Bypass Tech Flagged Time / Time Allotted Validation",
-                        key="time_bypass",
-                    )
-                    if time_bypass:
-                        time_bypass_user = current_person_name()
-                        st.caption(f"Bypass will be recorded under **{time_bypass_user}**.")
-                    else:
-                        time_bypass_user = ""
-                else:
-                    st.caption(
-                        "Time punch bypass requires a linked **Manager** or **Warranty Admin** account."
-                    )
-                    time_bypass = False
-                    time_bypass_user = ""
-
-            c1, c2, c3 = st.columns(3)
-
-            with c1:
-                tech_flagged_time = st.number_input(
-                    f"Tech Flagged Time - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"tech_time_{job_no}"
+            for job_no in job_numbers
+        ]
+        for job_no, tab in zip(job_numbers, st.tabs(tab_labels)):
+            with tab:
+                job, job_bypass, job_bypass_user = _render_review_job_panel(
+                    job_no,
+                    form_version=fv,
+                    smart_warranty_time_exempt=smart_warranty_time_exempt,
+                    rental_dollars_per_day=rental_dollars_per_day,
+                    collapse_extras=collapse_extras,
                 )
-
-            with c2:
-                time_allotted = st.number_input(
-                    f"Time Allotted - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    key=f"allotted_{job_no}"
-                )
-
-            with c3:
-                claim_value = st.number_input(
-                    f"Claim Value - Job {job_no}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=1.0,
-                    key=f"claim_value_{job_no}"
-                )
-
-            st.subheader("Required Warranty Checks")
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            with c1:
-                oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
-                oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
-                battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-                battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
-                alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
-                alignment_report_attached = st.checkbox(
-                    "Alignment Report Attached to RO",
-                    key=f"alignment_report_{job_no}",
-                )
-                if alignment_involved and not alignment_report_attached:
-                    st.error(
-                        "Hard stop: alignment printout report must be attached to the repair order."
-                    )
-
-            with c2:
-                sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
-                sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
-                sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
-                sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
-
-            with c3:
-                rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-                rental_days = st.number_input(
-                    "Rental Days Billed",
-                    min_value=0,
-                    value=0,
-                    step=1,
-                    key=f"rental_days_{job_no}"
-                )
-                if rental_dollars_per_day > 0:
-                    rental_total = float(rental_days or 0) * rental_dollars_per_day
-                    st.caption(
-                        f"**Rental Total:** ${rental_total:,.2f} "
-                        f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
-                    )
-                manager_signed_rental = st.checkbox(
-                    service_manager_action_label("Signed Rental"),
-                    key=f"rental_signed_{job_no}"
-                )
-
-            with c4:
-                warranty_add_on = st.checkbox(
-                    "Warranty Add-On (W+)",
-                    key=f"addon_{job_no}"
-                )
-                manager_approval = st.checkbox(
-                    service_manager_action_label("Signed Off"),
-                    key=f"manager_approval_{job_no}"
-                )
-                if warranty_add_on and not manager_approval:
-                    st.error(
-                        f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
-                    )
-                ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
-                ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-                parts_warranty = st.checkbox(
-                    "Parts Warranty",
-                    key=f"parts_warranty_{job_no}"
-                )
-                mopa_original_ro = st.checkbox(
-                    "MOPAR + Original RO",
-                    key=f"mopa_{job_no}"
-                )
-
-            preview_job = {
-                "concern": concern,
-                "cause": cause,
-                "correction": correction,
-                "oil_leak": oil_leak,
-                "oil_dye_billed": oil_dye_billed,
-                "battery_replacement": battery_replacement,
-                "battery_test_slip": battery_test_slip,
-                "sublet_repair": sublet_repair,
-                "rental_involved": rental_involved,
-                "warranty_add_on": warranty_add_on,
-                "ac_repair": ac_repair,
-                "ac_evac_slip": ac_evac_slip,
-                "parts_warranty": parts_warranty,
-                "alignment_involved": alignment_involved,
-            }
-            applicable_manual = find_applicable_manual_sections(preview_job)
-            render_applicable_manual_sections(
-                applicable_manual,
-                key_prefix=f"live_manual_{job_no}_{st.session_state.form_version}",
-            )
-
-            current_job_preview = {
-                "concern": concern,
-                "cause": cause,
-                "correction": correction,
-            }
-            similar_claims = find_similar_paid_claims(current_job_preview)
-            render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
-            similar_declined = find_similar_declined_claims(current_job_preview)
-            render_declined_claim_alert(current_job_preview, similar_declined)
-
-            jobs.append({
-                "job_no": str(job_no),
-                "concern": concern,
-                "cause": cause, 
-                "correction": correction,
-                "tech_flagged_time": tech_flagged_time,
-                "time_allotted": time_allotted,
-                "claim_value": claim_value,
-                "oil_leak": oil_leak,
-                "oil_dye_billed": oil_dye_billed,
-                "battery_replacement": battery_replacement,
-                "battery_test_slip": battery_test_slip,
-                "sublet_repair": sublet_repair,
-                "sublet_vin": sublet_vin,
-                "sublet_mileage": sublet_mileage,
-                "sublet_notes": sublet_notes,
-                "rental_involved": rental_involved,
-                "rental_days": rental_days,
-                "manager_signed_rental": manager_signed_rental,
-                "warranty_add_on": warranty_add_on,
-                "manager_approval": manager_approval,
-                "ac_repair": ac_repair,
-                "ac_evac_slip": ac_evac_slip,
-                "parts_warranty": parts_warranty,
-                "mopa_original_ro": mopa_original_ro,
-                "alignment_involved": alignment_involved,
-                "alignment_report_attached": alignment_report_attached,
-            })
+                if job_no == 1:
+                    time_bypass = job_bypass
+                    time_bypass_user = job_bypass_user
+                jobs.append(job)
+    else:
+        job, time_bypass, time_bypass_user = _render_review_job_panel(
+            1,
+            form_version=fv,
+            smart_warranty_time_exempt=smart_warranty_time_exempt,
+            rental_dollars_per_day=rental_dollars_per_day,
+            collapse_extras=False,
+        )
+        jobs.append(job)
 
     st.markdown("---")
 
