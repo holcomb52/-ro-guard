@@ -1382,10 +1382,14 @@ def analyze_narrative_gaps(current_job: dict, paid_match: dict) -> dict:
         )
 
     verification = _paid_has_phrases(
-        ["verified", "operates", "working", "proper operation", "test drove", "road test", "no further issues"],
+        [
+            "verified", "operates", "operating", "designed", "working",
+            "proper operation", "test drove", "road test", "no further issues",
+            "operating as designed", "as designed",
+        ],
         correction_blob,
     )
-    if _current_missing(verification, correction):
+    if verification and not _correction_verifies_proper_operation(correction):
         _add_gap(
             "Correction",
             "Paid claims verified proper operation or test drove — your correction does not.",
@@ -3206,6 +3210,27 @@ def _add_audit_finding(hard, warn, audit_rules, rule_key, message):
         hard.append(finding)
 
 
+def _correction_verifies_proper_operation(correction_text: str) -> bool:
+    """True when correction documents post-repair verification."""
+    text = str(correction_text or "").lower()
+    if not text.strip():
+        return False
+    if "operating" in text or "designed" in text:
+        return True
+    return any(
+        phrase in text
+        for phrase in (
+            "verified",
+            "operates",
+            "working",
+            "proper operation",
+            "no further issues",
+            "test drove",
+            "road tested",
+        )
+    )
+
+
 def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules=None):
     audit_rules = normalize_audit_rules(audit_rules)
     thresholds = audit_rules["thresholds"]
@@ -3270,7 +3295,7 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
                 hard, warn, audit_rules, "pencil_wrench_correction",
                 "Pencil Wrench Correction: parts replaced are not clearly justified.",
             )
-        if not any(x in correction_text for x in ["verified", "operates", "working", "proper operation", "no further issues", "test drove"]):
+        if not _correction_verifies_proper_operation(job["correction"]):
             _add_audit_finding(
                 hard, warn, audit_rules, "pencil_wrench_correction",
                 "Pencil Wrench Correction: proper operation was not verified after repair.",
