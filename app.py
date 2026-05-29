@@ -6140,14 +6140,12 @@ def render_admin():
         "Audit Rules",
         "Rejection Reasons",
         "Personnel",
-        "Scheduled Reports",
     ]
     admin_tab_fns = [
         render_smart_warranty_admin,
         render_audit_rules_admin,
         render_rejection_reason_library_admin,
         render_personnel_admin,
-        lambda: render_scheduled_reports_admin(supabase),
     ]
     if user_can_view_deployment():
         admin_tab_labels.append("Deployment & Secrets")
@@ -6160,6 +6158,10 @@ def render_admin():
     for tab, render_fn in zip(admin_tabs, admin_tab_fns):
         with tab:
             render_fn()
+
+
+def render_scheduled_reports():
+    render_scheduled_reports_admin(supabase)
 
 
 def render_tsb_bulletins():
@@ -6730,6 +6732,7 @@ def main():
         ("Reporting", render_reporting),
         ("Admin", render_admin),
         ("TSB / Bulletins", render_tsb_bulletins),
+        ("Scheduled Reports", render_scheduled_reports),
         ("WAM", render_wam),
     ]
 

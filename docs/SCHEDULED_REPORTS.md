@@ -1,6 +1,6 @@
 # Scheduled Reporting emails (Phase 1)
 
-Automatic **Reporting** and **ROI** summary PDF emails configured in **Admin → Scheduled Reports**.
+Automatic **Reporting** and **ROI** summary PDF emails configured on the **Scheduled Reports** tab.
 
 ## One-time setup
 
@@ -54,7 +54,7 @@ After pushing to GitHub, open **Actions** → **Scheduled RO Guard reports** →
 
 ## Using the Admin UI
 
-1. Open **Admin → Scheduled Reports**
+1. Open **Scheduled Reports**
 2. For each frequency (Daily / Monthly / Yearly):
    - Add recipient emails (or click **Use manager emails**)
    - Check **Reporting summary PDF** and/or **ROI dashboard PDF**
