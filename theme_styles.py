@@ -134,7 +134,7 @@ def metric_display_css() -> str:
 
 
 def expander_css(theme: str = "Dark") -> str:
-    """Expander headers/content — fixes white summary bar in dark mode."""
+    """Expander headers/content — overrides Streamlit bgMix on open expanders."""
     is_light = str(theme).lower() == "light"
     if is_light:
         surface = "var(--rg-surface, #dde8f2)"
@@ -153,12 +153,22 @@ def expander_css(theme: str = "Dark") -> str:
         muted = "#d6e8ff"
         icon = "#93c5fd"
 
-    scope = "details[data-testid='stExpander']"
-    summary = f"{scope} > summary, {scope} summary"
+    scope = ".stApp details[data-testid='stExpander']"
+    summary = f"{scope} > summary"
+    summary_label = (
+        f"{summary} *, "
+        f"{summary} p, "
+        f"{summary} span, "
+        f"{summary} div, "
+        f"{summary} div[data-testid='stMarkdownContainer'], "
+        f"{summary} div[data-testid='stMarkdownContainer'] p"
+    )
     return f"""
     {scope} {{
         background: {surface} !important;
+        background-color: {surface} !important;
         border: 1px solid {border} !important;
+        border-color: {border} !important;
         border-radius: 14px !important;
         overflow: hidden;
     }}
@@ -168,24 +178,47 @@ def expander_css(theme: str = "Dark") -> str:
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
         border: none !important;
+        border-radius: 14px !important;
+        opacity: 1 !important;
+    }}
+    {scope}[open] > summary {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
         border-radius: 14px 14px 0 0 !important;
+        opacity: 1 !important;
     }}
     {summary}:hover,
     {summary}:focus,
-    {summary}:active {{
+    {summary}:focus-visible,
+    {summary}:active,
+    {scope}[open] > summary:hover,
+    {scope}[open] > summary:focus-visible,
+    {scope}[open] > summary:active {{
         background: {surface_hover} !important;
         background-color: {surface_hover} !important;
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
+        opacity: 1 !important;
     }}
-    {scope} [data-testid="stExpanderDetails"] {{
+    {summary_label} {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        opacity: 1 !important;
+    }}
+    {scope} [data-testid="stExpanderDetails"],
+    {scope} > div {{
         background: {surface_inner} !important;
+        background-color: {surface_inner} !important;
         border-top: 1px solid {border} !important;
     }}
-    {scope} p,
-    {scope} label,
-    {scope} span,
-    {scope} div[data-testid="stMarkdownContainer"] {{
+    {scope} [data-testid="stExpanderDetails"] p,
+    {scope} [data-testid="stExpanderDetails"] label,
+    {scope} [data-testid="stExpanderDetails"] span,
+    {scope} [data-testid="stExpanderDetails"] div[data-testid="stMarkdownContainer"] {{
         color: {text} !important;
     }}
     {scope} div[data-testid="stCaptionContainer"] p {{
@@ -196,6 +229,34 @@ def expander_css(theme: str = "Dark") -> str:
     {scope} summary [data-testid="stIconMaterial"] {{
         color: {icon} !important;
         fill: {icon} !important;
+    }}
+    """
+
+
+def audit_result_panel_css(theme: str = "Dark") -> str:
+    """Static audit job result headers (always expanded — no Streamlit expander)."""
+    is_light = str(theme).lower() == "light"
+    if is_light:
+        surface = "var(--rg-surface, #dde8f2)"
+        border = "var(--rg-border, #b6c7da)"
+        text = "#0f172a"
+    else:
+        surface = "rgba(7, 19, 34, .86)"
+        border = "rgba(62, 150, 255, .28)"
+        text = "#f8fbff"
+
+    return f"""
+    .audit-job-result-header {{
+        margin: -4px -2px 10px -2px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: {surface};
+        border: 1px solid {border};
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-weight: 700;
+        font-size: 0.95rem;
+        line-height: 1.35;
     }}
     """
 

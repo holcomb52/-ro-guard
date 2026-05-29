@@ -68,6 +68,7 @@ from review_store import (
 from theme_styles import (
     BRAND_TEXT,
     THEME_CSS,
+    audit_result_panel_css,
     brand_color_lock_css,
     claim_learning_css,
     expander_css,
@@ -2279,10 +2280,11 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
         css += build_user_display_css(display_prefs, theme=theme)
     css += brand_color_lock_css(theme)
     css += metric_display_css()
-    css += expander_css(theme)
     css += claim_learning_css(theme)
     css += pricing_page_css(theme)
     css += multiselect_css(theme)
+    css += audit_result_panel_css(theme)
+    css += expander_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -4763,11 +4765,11 @@ def render_review():
             x5.metric("Hard Stops", len(all_hard))
 
             for job in jobs:
-                with st.expander(
-                    f"Job {job['job_no']} Results",
-                    expanded=True
-                ):
-
+                with st.container(border=True):
+                    st.markdown(
+                        f'<div class="audit-job-result-header">Job {job["job_no"]} Results</div>',
+                        unsafe_allow_html=True,
+                    )
                     for h in job.get("hard_stops", []):
                         st.error(finding_message(h))
 
