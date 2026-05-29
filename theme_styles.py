@@ -585,6 +585,32 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     """
 
 
+def narrative_copy_button_css(theme: str = "Dark") -> str:
+    """Transparent iframe copy buttons beside job narrative fields."""
+    is_light = str(theme).lower() == "light"
+    btn_bg = "var(--rg-surface-input, #e8f0f8)" if is_light else "rgba(7, 19, 34, .75)"
+    btn_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .35)"
+    btn_text = "#0f172a" if is_light else "#f8fbff"
+    scope = 'div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker)'
+    return f"""
+    {scope} iframe {{
+        background: transparent !important;
+        background-color: transparent !important;
+    }}
+    {scope} div[data-testid="stColumn"]:has(iframe) {{
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: flex-end !important;
+        padding-top: 2px !important;
+    }}
+    {scope} div[data-testid="stColumn"]:has(iframe) button {{
+        background: {btn_bg} !important;
+        border: 1px solid {btn_border} !important;
+        color: {btn_text} !important;
+    }}
+    """
+
+
 def claim_learning_css(theme: str = "Dark") -> str:
     """Green Paid / red Declined tabs and panel banners on Claim Learning."""
     is_light = str(theme).lower() == "light"
