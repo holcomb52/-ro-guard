@@ -60,8 +60,6 @@ from review_store import (
     save_bulletin as persist_bulletin,
     save_rejection_reason_library,
     find_review_id_for_update,
-    load_review_by_id,
-    parse_review_jobs,
     save_or_update_review as persist_save_or_update_review,
     save_smart_warranty_settings,
     smart_warranty_punch_exempt,
@@ -170,6 +168,37 @@ def _resolve_session_review_id(form_version: int, ro_number: str, vin: str) -> i
             st.session_state.pop(key, None)
         return None
     return int(review_id)
+
+
+def _parse_review_jobs(review: dict | None) -> list[dict]:
+    if not review:
+        return []
+    jobs = review.get("jobs")
+    if jobs is None:
+        return []
+    if isinstance(jobs, str):
+        try:
+            jobs = json.loads(jobs) if jobs.strip() else []
+        except json.JSONDecodeError:
+            return []
+    return list(jobs) if isinstance(jobs, list) else []
+
+
+def _load_review_by_id(review_id: int) -> dict | None:
+    if supabase is None or not review_id:
+        return None
+    try:
+        response = (
+            supabase.table("reviews")
+            .select("*")
+            .eq("id", int(review_id))
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
 
 
 def _review_will_update(form_version: int, ro_number: str, vin: str) -> bool:
@@ -3796,7 +3825,7 @@ _JOB_CHECKBOX_FIELDS = (
 def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
     """Hydrate the Review form from a saved Supabase review row."""
     fv = int(form_version)
-    jobs = parse_review_jobs(review)
+    jobs = _parse_review_jobs(review)
     st.session_state.job_count = max(len(jobs), 1)
 
     st.session_state[f"ro_number_{fv}"] = str(review.get("ro_number") or "").strip()
@@ -3853,7 +3882,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
 
 
 def _open_review_for_editing(review_id: int) -> bool:
-    review = load_review_by_id(supabase, int(review_id))
+    review = _load_review_by_id(int(review_id))
     if not review:
         return False
 
@@ -4147,7 +4176,7 @@ def render_pending_claims():
 
     st.caption(
         f"OEM outcome: **{review_outcome_label(selected.get('first_pass_paid'), selected.get('rejected'))}** · "
-        f"{len(parse_review_jobs(selected))} job(s) on file"
+        f"{len(_parse_review_jobs(selected))} job(s) on file"
     )
 
     if st.button("Open in Review for editing", type="primary", key="pending_open_in_review"):
