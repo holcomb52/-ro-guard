@@ -532,6 +532,48 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     {panel_wrap} div[data-testid="stTextArea"] label {{
         color: {code_text} !important;
     }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border: 1px solid {panel_border} !important;
+        border-radius: 14px !important;
+        margin-bottom: 12px !important;
+        overflow: hidden;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) > summary {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        font-weight: 700 !important;
+        padding: 12px 14px !important;
+        border: none !important;
+        opacity: 1 !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible)[open] > summary {{
+        border-radius: 14px 14px 0 0 !important;
+        border-bottom: 1px solid {panel_border} !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) [data-testid="stExpanderDetails"],
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) > div {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border-top: none !important;
+        padding: 0 14px 12px 14px !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary *,
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary p,
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary span,
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary div {{
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        background: transparent !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) [data-testid="stExpanderToggleIcon"],
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary svg {{
+        color: {code_text} !important;
+        fill: {code_text} !important;
+    }}
     """
 
 

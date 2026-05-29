@@ -3940,6 +3940,65 @@ def _render_dealer_connect_copy_field(*, label: str, value: str) -> None:
     )
 
 
+def _render_dealer_connect_job_lines_body(
+    *,
+    line_jobs: list[dict],
+    ro_clean: str,
+    vin_clean: str,
+) -> None:
+    st.caption(
+        "Labor operation, times, and claim value from the scanned invoice / RO. "
+        "Click a value block, then **⌘C** / **Ctrl+C** to paste into Dealer Connect."
+    )
+    if ro_clean or vin_clean:
+        header_cols = st.columns(2, gap="medium")
+        with header_cols[0]:
+            if ro_clean:
+                _render_dealer_connect_copy_field(label="RO", value=ro_clean)
+        with header_cols[1]:
+            if vin_clean:
+                _render_dealer_connect_copy_field(label="VIN", value=vin_clean)
+
+    if not line_jobs:
+        _dc_note_info(
+            "No labor operation or times imported yet. Upload the **Final Invoice** on the scan panel "
+            "and click **Scan & Fill Form**."
+        )
+        return
+
+    multi = len(line_jobs) > 1
+    for job in line_jobs:
+        job_no = job["job_no"]
+        with st.container(border=True):
+            st.markdown(
+                '<div class="dealer-connect-job-line"></div>',
+                unsafe_allow_html=True,
+            )
+            if multi:
+                st.markdown(f"**Job {job_no}**")
+
+            if job.get("operation_code"):
+                _render_dealer_connect_copy_field(
+                    label="Labor operation",
+                    value=str(job["operation_code"]),
+                )
+            if float(job.get("tech_flagged_time") or 0) > 0:
+                _render_dealer_connect_copy_field(
+                    label="Tech flagged time",
+                    value=_format_dc_copy_number(job["tech_flagged_time"]),
+                )
+            if float(job.get("time_allotted") or 0) > 0:
+                _render_dealer_connect_copy_field(
+                    label="Time allotted",
+                    value=_format_dc_copy_number(job["time_allotted"]),
+                )
+            if float(job.get("claim_value") or 0) > 0:
+                _render_dealer_connect_copy_field(
+                    label="Claim value",
+                    value=_format_dc_copy_number(job["claim_value"]),
+                )
+
+
 def _render_dealer_connect_job_lines_export(
     jobs: list[dict],
     *,
@@ -3974,63 +4033,16 @@ def _render_dealer_connect_job_lines_export(
         )
         return
 
-    with _dealer_connect_section(
-        "Job line details — copy into Dealer Connect",
-        "job-lines-panel",
-    ):
-        st.caption(
-            "Labor operation, times, and claim value from the scanned invoice / RO. "
-            "Click a value block, then **⌘C** / **Ctrl+C** to paste into Dealer Connect."
+    with st.expander("Job line details — copy into Dealer Connect", expanded=False):
+        st.markdown(
+            '<div class="dealer-connect-panel job-lines-panel dealer-connect-collapsible"></div>',
+            unsafe_allow_html=True,
         )
-        if ro_clean or vin_clean:
-            header_cols = st.columns(2, gap="medium")
-            with header_cols[0]:
-                if ro_clean:
-                    _render_dealer_connect_copy_field(label="RO", value=ro_clean)
-            with header_cols[1]:
-                if vin_clean:
-                    _render_dealer_connect_copy_field(label="VIN", value=vin_clean)
-            if line_jobs:
-                st.markdown("")
-
-        if not line_jobs:
-            _dc_note_info(
-                "No labor operation or times imported yet. Upload the **Final Invoice** on the scan panel "
-                "and click **Scan & Fill Form**."
-            )
-            return
-
-        multi = len(line_jobs) > 1
-        for job in line_jobs:
-            job_no = job["job_no"]
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="dealer-connect-job-line"></div>',
-                    unsafe_allow_html=True,
-                )
-                if multi:
-                    st.markdown(f"**Job {job_no}**")
-
-                if job.get("operation_code"):
-                    _render_dealer_connect_copy_field(
-                        label="Labor operation",
-                        value=str(job["operation_code"]),
-                    )
-                if float(job.get("tech_flagged_time") or 0) > 0:
-                    _render_dealer_connect_copy_field(
-                        label="Tech flagged time",
-                        value=_format_dc_copy_number(job["tech_flagged_time"]),
-                    )
-                if float(job.get("time_allotted") or 0) > 0:
-                    _render_dealer_connect_copy_field(
-                        label="Time allotted",
-                        value=_format_dc_copy_number(job["time_allotted"]),
-                    )
-                if float(job.get("claim_value") or 0) > 0:
-                    _render_dealer_connect_copy_field(
-                        label="Claim value",
-                        value=_format_dc_copy_number(job["claim_value"]),
-                    )
+        _render_dealer_connect_job_lines_body(
+            line_jobs=line_jobs,
+            ro_clean=ro_clean,
+            vin_clean=vin_clean,
+        )
 
 
 def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
