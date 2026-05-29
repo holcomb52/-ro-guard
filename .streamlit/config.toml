@@ -1,6 +1,5 @@
 [client]
-# "auto" = Share/admin toolbar only for Streamlit Cloud workspace admins (you).
-# Regular RO Guard users do not see Share, Deploy, or developer menu items.
+# Dealership users get viewer mode from app code; owner gets developer mode at runtime.
 toolbarMode = "auto"
 
 [browser]

@@ -84,7 +84,9 @@ from personnel_roles import (
     person_has_any_role,
     primary_personnel_role,
 )
-from sales_pricing import render_pricing_roi_page
+from sales_pricing import render_pricing_roi
+from deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
+from scheduled_reports_admin import render_scheduled_reports_admin
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -2101,7 +2103,9 @@ STREAMLIT_CHROME_HIDE_CSS = """
 [data-testid="stToolbar"],
 [data-testid="stToolbarActions"],
 .stAppDeployButton,
-.stDeployButton {
+.stDeployButton,
+[data-testid="stBottomBlock"],
+footer {
     display: none !important;
 }
 """
@@ -2118,40 +2122,60 @@ def _owner_emails() -> set[str]:
 
 
 def streamlit_cloud_chrome_allowed() -> bool:
-    """Streamlit Share / Manage app chrome only for configured owner login(s)."""
+    """Streamlit Share / Manage app chrome only for RO_SHIELD_OWNER_EMAIL login(s)."""
     owners = _owner_emails()
     if not owners:
-        # No owner list configured — rely on Streamlit Cloud toolbarMode=auto
-        # (workspace admins see Share; regular app users do not).
         return True
     if not is_authenticated():
-        return True
+        return False
     email = normalize_email(auth_user_email())
-    if not email:
-        return True
-    return email in owners
+    return bool(email and email in owners)
+
+
+def configure_streamlit_toolbar() -> None:
+    """Developer toolbar for app owner; viewer mode for dealership users."""
+    try:
+        if streamlit_cloud_chrome_allowed():
+            st.set_option("client.toolbarMode", "developer")
+        else:
+            st.set_option("client.toolbarMode", "viewer")
+    except Exception:
+        pass
 
 
 def _inject_streamlit_cloud_chrome_restore() -> None:
-    """Undo any prior hide scripts/styles so owners see Share again."""
+    """Keep Share / Manage app visible for the app owner."""
     components.html(
         """
         <script>
         (function () {
           function restoreChrome(doc) {
             if (!doc || !doc.body) return;
-            doc.querySelectorAll(
-              '[data-testid="stHeaderActionElements"], [data-testid="stToolbar"], [data-testid="stToolbarActions"], .stAppDeployButton, .stDeployButton'
-            ).forEach(function (el) {
-              el.style.removeProperty("display");
+            var selectors = [
+              '[data-testid="stHeaderActionElements"]',
+              '[data-testid="stToolbar"]',
+              '[data-testid="stToolbarActions"]',
+              '[data-testid="stBottomBlock"]',
+              '.stAppDeployButton',
+              '.stDeployButton',
+              'footer'
+            ];
+            selectors.forEach(function (sel) {
+              doc.querySelectorAll(sel).forEach(function (el) {
+                el.style.removeProperty("display");
+                el.style.removeProperty("visibility");
+                el.style.removeProperty("opacity");
+              });
             });
-            doc.querySelectorAll("a, button, span, p, div").forEach(function (el) {
+            doc.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
               var text = (el.textContent || "").trim();
-              if (text === "Share" || text === "Manage app") {
+              if (text === "Share" || text === "Manage app" || text === "Manage App") {
                 var target = el.closest("a, button, [role='button']") || el;
                 target.style.removeProperty("display");
+                target.style.removeProperty("visibility");
                 if (target.parentElement) {
                   target.parentElement.style.removeProperty("display");
+                  target.parentElement.style.removeProperty("visibility");
                 }
               }
             });
@@ -2161,8 +2185,54 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
             try { restoreChrome(window.parent.document); } catch (e) {}
           }
           sweep();
-          setTimeout(sweep, 250);
-          setTimeout(sweep, 1000);
+          [250, 1000, 2500, 5000].forEach(function (delay) {
+            setTimeout(sweep, delay);
+          });
+          try {
+            var target = window.parent.document.body || document.body;
+            if (target && window.parent.MutationObserver) {
+              new window.parent.MutationObserver(sweep).observe(target, { childList: true, subtree: true });
+            }
+          } catch (e) {}
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+def _inject_streamlit_cloud_chrome_hide() -> None:
+    """Hide Manage app / Share for dealership logins (Streamlit may still inject them)."""
+    components.html(
+        """
+        <script>
+        (function () {
+          function hideChrome(doc) {
+            if (!doc || !doc.body) return;
+            doc.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
+              var text = (el.textContent || "").trim();
+              if (text === "Share" || text === "Manage app" || text === "Manage App") {
+                var target = el.closest("a, button, [role='button']") || el;
+                target.style.setProperty("display", "none", "important");
+                if (target.parentElement) {
+                  target.parentElement.style.setProperty("display", "none", "important");
+                }
+              }
+            });
+          }
+          function sweep() {
+            try { hideChrome(document); } catch (e) {}
+            try { hideChrome(window.parent.document); } catch (e) {}
+          }
+          sweep();
+          [250, 1000, 2500].forEach(function (delay) { setTimeout(sweep, delay); });
+          try {
+            var target = window.parent.document.body || document.body;
+            if (target && window.parent.MutationObserver) {
+              new window.parent.MutationObserver(sweep).observe(target, { childList: true, subtree: true });
+            }
+          } catch (e) {}
         })();
         </script>
         """,
@@ -2184,6 +2254,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
         _inject_streamlit_cloud_chrome_restore()
     else:
         css = STREAMLIT_CHROME_HIDE_CSS + css
+        _inject_streamlit_cloud_chrome_hide()
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
@@ -6069,13 +6140,18 @@ def render_admin():
         "Audit Rules",
         "Rejection Reasons",
         "Personnel",
+        "Scheduled Reports",
     ]
     admin_tab_fns = [
         render_smart_warranty_admin,
         render_audit_rules_admin,
         render_rejection_reason_library_admin,
         render_personnel_admin,
+        lambda: render_scheduled_reports_admin(supabase),
     ]
+    if user_can_view_deployment():
+        admin_tab_labels.append("Deployment & Secrets")
+        admin_tab_fns.append(render_deployment_secrets_admin)
     if user_can_see_pricing():
         admin_tab_labels.append("Pricing & ROI")
         admin_tab_fns.append(render_pricing_roi)
@@ -6614,6 +6690,7 @@ def main():
         st.stop()
 
     sync_personnel_identity(supabase)
+    configure_streamlit_toolbar()
 
     render_sidebar_brand()
 

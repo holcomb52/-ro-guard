@@ -595,3 +595,7 @@ def render_authenticated_sidebar(supabase) -> None:
     if st.sidebar.button("Sign out", use_container_width=True, key="auth_sign_out_btn"):
         sign_out(supabase)
         st.rerun()
+
+    from deployment_admin import render_admin_profile_deployment_sidebar
+
+    render_admin_profile_deployment_sidebar()
