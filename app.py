@@ -1407,6 +1407,30 @@ def _collapsible_section(
         yield
 
 
+def _job_narrative_length(job: dict) -> int:
+    return len(
+        claim_source_text(
+            job.get("concern"),
+            job.get("cause"),
+            job.get("correction"),
+        ).strip()
+    )
+
+
+def _paid_labor_op_section_visible(jobs: list[dict]) -> bool:
+    """Show labor-op helper only when narrative exists and paid-claim context may help."""
+    eligible = [job for job in jobs if _job_narrative_length(job) >= 20]
+    if not eligible:
+        return False
+    if _paid_labor_op_applicable_hint(jobs):
+        return True
+    for job in eligible:
+        _suggestions, similar = _collect_paid_labor_op_suggestions(job)
+        if similar:
+            return True
+    return False
+
+
 def _paid_labor_op_applicable_hint(jobs: list[dict]) -> str | None:
     """Short hint for labor-op expander when paid-claim ops are available to copy."""
     total_ops = 0
@@ -1426,6 +1450,28 @@ def _paid_labor_op_applicable_hint(jobs: list[dict]) -> str | None:
     return f"{total_ops} labor {noun} to copy"
 
 
+def _dealer_connect_has_copy_sections(
+    jobs: list[dict],
+    *,
+    ro_number: str,
+    vin: str,
+) -> bool:
+    """True when at least one Dealer Connect collapsible may appear."""
+    if _paid_labor_op_section_visible(jobs):
+        return True
+    if str(ro_number or "").strip() or str(vin or "").strip():
+        return True
+    for job in jobs:
+        if (
+            str(job.get("operation_code") or "").strip()
+            or float(job.get("tech_flagged_time") or 0) > 0
+            or float(job.get("time_allotted") or 0) > 0
+            or float(job.get("claim_value") or 0) > 0
+        ):
+            return True
+    return False
+
+
 def _render_paid_labor_op_body(jobs: list[dict]) -> None:
     """Labor ops from similar paid claims — inner body for collapsible Dealer Connect panel."""
     eligible_jobs: list[dict] = []
@@ -1440,7 +1486,7 @@ def _render_paid_labor_op_body(jobs: list[dict]) -> None:
 
     st.caption(
         "Labor operations from similar **paid claims** in your library. "
-        "Click a value block, then **⌘C** / **Ctrl+C** to copy."
+        "Use **Copy** below each op to paste into Dealer Connect."
     )
     if not eligible_jobs:
         _dc_note_info(
@@ -1480,7 +1526,7 @@ def _render_paid_labor_op_body(jobs: list[dict]) -> None:
             f"**{similar[0].get('score', 0)}%** similar repair"
         )
 
-        for suggestion in suggestions:
+        for idx, suggestion in enumerate(suggestions):
             op_code = str(suggestion["op_code"])
             time_hint = _common_labor_time(suggestion.get("times") or [])
             detail_parts: list[str] = []
@@ -1500,6 +1546,14 @@ def _render_paid_labor_op_body(jobs: list[dict]) -> None:
                 f'<div class="dc-copy-value">{html.escape(op_code)}</div>',
                 unsafe_allow_html=True,
             )
+            safe_op = re.sub(r"[^a-zA-Z0-9_-]", "_", op_code)
+            _, copy_col = st.columns([5, 1])
+            with copy_col:
+                _render_field_copy_button(
+                    op_code,
+                    label=f"Labor op {op_code}",
+                    element_id=f"copy_labor_op_j{job_no}_{idx}_{safe_op}",
+                )
 
         if len(similar) > 1:
             others = len(similar) - 1
@@ -1509,14 +1563,17 @@ def _render_paid_labor_op_body(jobs: list[dict]) -> None:
         pass
 
 
-def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
+def _render_paid_labor_op_helper(jobs: list[dict], *, expand_all: bool = False) -> None:
     """Surface labor ops from similar paid claims for Dealer Connect entry."""
+    if not _paid_labor_op_section_visible(jobs):
+        return
     hint = _paid_labor_op_applicable_hint(jobs)
     with _collapsible_section(
         "Labor ops that paid — copy into Dealer Connect",
         hint,
         marker_class="dealer-connect-collapsible labor-ops-panel",
         anchor_class="dc-anchor-labor-ops",
+        expanded=expand_all,
     ):
         _render_paid_labor_op_body(jobs)
 
@@ -1817,6 +1874,11 @@ def _render_narrative_gap_coach_body(current_job: dict, similar_claims: list, jo
 
 
 def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: int):
+    text_len = len(
+        f"{current_job.get('concern', '')} {current_job.get('cause', '')} {current_job.get('correction', '')}".strip()
+    )
+    if text_len < 20 or not similar_claims:
+        return
     hint = _narrative_gap_coach_hint(current_job, similar_claims)
     with _collapsible_section(
         "Narrative Gap Coach",
@@ -4125,8 +4187,8 @@ def _render_narrative_field(
     return str(value or "")
 
 
-def _render_dealer_connect_copy_field(*, label: str, value: str) -> None:
-    """Label + dark selectable value block (no st.code white boxes)."""
+def _render_dealer_connect_copy_field(*, label: str, value: str, copy_id: str) -> None:
+    """Label + dark value block with Copy button for Dealer Connect paste."""
     text = str(value or "").strip()
     if not text:
         return
@@ -4135,6 +4197,9 @@ def _render_dealer_connect_copy_field(*, label: str, value: str) -> None:
         f'<div class="dc-copy-value">{html.escape(text)}</div>',
         unsafe_allow_html=True,
     )
+    _, copy_col = st.columns([5, 1])
+    with copy_col:
+        _render_field_copy_button(text, label=label, element_id=copy_id)
 
 
 def _render_dealer_connect_job_lines_body(
@@ -4142,19 +4207,29 @@ def _render_dealer_connect_job_lines_body(
     line_jobs: list[dict],
     ro_clean: str,
     vin_clean: str,
+    form_version: int,
 ) -> None:
     st.caption(
         "Labor operation, times, and claim value from the scanned invoice / RO. "
-        "Click a value block, then **⌘C** / **Ctrl+C** to paste into Dealer Connect."
+        "Use **Copy** below each field to paste into Dealer Connect."
     )
+    fv = int(form_version)
     if ro_clean or vin_clean:
         header_cols = st.columns(2, gap="medium")
         with header_cols[0]:
             if ro_clean:
-                _render_dealer_connect_copy_field(label="RO", value=ro_clean)
+                _render_dealer_connect_copy_field(
+                    label="RO",
+                    value=ro_clean,
+                    copy_id=f"copy_dc_ro_{fv}",
+                )
         with header_cols[1]:
             if vin_clean:
-                _render_dealer_connect_copy_field(label="VIN", value=vin_clean)
+                _render_dealer_connect_copy_field(
+                    label="VIN",
+                    value=vin_clean,
+                    copy_id=f"copy_dc_vin_{fv}",
+                )
 
     if not line_jobs:
         _dc_note_info(
@@ -4178,21 +4253,25 @@ def _render_dealer_connect_job_lines_body(
                 _render_dealer_connect_copy_field(
                     label="Labor operation",
                     value=str(job["operation_code"]),
+                    copy_id=f"copy_dc_op_j{job_no}_{fv}",
                 )
             if float(job.get("tech_flagged_time") or 0) > 0:
                 _render_dealer_connect_copy_field(
                     label="Tech flagged time",
                     value=_format_dc_copy_number(job["tech_flagged_time"]),
+                    copy_id=f"copy_dc_tech_time_j{job_no}_{fv}",
                 )
             if float(job.get("time_allotted") or 0) > 0:
                 _render_dealer_connect_copy_field(
                     label="Time allotted",
                     value=_format_dc_copy_number(job["time_allotted"]),
+                    copy_id=f"copy_dc_allotted_j{job_no}_{fv}",
                 )
             if float(job.get("claim_value") or 0) > 0:
                 _render_dealer_connect_copy_field(
                     label="Claim value",
                     value=_format_dc_copy_number(job["claim_value"]),
+                    copy_id=f"copy_dc_value_j{job_no}_{fv}",
                 )
 
 
@@ -4201,6 +4280,7 @@ def _render_dealer_connect_job_lines_export(
     *,
     ro_number: str,
     vin: str,
+    expand_all: bool = False,
 ) -> None:
     """Per-job labor op, times, and claim value from invoice / RO scan."""
     ro_clean = str(ro_number or "").strip()
@@ -4243,11 +4323,13 @@ def _render_dealer_connect_job_lines_export(
         hint,
         marker_class="dealer-connect-collapsible job-lines-panel",
         anchor_class="dc-anchor-job-lines",
+        expanded=expand_all,
     ):
         _render_dealer_connect_job_lines_body(
             line_jobs=line_jobs,
             ro_clean=ro_clean,
             vin_clean=vin_clean,
+            form_version=st.session_state.form_version,
         )
 
 
@@ -5383,8 +5465,20 @@ def render_review():
             '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
-        _render_paid_labor_op_helper(jobs)
-        _render_dealer_connect_job_lines_export(jobs, ro_number=ro_number, vin=vin)
+        fv = st.session_state.form_version
+        dc_expand_all = False
+        if _dealer_connect_has_copy_sections(jobs, ro_number=ro_number, vin=vin):
+            dc_expand_all = st.checkbox(
+                "Expand all for copying into Dealer Connect",
+                key=f"dc_expand_all_{fv}",
+            )
+        _render_paid_labor_op_helper(jobs, expand_all=dc_expand_all)
+        _render_dealer_connect_job_lines_export(
+            jobs,
+            ro_number=ro_number,
+            vin=vin,
+            expand_all=dc_expand_all,
+        )
 
     st.markdown("---")
 

@@ -744,12 +744,15 @@ def review_collapsible_css(theme: str = "Dark") -> str:
 
 
 def narrative_copy_button_css(theme: str = "Dark") -> str:
-    """Transparent iframe copy buttons beside job narrative fields."""
+    """Transparent iframe copy buttons beside narrative and Dealer Connect fields."""
     is_light = str(theme).lower() == "light"
     btn_bg = "var(--rg-surface-input, #e8f0f8)" if is_light else "rgba(7, 19, 34, .75)"
     btn_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .35)"
     btn_text = "#0f172a" if is_light else "#f8fbff"
-    scope = 'div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker)'
+    scope = (
+        'div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker), '
+        'div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
+    )
     return f"""
     {scope} iframe {{
         background: transparent !important;
