@@ -582,6 +582,75 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         color: {code_text} !important;
         fill: {code_text} !important;
     }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable) > summary {{
+        box-shadow: inset 3px 0 0 #3ecf8e !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable):not([open]) > summary {{
+        background: rgba(62, 207, 142, 0.1) !important;
+        background-color: rgba(62, 207, 142, 0.1) !important;
+    }}
+    """
+
+
+def review_collapsible_css(theme: str = "Dark") -> str:
+    """Collapsible coaching panels on Review job tabs (Manual/TSB, Gap Coach, Declined)."""
+    is_light = str(theme).lower() == "light"
+    panel_bg = "var(--rg-surface-card, #f4f8fc)" if is_light else "rgba(7, 19, 34, .92)"
+    panel_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .22)"
+    code_text = "#0f172a" if is_light else "#f8fbff"
+    highlight_bg = "rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"
+    accent_green = "#16a34a" if is_light else "#3ecf8e"
+    scope = 'div[data-testid="stVerticalBlock"]:has(.review-job-coaching-marker)'
+    return f"""
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border: 1px solid {panel_border} !important;
+        border-radius: 14px !important;
+        margin-bottom: 12px !important;
+        overflow: hidden;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) > summary {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        font-weight: 700 !important;
+        padding: 12px 14px !important;
+        border: none !important;
+        opacity: 1 !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible)[open] > summary {{
+        border-radius: 14px 14px 0 0 !important;
+        border-bottom: 1px solid {panel_border} !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) [data-testid="stExpanderDetails"],
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) > div {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border-top: none !important;
+        padding: 0 14px 12px 14px !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary *,
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary p,
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary span,
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary div {{
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        background: transparent !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) [data-testid="stExpanderToggleIcon"],
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary svg {{
+        color: {code_text} !important;
+        fill: {code_text} !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable) > summary {{
+        box-shadow: inset 3px 0 0 {accent_green} !important;
+    }}
+    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable):not([open]) > summary {{
+        background: {highlight_bg} !important;
+        background-color: {highlight_bg} !important;
+    }}
     """
 
 

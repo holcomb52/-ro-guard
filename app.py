@@ -80,6 +80,7 @@ from theme_styles import (
     pricing_page_css,
     dealer_connect_panel_css,
     narrative_copy_button_css,
+    review_collapsible_css,
     review_open_claims_strip_css,
     vin_recall_alert_css,
 )
@@ -1358,18 +1359,6 @@ def _collect_paid_labor_op_suggestions(
     return ranked[:max_ops], similar
 
 
-@contextmanager
-def _dealer_connect_section(title: str, panel_class: str):
-    """Bordered Dealer Connect panel — title inside panel to avoid white gap blocks."""
-    with st.container(border=True):
-        st.markdown(
-            f'<div class="dealer-connect-panel {panel_class}"></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(f"##### {title}")
-        yield
-
-
 def _dc_note_info(message: str) -> None:
     st.markdown(f'<div class="dc-note-info">{message}</div>', unsafe_allow_html=True)
 
@@ -1378,8 +1367,57 @@ def _dc_note_warn(message: str) -> None:
     st.markdown(f'<div class="dc-note-warn">{message}</div>', unsafe_allow_html=True)
 
 
-def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
-    """Surface labor ops from similar paid claims for Dealer Connect entry."""
+def _collapsible_section_label(title: str, applicable_hint: str | None = None) -> str:
+    """Expander title; append a dot hint when the section has claim-relevant content."""
+    if applicable_hint:
+        return f"{title} · ● {applicable_hint}"
+    return title
+
+
+@contextmanager
+def _collapsible_section(
+    title: str,
+    applicable_hint: str | None = None,
+    *,
+    marker_class: str = "review-collapsible",
+    expanded: bool = False,
+):
+    """Collapsible review / Dealer Connect block with optional applicable-content marker."""
+    label = _collapsible_section_label(title, applicable_hint)
+    with st.expander(label, expanded=expanded):
+        st.markdown(
+            f'<div class="{marker_class}" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        if applicable_hint:
+            st.markdown(
+                '<div class="review-collapsible-applicable" aria-hidden="true"></div>',
+                unsafe_allow_html=True,
+            )
+        yield
+
+
+def _paid_labor_op_applicable_hint(jobs: list[dict]) -> str | None:
+    """Short hint for labor-op expander when paid-claim ops are available to copy."""
+    total_ops = 0
+    for job in jobs:
+        narrative = claim_source_text(
+            job.get("concern"),
+            job.get("cause"),
+            job.get("correction"),
+        )
+        if len(narrative.strip()) < 20:
+            continue
+        suggestions, _similar = _collect_paid_labor_op_suggestions(job)
+        total_ops += len(suggestions)
+    if not total_ops:
+        return None
+    noun = "ops" if total_ops != 1 else "op"
+    return f"{total_ops} labor {noun} to copy"
+
+
+def _render_paid_labor_op_body(jobs: list[dict]) -> None:
+    """Labor ops from similar paid claims — inner body for collapsible Dealer Connect panel."""
     eligible_jobs: list[dict] = []
     for job in jobs:
         narrative = claim_source_text(
@@ -1390,79 +1428,90 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
         if len(narrative.strip()) >= 20:
             eligible_jobs.append(job)
 
-    with _dealer_connect_section(
-        "Labor ops that paid — copy into Dealer Connect",
-        "labor-ops-panel",
-    ):
-        st.caption(
-            "Labor operations from similar **paid claims** in your library. "
-            "Click a value block, then **⌘C** / **Ctrl+C** to copy."
+    st.caption(
+        "Labor operations from similar **paid claims** in your library. "
+        "Click a value block, then **⌘C** / **Ctrl+C** to copy."
+    )
+    if not eligible_jobs:
+        _dc_note_info(
+            "Enter concern, cause, or correction above to suggest labor ops from paid claims."
         )
-        if not eligible_jobs:
+        return
+
+    multi = len(eligible_jobs) > 1
+    found_any = False
+    for job in eligible_jobs:
+        job_no = int(job.get("job_no") or 1)
+        suggestions, similar = _collect_paid_labor_op_suggestions(job)
+
+        if multi:
+            st.markdown(f"**Job {job_no}**")
+
+        if not similar:
             _dc_note_info(
-                "Enter concern, cause, or correction above to suggest labor ops from paid claims."
+                "No similar paid claims yet. Upload paid warranty PDFs on **Claim Learning** "
+                "to build your labor op library."
             )
-            return
+            continue
 
-        multi = len(eligible_jobs) > 1
-        found_any = False
-        for job in eligible_jobs:
-            job_no = int(job.get("job_no") or 1)
-            suggestions, similar = _collect_paid_labor_op_suggestions(job)
-
-            if multi:
-                st.markdown(f"**Job {job_no}**")
-
-            if not similar:
-                _dc_note_info(
-                    "No similar paid claims yet. Upload paid warranty PDFs on **Claim Learning** "
-                    "to build your labor op library."
-                )
-                continue
-
-            if not suggestions:
-                best = enrich_paid_claim_match(similar[0])
-                _dc_note_warn(
-                    f"Similar paid claim **{best.get('ro_number', 'on file')}** "
-                    f"({similar[0].get('score', 0)}% match) has no labor ops parsed. "
-                    "Re-upload paid Dealer Connect PDFs that include labor operation lines."
-                )
-                continue
-
-            found_any = True
+        if not suggestions:
             best = enrich_paid_claim_match(similar[0])
-            st.caption(
-                f"Best match: **{best.get('ro_number', 'Paid claim')}** · "
-                f"**{similar[0].get('score', 0)}%** similar repair"
+            _dc_note_warn(
+                f"Similar paid claim **{best.get('ro_number', 'on file')}** "
+                f"({similar[0].get('score', 0)}% match) has no labor ops parsed. "
+                "Re-upload paid Dealer Connect PDFs that include labor operation lines."
+            )
+            continue
+
+        found_any = True
+        best = enrich_paid_claim_match(similar[0])
+        st.caption(
+            f"Best match: **{best.get('ro_number', 'Paid claim')}** · "
+            f"**{similar[0].get('score', 0)}%** similar repair"
+        )
+
+        for suggestion in suggestions:
+            op_code = str(suggestion["op_code"])
+            time_hint = _common_labor_time(suggestion.get("times") or [])
+            detail_parts: list[str] = []
+            if time_hint:
+                detail_parts.append(f"**{time_hint}h** paid time")
+            count = int(suggestion.get("count") or 0)
+            if count > 1:
+                detail_parts.append(f"on **{count}** similar paid claims")
+            elif suggestion.get("best_ro"):
+                detail_parts.append(f"paid RO **{suggestion['best_ro']}**")
+
+            st.markdown(
+                f"**{op_code}**"
+                + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
+            )
+            st.markdown(
+                f'<div class="dc-copy-value">{html.escape(op_code)}</div>',
+                unsafe_allow_html=True,
             )
 
-            for idx, suggestion in enumerate(suggestions):
-                op_code = str(suggestion["op_code"])
-                time_hint = _common_labor_time(suggestion.get("times") or [])
-                detail_parts: list[str] = []
-                if time_hint:
-                    detail_parts.append(f"**{time_hint}h** paid time")
-                count = int(suggestion.get("count") or 0)
-                if count > 1:
-                    detail_parts.append(f"on **{count}** similar paid claims")
-                elif suggestion.get("best_ro"):
-                    detail_parts.append(f"paid RO **{suggestion['best_ro']}**")
+        if len(similar) > 1:
+            others = len(similar) - 1
+            st.caption(f"+ {others} more similar paid claim(s) checked for labor ops.")
 
-                st.markdown(
-                    f"**{op_code}**"
-                    + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
-                )
-                st.markdown(
-                    f'<div class="dc-copy-value">{html.escape(op_code)}</div>',
-                    unsafe_allow_html=True,
-                )
+    if not found_any and len(eligible_jobs) == 1:
+        pass
 
-            if len(similar) > 1:
-                others = len(similar) - 1
-                st.caption(f"+ {others} more similar paid claim(s) checked for labor ops.")
 
-        if not found_any and len(eligible_jobs) == 1:
-            pass
+def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
+    """Surface labor ops from similar paid claims for Dealer Connect entry."""
+    hint = _paid_labor_op_applicable_hint(jobs)
+    with _collapsible_section(
+        "Labor ops that paid — copy into Dealer Connect",
+        hint,
+        marker_class="dealer-connect-collapsible labor-ops-panel",
+    ):
+        st.markdown(
+            '<div class="dealer-connect-panel labor-ops-panel"></div>',
+            unsafe_allow_html=True,
+        )
+        _render_paid_labor_op_body(jobs)
 
 
 def enrich_paid_claim_match(match):
@@ -1663,8 +1712,22 @@ def analyze_narrative_gaps(current_job: dict, paid_match: dict) -> dict:
     }
 
 
-def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: int):
-    st.markdown("### Narrative Gap Coach")
+def _narrative_gap_coach_hint(current_job: dict, similar_claims: list) -> str | None:
+    """Short expander hint when gap coach has claim-relevant output."""
+    text_len = len(
+        f"{current_job.get('concern', '')} {current_job.get('cause', '')} {current_job.get('correction', '')}".strip()
+    )
+    if text_len < 20 or not similar_claims:
+        return None
+    best_match = enrich_paid_claim_match(similar_claims[0])
+    analysis = analyze_narrative_gaps(current_job, best_match)
+    if analysis["gap_count"] > 0:
+        noun = "gaps" if analysis["gap_count"] != 1 else "gap"
+        return f"{analysis['gap_count']} narrative {noun} vs paid claim"
+    return f"{best_match.get('score', 0)}% paid claim match"
+
+
+def _render_narrative_gap_coach_body(current_job: dict, similar_claims: list, job_no: int) -> None:
     st.caption(
         "Compares this job's concern, cause, and correction to similar **paid claims** "
         "in your Claim Learning library."
@@ -1746,14 +1809,23 @@ def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: 
                 st.markdown("---")
 
 
-def render_declined_claim_alert(current_job: dict, similar_declined: list) -> None:
+def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: int):
+    hint = _narrative_gap_coach_hint(current_job, similar_claims)
+    with _collapsible_section("Narrative Gap Coach", hint, marker_class="review-collapsible gap-coach-panel"):
+        _render_narrative_gap_coach_body(current_job, similar_claims, job_no)
+
+
+def _declined_claim_hint(current_job: dict, similar_declined: list) -> str | None:
     text_len = len(
         f"{current_job.get('concern', '')} {current_job.get('cause', '')} {current_job.get('correction', '')}".strip()
     )
     if text_len < 20 or not similar_declined:
-        return
+        return None
+    best = similar_declined[0]
+    return f"{best.get('score', 0)}% declined match"
 
-    st.markdown("### Declined Claim Alert")
+
+def _render_declined_claim_alert_body(current_job: dict, similar_declined: list) -> None:
     st.caption(
         "This job looks similar to a declined claim from Dealer Connect — review before submit."
     )
@@ -1804,6 +1876,14 @@ def render_declined_claim_alert(current_job: dict, similar_declined: list) -> No
             for match in similar_declined[1:]:
                 label = (_decline_reason_value(match) or match.get("ro_number") or "Declined claim").strip()
                 st.markdown(f"**{match.get('score', 0)}%** · {label[:120]}")
+
+
+def render_declined_claim_alert(current_job: dict, similar_declined: list) -> None:
+    hint = _declined_claim_hint(current_job, similar_declined)
+    if not hint:
+        return
+    with _collapsible_section("Declined Claim Alert", hint, marker_class="review-collapsible declined-alert-panel"):
+        _render_declined_claim_alert_body(current_job, similar_declined)
 
 
 def _sync_declined_upload_metadata(file_name: str, claims: list[str]) -> int:
@@ -2502,6 +2582,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += vin_recall_alert_css(theme)
     css += dealer_connect_panel_css(theme)
     css += narrative_copy_button_css(theme)
+    css += review_collapsible_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -3194,11 +3275,7 @@ def find_wam_matches(job):
     return find_applicable_manual_sections(job)
 
 
-def render_applicable_manual_sections(sections, key_prefix="manual"):
-    if not sections:
-        return
-
-    st.markdown("### Applicable Manual & TSB Guidance")
+def _render_applicable_manual_sections_body(sections) -> None:
     st.caption(
         "WAM excerpts require a checked warranty flag or explicit WAM reference. "
         "TSB / bulletins match automatically when the repair narrative applies."
@@ -3213,6 +3290,21 @@ def render_applicable_manual_sections(sections, key_prefix="manual"):
         st.info(sec.get("snippet", ""))
         if idx < len(sections) - 1:
             st.markdown("")
+
+
+def render_applicable_manual_sections(sections, key_prefix="manual"):
+    if not sections:
+        return
+
+    count = len(sections)
+    noun = "matches" if count != 1 else "match"
+    hint = f"{count} manual / TSB {noun}"
+    with _collapsible_section(
+        "Applicable Manual & TSB Guidance",
+        hint,
+        marker_class="review-collapsible manual-tsb-panel",
+    ):
+        _render_applicable_manual_sections_body(sections)
 CLAIM_COMPONENT_TERMS = [
     "lower control arm", "control arm", "upper control arm", "bushing",
     "ball joint", "tie rod", "sway bar", "strut", "wheel bearing",
@@ -4120,9 +4212,21 @@ def _render_dealer_connect_job_lines_export(
         )
         return
 
-    with st.expander("Job line details — copy into Dealer Connect", expanded=False):
+    if line_jobs:
+        noun = "lines" if len(line_jobs) != 1 else "line"
+        hint = f"{len(line_jobs)} job {noun} ready"
+    elif ro_clean or vin_clean:
+        hint = "RO / VIN ready"
+    else:
+        hint = None
+
+    with _collapsible_section(
+        "Job line details — copy into Dealer Connect",
+        hint,
+        marker_class="dealer-connect-collapsible job-lines-panel",
+    ):
         st.markdown(
-            '<div class="dealer-connect-panel job-lines-panel dealer-connect-collapsible"></div>',
+            '<div class="dealer-connect-panel job-lines-panel"></div>',
             unsafe_allow_html=True,
         )
         _render_dealer_connect_job_lines_body(
@@ -4725,7 +4829,6 @@ def _render_review_job_panel(
     form_version: int,
     smart_warranty_time_exempt: bool,
     rental_dollars_per_day: float,
-    collapse_extras: bool,
 ) -> tuple[dict, bool, str]:
     """Render one warranty job on the Review tab."""
     fv = form_version
@@ -4878,28 +4981,19 @@ def _render_review_job_panel(
         "correction": correction,
     }
 
-    extras_label = "Coaching, WAM & claim references"
-    if collapse_extras:
-        with st.expander(extras_label, expanded=False):
-            applicable_manual = find_applicable_manual_sections(preview_job)
-            render_applicable_manual_sections(
-                applicable_manual,
-                key_prefix=f"live_manual_{job_no}_{fv}",
-            )
-            similar_claims = find_similar_paid_claims(current_job_preview)
-            render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
-            similar_declined = find_similar_declined_claims(current_job_preview)
-            render_declined_claim_alert(current_job_preview, similar_declined)
-    else:
-        applicable_manual = find_applicable_manual_sections(preview_job)
-        render_applicable_manual_sections(
-            applicable_manual,
-            key_prefix=f"live_manual_{job_no}_{fv}",
-        )
-        similar_claims = find_similar_paid_claims(current_job_preview)
-        render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
-        similar_declined = find_similar_declined_claims(current_job_preview)
-        render_declined_claim_alert(current_job_preview, similar_declined)
+    st.markdown(
+        '<div class="review-job-coaching-marker" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+    applicable_manual = find_applicable_manual_sections(preview_job)
+    render_applicable_manual_sections(
+        applicable_manual,
+        key_prefix=f"live_manual_{job_no}_{fv}",
+    )
+    similar_claims = find_similar_paid_claims(current_job_preview)
+    render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
+    similar_declined = find_similar_declined_claims(current_job_preview)
+    render_declined_claim_alert(current_job_preview, similar_declined)
 
     job = {
         "job_no": str(job_no),
@@ -5235,7 +5329,6 @@ def render_review():
     jobs = []
     time_bypass = False
     time_bypass_user = ""
-    collapse_extras = multi_job
 
     if multi_job:
         job_numbers = list(range(1, int(job_count) + 1))
@@ -5255,7 +5348,6 @@ def render_review():
                     form_version=fv,
                     smart_warranty_time_exempt=smart_warranty_time_exempt,
                     rental_dollars_per_day=rental_dollars_per_day,
-                    collapse_extras=collapse_extras,
                 )
                 if job_no == 1:
                     time_bypass = job_bypass
@@ -5267,7 +5359,6 @@ def render_review():
             form_version=fv,
             smart_warranty_time_exempt=smart_warranty_time_exempt,
             rental_dollars_per_day=rental_dollars_per_day,
-            collapse_extras=False,
         )
         jobs.append(job)
 
