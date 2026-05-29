@@ -84,7 +84,7 @@ from personnel_roles import (
     person_has_any_role,
     primary_personnel_role,
 )
-from sales_pricing import render_pricing_roi
+from sales_pricing import render_pricing_roi_page
 from deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from scheduled_reports_admin import render_scheduled_reports_admin
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
