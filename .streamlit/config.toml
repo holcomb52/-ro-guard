@@ -4,3 +4,10 @@ toolbarMode = "auto"
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#02070d"
+secondaryBackgroundColor = "#071322"
+textColor = "#f8fbff"

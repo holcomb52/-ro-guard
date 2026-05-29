@@ -344,9 +344,9 @@ def review_open_claims_strip_css(theme: str = "Dark") -> str:
         text = "#0f172a"
         muted = "#475569"
         accent = "#1d4ed8"
-        clear_bg = "rgba(220, 252, 231, 0.85)"
-        clear_border = "#22c55e"
-        clear_text = "#166534"
+        clear_bg = "rgba(255, 255, 255, 0.92)"
+        clear_border = "var(--rg-border, #b6c7da)"
+        clear_text = "#1d4ed8"
         warn_text = "#b45309"
         stop_text = "#b91c1c"
     else:
@@ -355,9 +355,9 @@ def review_open_claims_strip_css(theme: str = "Dark") -> str:
         text = "#f8fbff"
         muted = "#94a3b8"
         accent = "#93c5fd"
-        clear_bg = "rgba(22, 101, 52, 0.35)"
-        clear_border = "#4ade80"
-        clear_text = "#bbf7d0"
+        clear_bg = "rgba(7, 19, 34, .88)"
+        clear_border = "rgba(62, 150, 255, .28)"
+        clear_text = "#93c5fd"
         warn_text = "#fcd34d"
         stop_text = "#fca5a5"
 
@@ -872,12 +872,51 @@ def claim_learning_css(theme: str = "Dark") -> str:
     """
 
 
+def streamlit_primary_override_css(theme: str = "Dark") -> str:
+    """Force RO Guard blue chrome over Streamlit Cloud default green primary."""
+    is_light = str(theme).lower() == "light"
+    primary = "#2563eb" if is_light else "#3b82f6"
+    border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, 0.28)"
+    selected_bg = "rgba(37, 99, 235, 0.12)" if is_light else "rgba(59, 130, 246, 0.12)"
+    selected_text = "#1d4ed8" if is_light else "#f8fbff"
+    main_tab_scope = (
+        '.stApp:has(.app-workspace-header) div[data-testid="stTabs"]:first-of-type'
+    )
+    return f"""
+    :root, .stApp, div[data-testid="stAppViewContainer"] {{
+        --primary-color: {primary};
+        --border-color: {border};
+    }}
+    .stApp div[data-testid="stVerticalBlockBorderWrapper"] {{
+        border: 1px solid {border} !important;
+        border-color: {border} !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }}
+    {main_tab_scope} [data-baseweb="tab-border"] {{
+        background-color: {primary} !important;
+    }}
+    {main_tab_scope} button[data-baseweb="tab"][aria-selected="true"] {{
+        background: {selected_bg} !important;
+        box-shadow: inset 0 -2px 0 {primary} !important;
+        color: {selected_text} !important;
+    }}
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {{
+        background-color: transparent !important;
+    }}
+    """
+
+
 THEME_CSS = {
     "Dark": """
     .stApp {
         position: relative;
         isolation: isolate;
         color: #f8fbff;
+        --primary-color: #3b82f6;
+        --border-color: rgba(62, 150, 255, 0.28);
+        --secondary-background-color: #071322;
+        --background-color: #02070d;
         background-color: #02070d;
         background-image:
             radial-gradient(ellipse 90% 55% at 50% -15%, rgba(37, 99, 235, 0.38), transparent 58%),
@@ -1211,9 +1250,10 @@ THEME_CSS = {
     }
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
         color: #f8fbff !important;
-        background: transparent !important;
+        background: rgba(59, 130, 246, 0.12) !important;
         border: none !important;
         font-weight: 700 !important;
+        box-shadow: inset 0 -2px 0 #3b82f6 !important;
     }
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"]:hover {
         color: #ffffff !important;
@@ -1223,7 +1263,7 @@ THEME_CSS = {
         font-size: 0.94rem !important;
         padding: 0.72rem 1.05rem 0.82rem !important;
     }
-    .status-ready {background:rgba(0,150,90,.20); border:1px solid rgba(0,220,130,.45); padding:16px; border-radius:16px;}
+    .status-ready {background:rgba(37,99,235,.18); border:1px solid rgba(59,130,246,.45); padding:16px; border-radius:16px;}
     .status-review {background:rgba(255,200,0,.18); border:1px solid rgba(255,210,0,.50); padding:16px; border-radius:16px;}
     .status-stop {background:rgba(255,50,50,.18); border:1px solid rgba(255,90,90,.50); padding:16px; border-radius:16px;}
     .live-submit-bar {
@@ -1463,10 +1503,13 @@ THEME_CSS = {
     }
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background: rgba(7, 19, 34, .58) !important;
+        border: 1px solid rgba(62,150,255,.28) !important;
         border-color: rgba(62,150,255,.28) !important;
         border-radius: 16px !important;
         padding: 10px 14px !important;
         margin-bottom: 12px !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
     div[data-testid="stDataFrame"] {
         background: rgba(7, 19, 34, .72) !important;
@@ -1838,6 +1881,8 @@ THEME_CSS = {
         --rg-surface-input: #e8f0f8;
         --rg-surface-hover: #d2e0ed;
         --rg-border: #b6c7da;
+        --primary-color: #2563eb;
+        --border-color: #b6c7da;
     }
     .stApp::before {
         content: "";
@@ -2141,7 +2186,7 @@ THEME_CSS = {
         font-size: 0.94rem !important;
         padding: 0.72rem 1.05rem 0.82rem !important;
     }
-    .status-ready {background:#ecfdf5; border:1px solid #34d399; padding:16px; border-radius:16px; color:#065f46 !important;}
+    .status-ready {background:#eff6ff; border:1px solid #93c5fd; padding:16px; border-radius:16px; color:#1e40af !important;}
     .status-review {background:#fffbeb; border:1px solid #fbbf24; padding:16px; border-radius:16px; color:#92400e !important;}
     .status-stop {background:#fef2f2; border:1px solid #f87171; padding:16px; border-radius:16px; color:#991b1b !important;}
     .live-submit-bar {

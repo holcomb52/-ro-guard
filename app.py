@@ -82,6 +82,7 @@ from theme_styles import (
     narrative_copy_button_css,
     review_collapsible_css,
     review_open_claims_strip_css,
+    streamlit_primary_override_css,
     vin_recall_alert_css,
 )
 from personnel_roles import (
@@ -2685,6 +2686,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += dealer_connect_panel_css(theme)
     css += narrative_copy_button_css(theme)
     css += review_collapsible_css(theme)
+    css += streamlit_primary_override_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
