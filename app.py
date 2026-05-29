@@ -3714,47 +3714,148 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
     }
 
 
-def _format_jobs_for_dealer_connect(jobs: list[dict]) -> str:
-    """Format concern / cause / correction for paste into Dealer Connect."""
-    blocks = []
-    multi = len(jobs) > 1
+def _dealer_connect_narrative_height(text: str, *, min_h: int = 72, max_h: int = 220) -> int:
+    lines = max(1, str(text or "").count("\n") + 1)
+    return min(max_h, min_h + max(0, lines - 1) * 20)
+
+
+def _dealer_connect_copy_button(text: str, *, label: str, element_id: str) -> None:
+    """One-click copy for a Dealer Connect narrative field (HTTPS + fallback)."""
+    if not str(text or "").strip():
+        return
+    payload = json.dumps(str(text))
+    safe_label = html.escape(label)
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
+    components.html(
+        f"""
+        <button id="{safe_id}" type="button" title="Copy {safe_label}"
+          style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(148,163,184,.45);
+          background:rgba(30,41,59,.55);color:#f8fafc;font-size:0.82rem;font-weight:600;cursor:pointer;">
+          Copy {safe_label}
+        </button>
+        <script>
+        (function() {{
+          const btn = document.getElementById("{safe_id}");
+          if (!btn) return;
+          const text = {payload};
+          const reset = () => {{
+            btn.textContent = "Copy {safe_label}";
+          }};
+          btn.addEventListener("click", function() {{
+            const copied = () => {{
+              btn.textContent = "Copied!";
+              setTimeout(reset, 1200);
+            }};
+            const fallback = () => {{
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.setAttribute("readonly", "");
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.select();
+              try {{
+                document.execCommand("copy");
+                copied();
+              }} catch (e) {{
+                btn.textContent = "Select box below";
+                setTimeout(reset, 1600);
+              }}
+              document.body.removeChild(ta);
+            }};
+            if (navigator.clipboard && navigator.clipboard.writeText) {{
+              navigator.clipboard.writeText(text).then(copied).catch(fallback);
+            }} else {{
+              fallback();
+            }}
+          }});
+        }})();
+        </script>
+        """,
+        height=42,
+    )
+
+
+def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
+    """Per-job concern / cause / correction boxes for Dealer Connect paste."""
+    exportable: list[dict] = []
     for job in jobs:
         concern = str(job.get("concern") or "").strip()
         cause = str(job.get("cause") or "").strip()
         correction = str(job.get("correction") or "").strip()
-        if not any((concern, cause, correction)):
-            continue
-        lines = []
-        if multi:
-            lines.append(f"Job {job.get('job_no', '')}")
-        if concern:
-            lines.append(f"Concern: {concern}")
-        if cause:
-            lines.append(f"Cause: {cause}")
-        if correction:
-            lines.append(f"Correction: {correction}")
-        blocks.append("\n".join(lines))
-    return "\n\n".join(blocks).strip()
-
-
-def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
-    """Selectable narratives box — reliable copy on Mac and Windows."""
-    clip = _format_jobs_for_dealer_connect(jobs)
-    if not clip:
+        if any((concern, cause, correction)):
+            exportable.append(
+                {
+                    "job_no": int(job.get("job_no") or len(exportable) + 1),
+                    "concern": concern,
+                    "cause": cause,
+                    "correction": correction,
+                }
+            )
+    if not exportable:
         st.caption("Add concern, cause, or correction above to export for Dealer Connect.")
         return
 
+    fv = st.session_state.form_version
+    multi = len(exportable) > 1
+    field_specs = (
+        ("concern", "Concern"),
+        ("cause", "Cause"),
+        ("correction", "Correction"),
+    )
+
     with st.expander("Dealer Connect narratives — select and copy", expanded=False):
         st.caption(
-            "Click the box below, press **⌘A** then **⌘C** (Mac) or **Ctrl+A** then **Ctrl+C** (Windows), "
-            "then paste into Dealer Connect."
+            "Use **Copy Concern / Cause / Correction** for one click, or click a box and press "
+            "**⌘A** then **⌘C** (Mac) / **Ctrl+A** then **Ctrl+C** (Windows)."
         )
-        st.text_area(
-            "Narratives for Dealer Connect",
-            value=clip,
-            height=min(260, 100 + clip.count("\n") * 20),
-            key=f"dc_narratives_select_{st.session_state.form_version}",
-        )
+        filter_cols = st.columns(3)
+        show_fields = {
+            "concern": filter_cols[0].checkbox(
+                "Copy Concern",
+                value=True,
+                key=f"dc_show_concern_{fv}",
+            ),
+            "cause": filter_cols[1].checkbox(
+                "Copy Cause",
+                value=True,
+                key=f"dc_show_cause_{fv}",
+            ),
+            "correction": filter_cols[2].checkbox(
+                "Copy Correction",
+                value=True,
+                key=f"dc_show_correction_{fv}",
+            ),
+        }
+
+        for job in exportable:
+            job_no = job["job_no"]
+            if multi:
+                st.markdown(f"**Job {job_no}**")
+            for field_key, field_label in field_specs:
+                if not show_fields.get(field_key):
+                    continue
+                text = str(job.get(field_key) or "").strip()
+                if not text:
+                    continue
+                head_col, copy_col = st.columns([5, 1.4])
+                with head_col:
+                    st.markdown(f"**{field_label}**")
+                with copy_col:
+                    _dealer_connect_copy_button(
+                        text,
+                        label=field_label,
+                        element_id=f"dc_copy_{field_key}_j{job_no}_fv{fv}",
+                    )
+                st.text_area(
+                    field_label,
+                    value=text,
+                    height=_dealer_connect_narrative_height(text),
+                    key=f"dc_{field_key}_j{job_no}_fv{fv}",
+                    label_visibility="collapsed",
+                )
+            if multi and job != exportable[-1]:
+                st.markdown("---")
 
 
 def compute_live_audit_summary(
