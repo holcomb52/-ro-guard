@@ -1391,18 +1391,11 @@ def _collapsible_section(
             anchor_classes.append(token)
     if anchor_class and anchor_class not in anchor_classes:
         anchor_classes.append(anchor_class)
-    if applicable_hint:
-        anchor_classes.append("dc-expander-applicable")
     st.markdown(
         f'<div class="{" ".join(anchor_classes)}" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
     with st.expander(label, expanded=expanded):
-        if applicable_hint:
-            st.markdown(
-                '<div class="review-collapsible-applicable" aria-hidden="true"></div>',
-                unsafe_allow_html=True,
-            )
         yield
 
 

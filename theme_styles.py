@@ -287,14 +287,6 @@ def expander_css(theme: str = "Dark") -> str:
         background-color: transparent !important;
         opacity: 1 !important;
     }}
-    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-applicable) + div[data-testid="stElementContainer"] details[data-testid="stExpander"]:not([open]) > summary {{
-        box-shadow: inset 3px 0 0 {"#16a34a" if is_light else "#3ecf8e"} !important;
-        background: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
-        background-color: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
-        background-image: none !important;
-        color: {text} !important;
-        -webkit-text-fill-color: {text} !important;
-    }}
     .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary,
     .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"][open] > summary,
     .stApp:has(.dealer-connect-workspace-marker) details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
@@ -718,13 +710,6 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         color: {code_text} !important;
         fill: {code_text} !important;
     }}
-    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable) > summary {{
-        box-shadow: inset 3px 0 0 #3ecf8e !important;
-    }}
-    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable):not([open]) > summary {{
-        background: rgba(62, 207, 142, 0.1) !important;
-        background-color: rgba(62, 207, 142, 0.1) !important;
-    }}
     """
 
 
@@ -734,8 +719,6 @@ def review_collapsible_css(theme: str = "Dark") -> str:
     panel_bg = "var(--rg-surface-card, #f4f8fc)" if is_light else "rgba(7, 19, 34, .92)"
     panel_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .22)"
     code_text = "#0f172a" if is_light else "#f8fbff"
-    highlight_bg = "rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"
-    accent_green = "#16a34a" if is_light else "#3ecf8e"
     scope = (
         'div[data-testid="stVerticalBlock"]:has(.review-job-coaching-marker), '
         'div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
@@ -785,13 +768,6 @@ def review_collapsible_css(theme: str = "Dark") -> str:
     {scope} details[data-testid="stExpander"]:has(.review-collapsible) summary svg {{
         color: {code_text} !important;
         fill: {code_text} !important;
-    }}
-    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable) > summary {{
-        box-shadow: inset 3px 0 0 {accent_green} !important;
-    }}
-    {scope} details[data-testid="stExpander"]:has(.review-collapsible-applicable):not([open]) > summary {{
-        background: {highlight_bg} !important;
-        background-color: {highlight_bg} !important;
     }}
     """
 
