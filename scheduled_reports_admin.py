@@ -47,7 +47,7 @@ def _current_person_name() -> str:
 def render_scheduled_reports_admin(supabase) -> None:
     st.header("Scheduled Reports")
     st.caption(
-        "Email the Reporting summary PDF on a daily, monthly, or yearly schedule. "
+        "Emails the **Reporting** and **ROI** summary PDFs on a daily, monthly, or yearly schedule. "
         "Requires REPORT_SMTP_* secrets and the GitHub Actions workflow (see docs/SCHEDULED_REPORTS.md)."
     )
 
@@ -158,7 +158,8 @@ def render_scheduled_reports_admin(supabase) -> None:
                                 )
                                 st.success(
                                     f"Test email sent to {', '.join(result['recipients'])} "
-                                    f"({result['review_count']} review(s) in {result['period_label']})."
+                                    f"with Reporting + ROI PDFs ({result['review_count']} review(s) in "
+                                    f"{result['period_label']})."
                                 )
                             except Exception as exc:
                                 st.error(format_smtp_send_error(exc, load_smtp_config()))

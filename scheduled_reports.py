@@ -12,12 +12,16 @@ from email.mime.text import MIMEText
 import pandas as pd
 
 from auth import is_valid_email, normalize_email
-from pdf_reports import build_review_report_pdf
+from pdf_reports import build_review_report_pdf, build_roi_report_pdf
 from personnel_roles import parse_personnel_roles
-from review_store import load_reviews, normalize_reviews_dataframe
+from review_store import compute_roi_metrics, load_reviews, normalize_reviews_dataframe
 
 SCHEDULE_FREQUENCIES = ("daily", "monthly", "yearly")
-REPORT_TYPES = ("reporting",)
+REPORT_TYPES = ("reporting", "roi")
+
+DEFAULT_ROI_REWORK_PCT = 0.40
+DEFAULT_ROI_MINUTES_SAVED = 15.0
+DEFAULT_ROI_HOURLY_RATE = 38.0
 
 FREQUENCY_LABELS = {
     "daily": "Daily",
@@ -244,12 +248,35 @@ def build_reporting_pdf_for_schedule(
     frequency: str,
     *,
     reference: date | None = None,
-) -> tuple[bytes, str, int]:
+) -> tuple[bytes, str, int, pd.DataFrame]:
     start, end, period_label = report_period_for_frequency(frequency, reference)
     df = normalize_reviews_dataframe(load_reviews(supabase))
     scoped = filter_reviews_for_period(df, start, end)
     pdf_bytes = build_review_report_pdf(scoped, period_label=period_label)
-    return pdf_bytes, period_label, len(scoped)
+    return pdf_bytes, period_label, len(scoped), scoped
+
+
+def build_roi_pdf_for_schedule(
+    scoped: pd.DataFrame,
+    *,
+    period_label: str,
+    rejection_rework_pct: float = DEFAULT_ROI_REWORK_PCT,
+    minutes_saved: float = DEFAULT_ROI_MINUTES_SAVED,
+    hourly_rate: float = DEFAULT_ROI_HOURLY_RATE,
+) -> bytes:
+    metrics = compute_roi_metrics(
+        scoped,
+        rejection_rework_pct=rejection_rework_pct,
+        minutes_saved_per_review=minutes_saved,
+        admin_hourly_rate=hourly_rate,
+    )
+    return build_roi_report_pdf(
+        metrics,
+        period_label=period_label,
+        rejection_rework_pct=rejection_rework_pct,
+        minutes_saved=minutes_saved,
+        hourly_rate=hourly_rate,
+    )
 
 
 def format_smtp_send_error(exc: Exception, config: dict | None = None) -> str:
@@ -273,13 +300,14 @@ def send_report_email(
     recipients: list[str],
     subject: str,
     body_text: str,
-    pdf_bytes: bytes,
-    filename: str,
+    attachments: list[tuple[bytes, str]],
     smtp_config: dict | None = None,
 ) -> None:
     recipients = parse_recipient_list(", ".join(recipients))
     if not recipients:
         raise ValueError("No valid recipient email addresses.")
+    if not attachments:
+        raise ValueError("No report attachments to send.")
     config = smtp_config or load_smtp_config()
     if not config:
         raise RuntimeError("Report SMTP is not configured.")
@@ -290,9 +318,10 @@ def send_report_email(
     message["To"] = ", ".join(recipients)
     message.attach(MIMEText(body_text, "plain"))
 
-    attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
-    attachment.add_header("Content-Disposition", "attachment", filename=filename)
-    message.attach(attachment)
+    for pdf_bytes, filename in attachments:
+        attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
+        attachment.add_header("Content-Disposition", "attachment", filename=filename)
+        message.attach(attachment)
 
     if config["use_tls"]:
         with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
@@ -325,25 +354,31 @@ def send_schedule_report(
     if not recipients:
         raise ValueError("Add at least one recipient email for this schedule.")
 
-    pdf_bytes, period_label, review_count = build_reporting_pdf_for_schedule(
+    pdf_bytes, period_label, review_count, scoped = build_reporting_pdf_for_schedule(
         supabase,
         frequency,
         reference=reference,
     )
+    roi_pdf = build_roi_pdf_for_schedule(scoped, period_label=period_label)
+    period_slug = period_label.replace(" — ", "_").replace(" ", "_")
+    attachments = [
+        (pdf_bytes, _safe_filename(f"Review_{period_slug}")),
+        (roi_pdf, _safe_filename(f"ROI_{period_slug}")),
+    ]
     subject = f"RO Shield — {period_label}"
     body = (
         f"{period_label}\n\n"
         f"Reviews in period: {review_count}\n"
-        f"The Reporting summary PDF is attached.\n\n"
+        f"Attached PDFs:\n"
+        f"- Reporting summary\n"
+        f"- ROI dashboard summary\n\n"
         "— RO Shield (automated report)\n"
     )
-    filename = _safe_filename(period_label.replace(" — ", "_").replace(" ", "_"))
     send_report_email(
         recipients=recipients,
         subject=subject,
         body_text=body,
-        pdf_bytes=pdf_bytes,
-        filename=filename,
+        attachments=attachments,
     )
 
     if record_send and supabase is not None:

@@ -1,6 +1,6 @@
 # Scheduled Reporting emails (Phase 1)
 
-Automatic **Reporting summary PDF** emails configured in **Admin → Scheduled Reports**.
+Automatic **Reporting** and **ROI** summary PDF emails configured in **Admin → Scheduled Reports**.
 
 ## One-time setup
 
