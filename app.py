@@ -60,6 +60,8 @@ from review_store import (
     save_bulletin as persist_bulletin,
     save_rejection_reason_library,
     find_review_id_for_update,
+    load_review_by_id,
+    parse_review_jobs,
     save_or_update_review as persist_save_or_update_review,
     save_smart_warranty_settings,
     smart_warranty_punch_exempt,
@@ -3749,6 +3751,147 @@ def _match_personnel_name(name: str, options: list) -> str:
     return None
 
 
+def _truthy_flag(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    try:
+        return int(float(value or 0)) != 0
+    except (TypeError, ValueError):
+        return bool(value)
+
+
+def _coerce_form_date(value) -> date:
+    if isinstance(value, date):
+        return value
+    if value is None or str(value).strip() in ("", "NaT", "None"):
+        return date.today()
+    try:
+        return pd.to_datetime(value).date()
+    except Exception:
+        return date.today()
+
+
+_JOB_CHECKBOX_FIELDS = (
+    ("oil_leak", "oil_leak"),
+    ("oil_dye_billed", "oil_dye"),
+    ("battery_replacement", "battery"),
+    ("battery_test_slip", "battery_slip"),
+    ("alignment_involved", "alignment"),
+    ("alignment_report_attached", "alignment_report"),
+    ("sublet_repair", "sublet"),
+    ("sublet_vin", "sublet_vin"),
+    ("sublet_mileage", "sublet_mileage"),
+    ("sublet_notes", "sublet_notes"),
+    ("rental_involved", "rental"),
+    ("manager_signed_rental", "rental_signed"),
+    ("warranty_add_on", "addon"),
+    ("manager_approval", "manager_approval"),
+    ("ac_repair", "ac"),
+    ("ac_evac_slip", "ac_slip"),
+    ("parts_warranty", "parts_warranty"),
+    ("mopa_original_ro", "mopa"),
+)
+
+
+def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
+    """Hydrate the Review form from a saved Supabase review row."""
+    fv = int(form_version)
+    jobs = parse_review_jobs(review)
+    st.session_state.job_count = max(len(jobs), 1)
+
+    st.session_state[f"ro_number_{fv}"] = str(review.get("ro_number") or "").strip()
+    st.session_state[f"vin_{fv}"] = str(review.get("vin") or "").strip()
+    st.session_state[f"ro_invoiced_{fv}"] = _coerce_form_date(review.get("ro_invoiced"))
+    st.session_state[f"day_submitted_{fv}"] = _coerce_form_date(review.get("day_submitted"))
+
+    for field, stash_key in (
+        ("advisor", "_loaded_review_advisor"),
+        ("technician", "_loaded_review_technician"),
+        ("warranty_admin", "_loaded_review_warranty_admin"),
+        ("manager", "_loaded_review_service_manager"),
+    ):
+        value = str(review.get(field) or "").strip()
+        if value:
+            st.session_state[stash_key] = value
+
+    st.session_state[f"first_pass_paid_{fv}"] = _truthy_flag(review.get("first_pass_paid"))
+    st.session_state[f"rejected_{fv}"] = _truthy_flag(review.get("rejected"))
+
+    rejection_reason = str(review.get("rejection_reason") or "").strip()
+    if rejection_reason:
+        primary, _, notes = rejection_reason.partition(" — ")
+        st.session_state[f"rejection_reason_select_{fv}"] = primary.strip()
+        if notes.strip():
+            st.session_state[f"rejection_reason_notes_{fv}"] = notes.strip()
+    else:
+        st.session_state[f"rejection_reason_select_{fv}"] = ""
+        st.session_state[f"rejection_reason_notes_{fv}"] = ""
+
+    st.session_state["time_bypass"] = _truthy_flag(review.get("time_bypass"))
+
+    for job_no in range(1, 11):
+        for _, dest in _JOB_CHECKBOX_FIELDS:
+            st.session_state[f"{dest}_{job_no}"] = False
+        st.session_state[f"tech_time_{job_no}"] = 0.0
+        st.session_state[f"allotted_{job_no}"] = 0.0
+        st.session_state[f"claim_value_{job_no}"] = 0.0
+        st.session_state[f"rental_days_{job_no}"] = 0
+        st.session_state[f"concern_{job_no}_{fv}"] = ""
+        st.session_state[f"cause_{job_no}_{fv}"] = ""
+        st.session_state[f"correction_{job_no}_{fv}"] = ""
+
+    for idx, job in enumerate(jobs, start=1):
+        st.session_state[f"concern_{idx}_{fv}"] = str(job.get("concern") or "")
+        st.session_state[f"cause_{idx}_{fv}"] = str(job.get("cause") or "")
+        st.session_state[f"correction_{idx}_{fv}"] = str(job.get("correction") or "")
+        st.session_state[f"tech_time_{idx}"] = float(job.get("tech_flagged_time") or 0)
+        st.session_state[f"allotted_{idx}"] = float(job.get("time_allotted") or 0)
+        st.session_state[f"claim_value_{idx}"] = float(job.get("claim_value") or 0)
+        st.session_state[f"rental_days_{idx}"] = int(float(job.get("rental_days") or 0))
+        for src, dest in _JOB_CHECKBOX_FIELDS:
+            st.session_state[f"{dest}_{idx}"] = _truthy_flag(job.get(src))
+
+
+def _open_review_for_editing(review_id: int) -> bool:
+    review = load_review_by_id(supabase, int(review_id))
+    if not review:
+        return False
+
+    st.session_state.form_version += 1
+    fv = st.session_state.form_version
+    st.session_state.pop(f"vin_recall_result_{fv}", None)
+    st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+    st.session_state.pop("ro_scan_summary", None)
+
+    _apply_saved_review_to_form(review, fv)
+    st.session_state[_active_review_id_key(fv)] = int(review_id)
+    st.session_state[_active_review_ro_key(fv)] = str(review.get("ro_number") or "").strip()
+    st.session_state[_active_review_vin_key(fv)] = str(review.get("vin") or "").strip()
+    st.session_state["loaded_review_ro"] = str(review.get("ro_number") or "").strip()
+    st.session_state["loaded_review_id"] = int(review_id)
+    return True
+
+
+def _pending_claims_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    work = df.copy()
+    work["first_pass_paid"] = pd.to_numeric(work.get("first_pass_paid", 0), errors="coerce").fillna(0).astype(int)
+    work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
+    pending = work[(work["first_pass_paid"] == 0) & (work["rejected"] == 0)].copy()
+    if pending.empty:
+        return pending
+
+    status_rank = {"🔴 DO NOT SUBMIT": 0, "🟡 NEEDS REVIEW": 1}
+    pending["status_rank"] = pending.get("status", "").astype(str).map(status_rank).fillna(2)
+    sort_cols = ["status_rank"]
+    if "created_at" in pending.columns:
+        pending["created_at"] = pd.to_datetime(pending["created_at"], errors="coerce")
+        sort_cols.append("created_at")
+    pending = pending.sort_values(sort_cols, ascending=[True, False][: len(sort_cols)])
+    return pending.drop(columns=["status_rank"], errors="ignore")
+
+
 def _apply_ro_scan_to_form(import_data: dict):
     fv = st.session_state.form_version
     jobs = import_data.get("jobs") or []
@@ -3926,7 +4069,102 @@ def _render_ro_scanner(theme: str | None = None):
 # SCREENS
 # =========================
 
+def render_pending_claims():
+    st.header("Pending Claims")
+    st.caption(
+        "Repair orders saved in RO Shield that have **not** been marked paid or rejected by the OEM yet. "
+        "Open one in **Review** to fix audit issues and update the saved record — no retyping required."
+    )
+
+    df = load_reviews()
+    if df.empty:
+        st.info("No saved reviews yet.")
+        return
+
+    pending = _pending_claims_dataframe(df)
+    if pending.empty:
+        st.success("No open claims — every saved review has a recorded OEM outcome.")
+        return
+
+    hard_stop_count = int(pending.get("status", pd.Series(dtype=str)).astype(str).str.contains("DO NOT SUBMIT", na=False).sum())
+    needs_review_count = int(pending.get("status", pd.Series(dtype=str)).astype(str).str.contains("NEEDS REVIEW", na=False).sum())
+
+    render_metric_rows([
+        [
+            ("Open Claims", f"{len(pending):,}"),
+            ("Do Not Submit", f"{hard_stop_count:,}"),
+            ("Needs Review", f"{needs_review_count:,}"),
+        ],
+    ])
+
+    loaded_ro = str(st.session_state.get("loaded_review_ro") or "").strip()
+    if loaded_ro:
+        st.success(
+            f"**RO {loaded_ro}** is loaded on the **Review** tab. "
+            "Fix the issues there, then click **Update Review + Re-run Audit**."
+        )
+        if st.button("Clear loaded RO notice", key="pending_clear_loaded_notice"):
+            st.session_state.pop("loaded_review_ro", None)
+            st.session_state.pop("loaded_review_id", None)
+            st.rerun()
+
+    table_view = pending.copy()
+    if "created_at" in table_view.columns:
+        table_view["created_at"] = pd.to_datetime(
+            table_view["created_at"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+    table_cols = [
+        c
+        for c in ("created_at", "ro_number", "advisor", "total_claim_value", "status", "score")
+        if c in table_view.columns
+    ]
+    st.dataframe(table_view[table_cols], use_container_width=True, hide_index=True)
+
+    if "id" not in pending.columns:
+        st.warning("Review IDs are missing — refresh after Supabase is up to date.")
+        return
+
+    option_rows = pending.to_dict("records")
+    option_ids = [int(row["id"]) for row in option_rows]
+    label_by_id = {int(row["id"]): _review_option_label(row) for row in option_rows}
+
+    selected_id = st.selectbox(
+        "Select claim to open",
+        options=option_ids,
+        format_func=lambda rid: label_by_id.get(int(rid), str(rid)),
+        key="pending_claims_review_id",
+    )
+    selected = next(row for row in option_rows if int(row["id"]) == int(selected_id))
+
+    info_cols = st.columns(4)
+    info_cols[0].metric("RO", str(selected.get("ro_number") or "—"))
+    info_cols[1].metric("Advisor", str(selected.get("advisor") or "—"))
+    info_cols[2].metric(
+        "Claim Value",
+        f"${float(selected.get('total_claim_value') or 0):,.2f}",
+    )
+    info_cols[3].metric("Audit Status", str(selected.get("status") or "—"))
+
+    st.caption(
+        f"OEM outcome: **{review_outcome_label(selected.get('first_pass_paid'), selected.get('rejected'))}** · "
+        f"{len(parse_review_jobs(selected))} job(s) on file"
+    )
+
+    if st.button("Open in Review for editing", type="primary", key="pending_open_in_review"):
+        if _open_review_for_editing(int(selected_id)):
+            st.rerun()
+        else:
+            st.error("Could not load that review. Try refreshing the page.")
+
+
 def render_review():
+    loaded_ro = str(st.session_state.get("loaded_review_ro") or "").strip()
+    if loaded_ro:
+        st.info(
+            f"Editing saved **RO {loaded_ro}**. Update the form below and click "
+            "**Update Review + Re-run Audit** when finished."
+        )
+
     _render_ro_scanner()
 
     _, next_col = st.columns([5, 1])
@@ -3945,6 +4183,8 @@ def render_review():
             st.session_state.pop("_ro_scan_advisor", None)
             st.session_state.pop("_ro_scan_technician", None)
             st.session_state.pop("ro_scan_summary", None)
+            st.session_state.pop("loaded_review_ro", None)
+            st.session_state.pop("loaded_review_id", None)
             st.rerun()
 
     if "job_count" not in st.session_state:
@@ -4001,7 +4241,7 @@ def render_review():
     with st.expander("Claim outcome (optional — update later in Reporting)", expanded=False):
         st.caption(
             "Record the Stellantis result when you know it. Leave both unchecked if the claim "
-            "is still pending — you can update outcomes anytime under **Reporting**."
+            "is still pending — update outcomes on **Pending Claims** or **Reporting**."
         )
         first_pass_paid = st.checkbox(
             "Paid on First Submission",
@@ -4051,6 +4291,11 @@ def render_review():
     matched_advisor = _match_personnel_name(scan_advisor, advisor_list) if scan_advisor else None
     if matched_advisor:
         st.session_state[f"advisor_{st.session_state.form_version}"] = matched_advisor
+    else:
+        loaded_advisor = st.session_state.pop("_loaded_review_advisor", None)
+        matched_advisor = _match_personnel_name(loaded_advisor, advisor_list) if loaded_advisor else None
+        if matched_advisor:
+            st.session_state[f"advisor_{st.session_state.form_version}"] = matched_advisor
 
     tech_list = review_personnel_names("Technician")
 
@@ -4058,8 +4303,17 @@ def render_review():
     matched_technician = _match_personnel_name(scan_technician, tech_list) if scan_technician else None
     if matched_technician:
         st.session_state[f"technician_{st.session_state.form_version}"] = matched_technician
+    else:
+        loaded_technician = st.session_state.pop("_loaded_review_technician", None)
+        matched_technician = _match_personnel_name(loaded_technician, tech_list) if loaded_technician else None
+        if matched_technician:
+            st.session_state[f"technician_{st.session_state.form_version}"] = matched_technician
 
     warranty_list = review_personnel_names("Warranty Admin")
+    loaded_warranty = st.session_state.pop("_loaded_review_warranty_admin", None)
+    matched_warranty = _match_personnel_name(loaded_warranty, warranty_list) if loaded_warranty else None
+    if matched_warranty:
+        st.session_state[f"warranty_admin_{st.session_state.form_version}"] = matched_warranty
 
     advisor = st.selectbox(
         "Advisor",
@@ -4081,12 +4335,17 @@ def render_review():
 
     sm_names = service_manager_names()
     if sm_names:
+        loaded_manager = st.session_state.pop("_loaded_review_service_manager", None)
+        matched_manager = _match_personnel_name(loaded_manager, sm_names) if loaded_manager else None
+        if matched_manager:
+            st.session_state[f"service_manager_{st.session_state.form_version}"] = matched_manager
         service_manager = st.selectbox(
             service_manager_selectbox_label(),
             sm_names,
             key=f"service_manager_{st.session_state.form_version}",
         )
     else:
+        st.session_state.pop("_loaded_review_service_manager", None)
         service_manager = ""
         st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
  
@@ -6729,6 +6988,7 @@ def main():
 
     tab_entries: list[tuple[str, callable]] = [
         ("Review", render_review),
+        ("Pending Claims", render_pending_claims),
         ("ROI Dashboard", render_roi_dashboard),
         ("Claim Learning", render_claims),
         ("Reporting", render_reporting),

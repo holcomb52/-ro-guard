@@ -216,6 +216,38 @@ def update_review_outcome(
     supabase.table("reviews").update(payload).eq("id", int(review_id)).execute()
 
 
+def parse_review_jobs(review: dict | None) -> list[dict]:
+    """Return job dicts from a review row."""
+    if not review:
+        return []
+    jobs = review.get("jobs")
+    if jobs is None:
+        return []
+    if isinstance(jobs, str):
+        try:
+            jobs = json.loads(jobs) if jobs.strip() else []
+        except json.JSONDecodeError:
+            return []
+    return list(jobs) if isinstance(jobs, list) else []
+
+
+def load_review_by_id(supabase, review_id: int) -> dict | None:
+    if supabase is None or not review_id:
+        return None
+    try:
+        response = (
+            supabase.table("reviews")
+            .select("*")
+            .eq("id", int(review_id))
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def load_reviews(supabase, limit: int = 5000) -> pd.DataFrame:
     if supabase is None:
         return pd.DataFrame()
