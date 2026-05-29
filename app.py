@@ -3892,7 +3892,8 @@ def _open_review_for_editing(review_id: int) -> bool:
     st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
     st.session_state.pop("ro_scan_summary", None)
 
-    _apply_saved_review_to_form(review, fv)
+    # Apply on the next run at the top of render_review — before job_count widgets exist.
+    st.session_state["_pending_review_load"] = review
     st.session_state[_active_review_id_key(fv)] = int(review_id)
     st.session_state[_active_review_ro_key(fv)] = str(review.get("ro_number") or "").strip()
     st.session_state[_active_review_vin_key(fv)] = str(review.get("vin") or "").strip()
@@ -4187,6 +4188,10 @@ def render_pending_claims():
 
 
 def render_review():
+    pending_review = st.session_state.pop("_pending_review_load", None)
+    if pending_review is not None:
+        _apply_saved_review_to_form(pending_review, st.session_state.form_version)
+
     loaded_ro = str(st.session_state.get("loaded_review_ro") or "").strip()
     if loaded_ro:
         st.info(
