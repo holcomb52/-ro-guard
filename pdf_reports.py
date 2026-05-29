@@ -28,7 +28,26 @@ def _safe_text(value) -> str:
     for old, new in replacements.items():
         text = text.replace(old, new)
     text = re.sub(r"[^\x00-\xFF]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    # fpdf2 cannot wrap tokens longer than the page width.
+    tokens: list[str] = []
+    for word in text.split():
+        while len(word) > 48:
+            tokens.append(word[:48])
+            word = word[48:]
+        if word:
+            tokens.append(word)
+    return " ".join(tokens)
+
+
+def _safe_multi_cell(pdf: FPDF, h: float, text: str, *, align: str = "L") -> None:
+    """Write wrapped text without tripping fpdf2 zero-width layout errors."""
+    cleaned = _safe_text(text)
+    if not cleaned:
+        return
+    pdf.set_x(pdf.l_margin)
+    width = max(float(pdf.epw), 10.0)
+    pdf.multi_cell(width, h, cleaned, align=align, new_x="LMARGIN", new_y="NEXT")
 
 
 class _ReportPDF(FPDF):
@@ -39,7 +58,7 @@ class _ReportPDF(FPDF):
     def header(self):
         self._draw_page_background()
         self._draw_watermark()
-        self.set_y(10)
+        self.set_xy(self.l_margin, 10)
         self.set_font("Helvetica", "I", 9)
         self.set_text_color(90, 90, 90)
         self.cell(0, 5, "Patent Pending", align="R", new_x="LMARGIN", new_y="NEXT")
@@ -72,29 +91,26 @@ def _ensure_left(pdf: FPDF):
 
 
 def _section_title(pdf: FPDF, title: str):
-    _ensure_left(pdf)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(20, 60, 110)
-    pdf.multi_cell(0, 6, _safe_text(title))
+    _safe_multi_cell(pdf, 6, title)
     pdf.ln(0.5)
 
 
 def _body_text(pdf: FPDF, text: str, size: int = 10):
-    _ensure_left(pdf)
     pdf.set_font("Helvetica", "", size)
     pdf.set_text_color(30, 30, 30)
-    pdf.multi_cell(0, 5, _safe_text(text))
+    _safe_multi_cell(pdf, 5, text)
     pdf.ln(1)
 
 
 def _bullet_list(pdf: FPDF, items: list):
-    _ensure_left(pdf)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(30, 30, 30)
     for item in items:
         text = finding_message(item)
         if text:
-            pdf.multi_cell(0, 5, f"- {_safe_text(text)}")
+            _safe_multi_cell(pdf, 5, f"- {text}")
     pdf.ln(1)
 
 
@@ -233,8 +249,7 @@ def _key_value_lines(pdf: FPDF, pairs: list[tuple[str, str]]):
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(30, 30, 30)
     for label, value in pairs:
-        _ensure_left(pdf)
-        pdf.multi_cell(0, 5, _safe_text(f"{label}: {value}"))
+        _safe_multi_cell(pdf, 5, f"{label}: {value}")
     pdf.ln(1)
 
 
@@ -340,17 +355,14 @@ def build_audit_report_pdf(data: dict) -> bytes:
     pdf.add_page()
 
     ro_number = _safe_text(data.get("ro_number") or "RO")
-    _ensure_left(pdf)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(10, 40, 80)
-    pdf.multi_cell(0, 8, "RO Shield Warranty Audit Report")
+    _safe_multi_cell(pdf, 8, "RO Shield Warranty Audit Report")
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(60, 60, 60)
-    _ensure_left(pdf)
-    pdf.multi_cell(0, 6, f"RO Number: {ro_number}")
-    _ensure_left(pdf)
-    pdf.multi_cell(
-        0,
+    _safe_multi_cell(pdf, 6, f"RO Number: {ro_number}")
+    _safe_multi_cell(
+        pdf,
         6,
         f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
     )
@@ -422,12 +434,17 @@ def build_audit_report_pdf(data: dict) -> bytes:
         if manual_sections:
             _section_title(pdf, "Applicable Warranty Manual Guidance")
             for sec in manual_sections:
-                _body_text(
-                    pdf,
-                    f"{sec.get('section', 'Manual')} ({sec.get('source', 'WAM')})",
-                    size=10,
-                )
-                _body_text(pdf, sec.get("snippet", ""), size=9)
+                try:
+                    _body_text(
+                        pdf,
+                        f"{sec.get('section', 'Manual')} ({sec.get('source', 'WAM')})",
+                        size=10,
+                    )
+                    snippet = str(sec.get("snippet") or "").strip()
+                    if snippet:
+                        _body_text(pdf, snippet[:4000], size=9)
+                except Exception:
+                    _body_text(pdf, "Manual guidance excerpt omitted (formatting issue).", size=9)
 
     return bytes(pdf.output())
 
