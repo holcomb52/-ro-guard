@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from auth import auth_user_email, current_person_roles
+from auth import auth_user_email
 from scheduled_reports import (
     FREQUENCY_HELP,
     FREQUENCY_LABELS,
@@ -22,8 +22,20 @@ from scheduled_reports import (
 ADMIN_WRITE_ROLES = ("Manager", "Warranty Admin", "Admin")
 
 
+def _current_person_roles() -> list[str]:
+    roles = st.session_state.get("current_person_roles") or []
+    if roles:
+        return [str(r) for r in roles]
+    legacy = str(st.session_state.get("current_person_role") or "").strip()
+    if not legacy:
+        return []
+    if " · " in legacy:
+        return [part.strip() for part in legacy.split(" · ") if part.strip()]
+    return [legacy]
+
+
 def _can_configure_schedules() -> bool:
-    return bool(set(current_person_roles()) & set(ADMIN_WRITE_ROLES))
+    return bool(set(_current_person_roles()) & set(ADMIN_WRITE_ROLES))
 
 
 def _current_person_name() -> str:
