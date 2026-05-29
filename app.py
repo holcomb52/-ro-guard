@@ -1380,10 +1380,20 @@ def _collapsible_section(
     applicable_hint: str | None = None,
     *,
     marker_class: str = "review-collapsible",
+    anchor_class: str = "",
     expanded: bool = False,
 ):
     """Collapsible review / Dealer Connect block with optional applicable-content marker."""
     label = _collapsible_section_label(title, applicable_hint)
+    anchor_classes = ["dc-expander-anchor"]
+    if anchor_class:
+        anchor_classes.append(anchor_class)
+    if applicable_hint:
+        anchor_classes.append("dc-expander-applicable")
+    st.markdown(
+        f'<div class="{" ".join(anchor_classes)}" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     with st.expander(label, expanded=expanded):
         st.markdown(
             f'<div class="{marker_class}" aria-hidden="true"></div>',
@@ -1506,11 +1516,8 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
         "Labor ops that paid — copy into Dealer Connect",
         hint,
         marker_class="dealer-connect-collapsible labor-ops-panel",
+        anchor_class="dc-anchor-labor-ops",
     ):
-        st.markdown(
-            '<div class="dealer-connect-panel labor-ops-panel"></div>',
-            unsafe_allow_html=True,
-        )
         _render_paid_labor_op_body(jobs)
 
 
@@ -1811,7 +1818,12 @@ def _render_narrative_gap_coach_body(current_job: dict, similar_claims: list, jo
 
 def render_narrative_gap_coach(current_job: dict, similar_claims: list, job_no: int):
     hint = _narrative_gap_coach_hint(current_job, similar_claims)
-    with _collapsible_section("Narrative Gap Coach", hint, marker_class="review-collapsible gap-coach-panel"):
+    with _collapsible_section(
+        "Narrative Gap Coach",
+        hint,
+        marker_class="review-collapsible gap-coach-panel",
+        anchor_class="dc-anchor-gap-coach",
+    ):
         _render_narrative_gap_coach_body(current_job, similar_claims, job_no)
 
 
@@ -1882,7 +1894,12 @@ def render_declined_claim_alert(current_job: dict, similar_declined: list) -> No
     hint = _declined_claim_hint(current_job, similar_declined)
     if not hint:
         return
-    with _collapsible_section("Declined Claim Alert", hint, marker_class="review-collapsible declined-alert-panel"):
+    with _collapsible_section(
+        "Declined Claim Alert",
+        hint,
+        marker_class="review-collapsible declined-alert-panel",
+        anchor_class="dc-anchor-declined-alert",
+    ):
         _render_declined_claim_alert_body(current_job, similar_declined)
 
 
@@ -3303,6 +3320,7 @@ def render_applicable_manual_sections(sections, key_prefix="manual"):
         "Applicable Manual & TSB Guidance",
         hint,
         marker_class="review-collapsible manual-tsb-panel",
+        anchor_class="dc-anchor-manual-tsb",
     ):
         _render_applicable_manual_sections_body(sections)
 CLAIM_COMPONENT_TERMS = [
@@ -4224,11 +4242,8 @@ def _render_dealer_connect_job_lines_export(
         "Job line details — copy into Dealer Connect",
         hint,
         marker_class="dealer-connect-collapsible job-lines-panel",
+        anchor_class="dc-anchor-job-lines",
     ):
-        st.markdown(
-            '<div class="dealer-connect-panel job-lines-panel"></div>',
-            unsafe_allow_html=True,
-        )
         _render_dealer_connect_job_lines_body(
             line_jobs=line_jobs,
             ro_clean=ro_clean,
@@ -5363,12 +5378,13 @@ def render_review():
         jobs.append(job)
 
     st.markdown("**Dealer Connect**")
-    st.markdown(
-        '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
-    )
-    _render_paid_labor_op_helper(jobs)
-    _render_dealer_connect_job_lines_export(jobs, ro_number=ro_number, vin=vin)
+    with st.container():
+        st.markdown(
+            '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        _render_paid_labor_op_helper(jobs)
+        _render_dealer_connect_job_lines_export(jobs, ro_number=ro_number, vin=vin)
 
     st.markdown("---")
 

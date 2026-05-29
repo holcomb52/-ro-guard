@@ -230,6 +230,48 @@ def expander_css(theme: str = "Dark") -> str:
         color: {icon} !important;
         fill: {icon} !important;
     }}
+    .dc-expander-anchor {{
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }}
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        border: 1px solid {border} !important;
+        border-color: {border} !important;
+        border-radius: 14px !important;
+        overflow: hidden;
+    }}
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {surface} !important;
+        background-color: {surface} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        opacity: 1 !important;
+    }}
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary *,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary p,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary span,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary div,
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"],
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-anchor) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"] p {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        opacity: 1 !important;
+    }}
+    .stApp div[data-testid="stElementContainer"]:has(.dc-expander-applicable) + div[data-testid="stElementContainer"] details[data-testid="stExpander"]:not([open]) > summary {{
+        box-shadow: inset 3px 0 0 {"#16a34a" if is_light else "#3ecf8e"} !important;
+        background: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
+        background-color: {"rgba(22, 163, 74, 0.12)" if is_light else "rgba(62, 207, 142, 0.1)"} !important;
+    }}
     """
 
 
@@ -531,6 +573,53 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
     }}
     {panel_wrap} div[data-testid="stTextArea"] label {{
         color: {code_text} !important;
+    }}
+    {scope} details[data-testid="stExpander"] {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border: 1px solid {panel_border} !important;
+        border-radius: 14px !important;
+        margin-bottom: 12px !important;
+        overflow: hidden;
+    }}
+    {scope} details[data-testid="stExpander"] > summary,
+    {scope} details[data-testid="stExpander"] > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        font-weight: 700 !important;
+        padding: 12px 14px !important;
+        border: none !important;
+        opacity: 1 !important;
+    }}
+    {scope} details[data-testid="stExpander"] > summary *,
+    {scope} details[data-testid="stExpander"] > summary p,
+    {scope} details[data-testid="stExpander"] > summary span,
+    {scope} details[data-testid="stExpander"] > summary div,
+    {scope} details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"],
+    {scope} details[data-testid="stExpander"] > summary div[data-testid="stMarkdownContainer"] p {{
+        color: {code_text} !important;
+        -webkit-text-fill-color: {code_text} !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        opacity: 1 !important;
+    }}
+    {scope} details[data-testid="stExpander"][open] > summary {{
+        border-radius: 14px 14px 0 0 !important;
+        border-bottom: 1px solid {panel_border} !important;
+    }}
+    {scope} details[data-testid="stExpander"] [data-testid="stExpanderDetails"],
+    {scope} details[data-testid="stExpander"] > div {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border-top: none !important;
+        padding: 0 14px 12px 14px !important;
+    }}
+    {scope} details[data-testid="stExpander"] [data-testid="stExpanderDetails"] div[data-testid="stMarkdownContainer"],
+    {scope} details[data-testid="stExpander"] [data-testid="stExpanderDetails"] div[data-testid="stVerticalBlock"] {{
+        background: transparent !important;
+        background-color: transparent !important;
     }}
     {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) {{
         background: {panel_bg} !important;
