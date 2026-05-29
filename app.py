@@ -3691,6 +3691,62 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
     }
 
 
+def _format_jobs_for_dealer_connect(jobs: list[dict]) -> str:
+    """Format concern / cause / correction for paste into Dealer Connect."""
+    blocks = []
+    multi = len(jobs) > 1
+    for job in jobs:
+        concern = str(job.get("concern") or "").strip()
+        cause = str(job.get("cause") or "").strip()
+        correction = str(job.get("correction") or "").strip()
+        if not any((concern, cause, correction)):
+            continue
+        lines = []
+        if multi:
+            lines.append(f"Job {job.get('job_no', '')}")
+        if concern:
+            lines.append(f"Concern: {concern}")
+        if cause:
+            lines.append(f"Cause: {cause}")
+        if correction:
+            lines.append(f"Correction: {correction}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks).strip()
+
+
+def _inject_clipboard_copy(text: str) -> None:
+    if not str(text or "").strip():
+        return
+    payload = json.dumps(text)
+    components.html(
+        f"""
+        <script>
+        (function () {{
+          const text = {payload};
+          const doc = window.parent.document;
+          if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(text).catch(function () {{}});
+            return;
+          }}
+          const ta = doc.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          doc.body.appendChild(ta);
+          ta.select();
+          try {{
+            doc.execCommand("copy");
+          }} catch (e) {{}}
+          doc.body.removeChild(ta);
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 def compute_live_audit_summary(
     form_version: int,
     job_count: int,
@@ -4556,6 +4612,9 @@ def render_review():
 
     _render_review_open_claims_strip()
 
+    if clip_text := st.session_state.pop("_pending_clipboard_copy", None):
+        _inject_clipboard_copy(clip_text)
+
     with st.expander(
         "Scan Repair Order & Invoice",
         expanded=bool(st.session_state.get("ro_scan_summary")),
@@ -4795,6 +4854,26 @@ def render_review():
             collapse_extras=False,
         )
         jobs.append(job)
+
+    copy_note_col, copy_btn_col = st.columns([3.2, 1.3], vertical_alignment="center")
+    with copy_note_col:
+        st.caption(
+            "Ready to submit? Copy formatted **Concern / Cause / Correction** text for paste into Dealer Connect."
+        )
+    with copy_btn_col:
+        if st.button(
+            "Copy for Dealer Connect",
+            key="copy_narratives_dealer_connect",
+            use_container_width=True,
+            help="Copy all job narratives to your clipboard.",
+        ):
+            clip = _format_jobs_for_dealer_connect(jobs)
+            if clip:
+                st.session_state["_pending_clipboard_copy"] = clip
+                st.toast("Narratives copied — paste into Dealer Connect.", icon="📋")
+                st.rerun()
+            else:
+                st.warning("Add concern, cause, or correction text first.")
 
     st.markdown("---")
 
