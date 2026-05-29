@@ -561,6 +561,14 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         border-top: none !important;
         padding: 0 14px 12px 14px !important;
     }}
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) [data-testid="stExpanderDetails"] textarea,
+    {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) textarea {{
+        background: {input_bg} !important;
+        background-color: {input_bg} !important;
+        color: {code_text} !important;
+        border: 1px solid {code_border} !important;
+        border-radius: 10px !important;
+    }}
     {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary *,
     {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary p,
     {scope} details[data-testid="stExpander"]:has(.dealer-connect-collapsible) summary span,

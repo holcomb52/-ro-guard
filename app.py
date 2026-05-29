@@ -4045,6 +4045,58 @@ def _render_dealer_connect_job_lines_export(
         )
 
 
+def _render_dealer_connect_narratives_body(exportable: list[dict], *, form_version: int) -> None:
+    fv = int(form_version)
+    multi = len(exportable) > 1
+    field_specs = (
+        ("concern", "Concern"),
+        ("cause", "Cause"),
+        ("correction", "Correction"),
+    )
+
+    st.caption(
+        "Click a box, press **⌘A** then **⌘C** (Mac) or **Ctrl+A** then **Ctrl+C** (Windows), "
+        "then paste into Dealer Connect."
+    )
+    filter_cols = st.columns(3)
+    show_fields = {
+        "concern": filter_cols[0].checkbox(
+            "Copy Concern",
+            value=True,
+            key=f"dc_show_concern_{fv}",
+        ),
+        "cause": filter_cols[1].checkbox(
+            "Copy Cause",
+            value=True,
+            key=f"dc_show_cause_{fv}",
+        ),
+        "correction": filter_cols[2].checkbox(
+            "Copy Correction",
+            value=True,
+            key=f"dc_show_correction_{fv}",
+        ),
+    }
+
+    for job in exportable:
+        job_no = job["job_no"]
+        if multi:
+            st.markdown(f"**Job {job_no}**")
+        for field_key, field_label in field_specs:
+            if not show_fields.get(field_key):
+                continue
+            text = str(job.get(field_key) or "").strip()
+            if not text:
+                continue
+            st.markdown(f"**{field_label}**")
+            st.text_area(
+                field_label,
+                value=text,
+                height=_dealer_connect_narrative_height(text),
+                key=f"dc_{field_key}_j{job_no}_fv{fv}",
+                label_visibility="collapsed",
+            )
+
+
 def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
     """Per-job concern / cause / correction boxes for Dealer Connect paste."""
     exportable: list[dict] = []
@@ -4066,58 +4118,12 @@ def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
         return
 
     fv = st.session_state.form_version
-    multi = len(exportable) > 1
-    field_specs = (
-        ("concern", "Concern"),
-        ("cause", "Cause"),
-        ("correction", "Correction"),
-    )
-
-    with _dealer_connect_section(
-        "Dealer Connect narratives — select and copy",
-        "narratives-panel",
-    ):
-        st.caption(
-            "Click a box, press **⌘A** then **⌘C** (Mac) or **Ctrl+A** then **Ctrl+C** (Windows), "
-            "then paste into Dealer Connect."
+    with st.expander("Dealer Connect narratives — select and copy", expanded=False):
+        st.markdown(
+            '<div class="dealer-connect-panel narratives-panel dealer-connect-collapsible"></div>',
+            unsafe_allow_html=True,
         )
-        filter_cols = st.columns(3)
-        show_fields = {
-            "concern": filter_cols[0].checkbox(
-                "Copy Concern",
-                value=True,
-                key=f"dc_show_concern_{fv}",
-            ),
-            "cause": filter_cols[1].checkbox(
-                "Copy Cause",
-                value=True,
-                key=f"dc_show_cause_{fv}",
-            ),
-            "correction": filter_cols[2].checkbox(
-                "Copy Correction",
-                value=True,
-                key=f"dc_show_correction_{fv}",
-            ),
-        }
-
-        for job in exportable:
-            job_no = job["job_no"]
-            if multi:
-                st.markdown(f"**Job {job_no}**")
-            for field_key, field_label in field_specs:
-                if not show_fields.get(field_key):
-                    continue
-                text = str(job.get(field_key) or "").strip()
-                if not text:
-                    continue
-                st.markdown(f"**{field_label}**")
-                st.text_area(
-                    field_label,
-                    value=text,
-                    height=_dealer_connect_narrative_height(text),
-                    key=f"dc_{field_key}_j{job_no}_fv{fv}",
-                    label_visibility="collapsed",
-                )
+        _render_dealer_connect_narratives_body(exportable, form_version=fv)
 
 
 def compute_live_audit_summary(
