@@ -422,6 +422,124 @@ def vin_recall_alert_css(theme: str = "Dark") -> str:
     """
 
 
+def dealer_connect_panel_css(theme: str = "Dark") -> str:
+    """Dealer Connect panels — dark bordered sections, code blocks, and notes (no expander white boxes)."""
+    is_light = str(theme).lower() == "light"
+    if is_light:
+        code_bg = "var(--rg-surface-input, #e8f0f8)"
+        code_border = "var(--rg-border, #b6c7da)"
+        code_text = "#0f172a"
+        label_muted = "#475569"
+        panel_bg = "var(--rg-surface, #dde8f2)"
+        panel_border = "var(--rg-border, #b6c7da)"
+        info_bg = "rgba(219, 234, 254, 0.95)"
+        info_border = "#93c5fd"
+        warn_bg = "rgba(254, 243, 199, 0.95)"
+        warn_border = "#f59e0b"
+        warn_text = "#92400e"
+        input_bg = "#e8f0f8"
+    else:
+        code_bg = "rgba(7, 19, 34, .92)"
+        code_border = "rgba(62, 150, 255, .28)"
+        code_text = "#f8fbff"
+        label_muted = "#cbd5e1"
+        panel_bg = "rgba(7, 19, 34, .92)"
+        panel_border = "rgba(62, 150, 255, .28)"
+        info_bg = "rgba(15, 40, 70, 0.62)"
+        info_border = "rgba(62, 150, 255, .35)"
+        warn_bg = "rgba(120, 53, 15, 0.48)"
+        warn_border = "#f59e0b"
+        warn_text = "#fcd34d"
+        input_bg = "rgba(7, 19, 34, .86)"
+
+    scope = 'div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
+    panel_wrap = f'{scope} div[data-testid="stVerticalBlockBorderWrapper"]:has(.dealer-connect-panel)'
+    job_wrap = f'{scope} div[data-testid="stVerticalBlockBorderWrapper"]:has(.dealer-connect-job-line)'
+    job_bg = "rgba(7, 19, 34, .72)" if not is_light else "var(--rg-surface-hover, #d2e0ed)"
+    return f"""
+    {scope} .dealer-connect-section-title {{
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: {code_text} !important;
+        margin: 16px 0 8px 0 !important;
+        line-height: 1.3;
+    }}
+    {panel_wrap} {{
+        background: {panel_bg} !important;
+        background-color: {panel_bg} !important;
+        border-color: {panel_border} !important;
+        border-radius: 14px !important;
+        margin-bottom: 12px !important;
+        padding: 12px 14px !important;
+    }}
+    {panel_wrap} > div {{
+        background: transparent !important;
+        background-color: transparent !important;
+    }}
+    {job_wrap} {{
+        background: {job_bg} !important;
+        background-color: {job_bg} !important;
+        border-color: {panel_border} !important;
+        border-radius: 12px !important;
+        margin-bottom: 10px !important;
+    }}
+    {scope} .dc-note-info {{
+        margin: 8px 0 10px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: {info_bg};
+        border: 1px solid {info_border};
+        color: {code_text} !important;
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }}
+    {scope} .dc-note-warn {{
+        margin: 8px 0 10px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: {warn_bg};
+        border: 1px solid {warn_border};
+        color: {warn_text} !important;
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }}
+    {scope} [data-testid="stCodeBlock"] {{
+        margin: 0 0 10px 0 !important;
+        background: transparent !important;
+    }}
+    {scope} [data-testid="stCodeBlock"] pre {{
+        background: {code_bg} !important;
+        background-color: {code_bg} !important;
+        border: 1px solid {code_border} !important;
+        border-radius: 10px !important;
+        color: {code_text} !important;
+        padding: 10px 12px !important;
+        margin: 0 !important;
+        font-size: 0.92rem !important;
+        line-height: 1.45 !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+    }}
+    {scope} [data-testid="stCodeBlock"] code {{
+        color: {code_text} !important;
+        background: transparent !important;
+    }}
+    {scope} div[data-testid="stCaptionContainer"] p {{
+        color: {label_muted} !important;
+    }}
+    {panel_wrap} textarea {{
+        background: {input_bg} !important;
+        background-color: {input_bg} !important;
+        color: {code_text} !important;
+        border: 1px solid {code_border} !important;
+        border-radius: 10px !important;
+    }}
+    {panel_wrap} div[data-testid="stTextArea"] label {{
+        color: {code_text} !important;
+    }}
+    """
+
+
 def claim_learning_css(theme: str = "Dark") -> str:
     """Green Paid / red Declined tabs and panel banners on Claim Learning."""
     is_light = str(theme).lower() == "light"

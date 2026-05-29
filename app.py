@@ -4,6 +4,7 @@ import html
 import json
 import os
 import re
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
@@ -77,6 +78,7 @@ from theme_styles import (
     metric_display_css,
     multiselect_css,
     pricing_page_css,
+    dealer_connect_panel_css,
     review_open_claims_strip_css,
     vin_recall_alert_css,
 )
@@ -1355,9 +1357,31 @@ def _collect_paid_labor_op_suggestions(
     return ranked[:max_ops], similar
 
 
+@contextmanager
+def _dealer_connect_section(title: str, panel_class: str):
+    """Bordered Dealer Connect panel — avoids expander white boxes in dark theme."""
+    st.markdown(
+        f'<div class="dealer-connect-section-title">{html.escape(title)}</div>',
+        unsafe_allow_html=True,
+    )
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="dealer-connect-panel {panel_class}"></div>',
+            unsafe_allow_html=True,
+        )
+        yield
+
+
+def _dc_note_info(message: str) -> None:
+    st.markdown(f'<div class="dc-note-info">{message}</div>', unsafe_allow_html=True)
+
+
+def _dc_note_warn(message: str) -> None:
+    st.markdown(f'<div class="dc-note-warn">{message}</div>', unsafe_allow_html=True)
+
+
 def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
     """Surface labor ops from similar paid claims for Dealer Connect entry."""
-    fv = st.session_state.form_version
     eligible_jobs: list[dict] = []
     for job in jobs:
         narrative = claim_source_text(
@@ -1368,13 +1392,18 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
         if len(narrative.strip()) >= 20:
             eligible_jobs.append(job)
 
-    with st.expander("Labor ops that paid — copy into Dealer Connect", expanded=True):
+    with _dealer_connect_section(
+        "Labor ops that paid — copy into Dealer Connect",
+        "labor-ops-panel",
+    ):
         st.caption(
-            "Labor operations from similar **paid claims** in your library — start here before "
-            "searching OEM labor catalogs."
+            "Labor operations from similar **paid claims** in your library. "
+            "Use the **copy icon** on each op code before searching OEM labor catalogs."
         )
         if not eligible_jobs:
-            st.info("Enter concern, cause, or correction above to suggest labor ops from paid claims.")
+            _dc_note_info(
+                "Enter concern, cause, or correction above to suggest labor ops from paid claims."
+            )
             return
 
         multi = len(eligible_jobs) > 1
@@ -1387,23 +1416,19 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
                 st.markdown(f"**Job {job_no}**")
 
             if not similar:
-                st.info(
+                _dc_note_info(
                     "No similar paid claims yet. Upload paid warranty PDFs on **Claim Learning** "
                     "to build your labor op library."
                 )
-                if multi and job != eligible_jobs[-1]:
-                    st.markdown("---")
                 continue
 
             if not suggestions:
                 best = enrich_paid_claim_match(similar[0])
-                st.warning(
+                _dc_note_warn(
                     f"Similar paid claim **{best.get('ro_number', 'on file')}** "
                     f"({similar[0].get('score', 0)}% match) has no labor ops parsed. "
                     "Re-upload paid Dealer Connect PDFs that include labor operation lines."
                 )
-                if multi and job != eligible_jobs[-1]:
-                    st.markdown("---")
                 continue
 
             found_any = True
@@ -1425,25 +1450,15 @@ def _render_paid_labor_op_helper(jobs: list[dict]) -> None:
                 elif suggestion.get("best_ro"):
                     detail_parts.append(f"paid RO **{suggestion['best_ro']}**")
 
-                label_col, copy_col = st.columns([5, 1.4])
-                with label_col:
-                    st.markdown(
-                        f"**{op_code}**"
-                        + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
-                    )
-                with copy_col:
-                    _dealer_connect_copy_button(
-                        op_code,
-                        label=op_code,
-                        element_id=f"lop_copy_j{job_no}_{op_code}_{fv}_{idx}",
-                    )
+                st.markdown(
+                    f"**{op_code}**"
+                    + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
+                )
+                st.code(op_code, language=None)
 
             if len(similar) > 1:
                 others = len(similar) - 1
                 st.caption(f"+ {others} more similar paid claim(s) checked for labor ops.")
-
-            if multi and job != eligible_jobs[-1]:
-                st.markdown("---")
 
         if not found_any and len(eligible_jobs) == 1:
             pass
@@ -2484,6 +2499,7 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += review_open_claims_strip_css(theme)
     css += expander_css(theme)
     css += vin_recall_alert_css(theme)
+    css += dealer_connect_panel_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -3912,24 +3928,13 @@ def _format_dc_copy_number(value: float | int | str) -> str:
     return f"{number:.2f}".rstrip("0").rstrip(".")
 
 
-def _render_dealer_connect_copy_row(
-    *,
-    label: str,
-    value: str,
-    element_id: str,
-) -> None:
+def _render_dealer_connect_copy_field(*, label: str, value: str) -> None:
+    """Label + native Streamlit code block (built-in copy icon, no iframe)."""
     text = str(value or "").strip()
     if not text:
         return
-    head_col, copy_col = st.columns([5, 1.4])
-    with head_col:
-        st.markdown(f"**{label}** · `{text}`")
-    with copy_col:
-        _dealer_connect_copy_button(
-            text,
-            label=label,
-            element_id=element_id,
-        )
+    st.markdown(f"**{label}**")
+    st.code(text, language=None)
 
 
 def _render_dealer_connect_job_lines_export(
@@ -3939,7 +3944,6 @@ def _render_dealer_connect_job_lines_export(
     vin: str,
 ) -> None:
     """Per-job labor op, times, and claim value from invoice / RO scan."""
-    fv = st.session_state.form_version
     ro_clean = str(ro_number or "").strip()
     vin_clean = str(vin or "").strip()
 
@@ -3967,32 +3971,27 @@ def _render_dealer_connect_job_lines_export(
         )
         return
 
-    with st.expander("Job line details — copy into Dealer Connect", expanded=True):
+    with _dealer_connect_section(
+        "Job line details — copy into Dealer Connect",
+        "job-lines-panel",
+    ):
         st.caption(
-            "Labor operation, times, and claim value from the scanned invoice / RO — paste into the "
-            "matching Dealer Connect job line."
+            "Labor operation, times, and claim value from the scanned invoice / RO. "
+            "Use the **copy icon** on each block, then paste into the matching Dealer Connect job line."
         )
         if ro_clean or vin_clean:
-            header_cols = st.columns(2)
+            header_cols = st.columns(2, gap="medium")
             with header_cols[0]:
                 if ro_clean:
-                    _render_dealer_connect_copy_row(
-                        label="RO",
-                        value=ro_clean,
-                        element_id=f"dc_ro_{fv}",
-                    )
+                    _render_dealer_connect_copy_field(label="RO", value=ro_clean)
             with header_cols[1]:
                 if vin_clean:
-                    _render_dealer_connect_copy_row(
-                        label="VIN",
-                        value=vin_clean,
-                        element_id=f"dc_vin_{fv}",
-                    )
+                    _render_dealer_connect_copy_field(label="VIN", value=vin_clean)
             if line_jobs:
-                st.markdown("---")
+                st.markdown("")
 
         if not line_jobs:
-            st.info(
+            _dc_note_info(
                 "No labor operation or times imported yet. Upload the **Final Invoice** on the scan panel "
                 "and click **Scan & Fill Form**."
             )
@@ -4001,93 +4000,34 @@ def _render_dealer_connect_job_lines_export(
         multi = len(line_jobs) > 1
         for job in line_jobs:
             job_no = job["job_no"]
-            if multi:
-                st.markdown(f"**Job {job_no}**")
-
-            if job.get("operation_code"):
-                _render_dealer_connect_copy_row(
-                    label="Labor operation",
-                    value=str(job["operation_code"]),
-                    element_id=f"dc_op_j{job_no}_fv{fv}",
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="dealer-connect-job-line"></div>',
+                    unsafe_allow_html=True,
                 )
-            if float(job.get("tech_flagged_time") or 0) > 0:
-                _render_dealer_connect_copy_row(
-                    label="Tech flagged time",
-                    value=_format_dc_copy_number(job["tech_flagged_time"]),
-                    element_id=f"dc_tech_j{job_no}_fv{fv}",
-                )
-            if float(job.get("time_allotted") or 0) > 0:
-                _render_dealer_connect_copy_row(
-                    label="Time allotted",
-                    value=_format_dc_copy_number(job["time_allotted"]),
-                    element_id=f"dc_allotted_j{job_no}_fv{fv}",
-                )
-            if float(job.get("claim_value") or 0) > 0:
-                _render_dealer_connect_copy_row(
-                    label="Claim value",
-                    value=_format_dc_copy_number(job["claim_value"]),
-                    element_id=f"dc_claim_j{job_no}_fv{fv}",
-                )
+                if multi:
+                    st.markdown(f"**Job {job_no}**")
 
-            if multi and job != line_jobs[-1]:
-                st.markdown("---")
-
-
-def _dealer_connect_copy_button(text: str, *, label: str, element_id: str) -> None:
-    """One-click copy for a Dealer Connect narrative field (HTTPS + fallback)."""
-    if not str(text or "").strip():
-        return
-    payload = json.dumps(str(text))
-    safe_label = html.escape(label)
-    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
-    components.html(
-        f"""
-        <button id="{safe_id}" type="button" title="Copy {safe_label}"
-          style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid rgba(148,163,184,.45);
-          background:rgba(30,41,59,.55);color:#f8fafc;font-size:0.82rem;font-weight:600;cursor:pointer;">
-          Copy {safe_label}
-        </button>
-        <script>
-        (function() {{
-          const btn = document.getElementById("{safe_id}");
-          if (!btn) return;
-          const text = {payload};
-          const reset = () => {{
-            btn.textContent = "Copy {safe_label}";
-          }};
-          btn.addEventListener("click", function() {{
-            const copied = () => {{
-              btn.textContent = "Copied!";
-              setTimeout(reset, 1200);
-            }};
-            const fallback = () => {{
-              const ta = document.createElement("textarea");
-              ta.value = text;
-              ta.setAttribute("readonly", "");
-              ta.style.position = "fixed";
-              ta.style.left = "-9999px";
-              document.body.appendChild(ta);
-              ta.select();
-              try {{
-                document.execCommand("copy");
-                copied();
-              }} catch (e) {{
-                btn.textContent = "Select box below";
-                setTimeout(reset, 1600);
-              }}
-              document.body.removeChild(ta);
-            }};
-            if (navigator.clipboard && navigator.clipboard.writeText) {{
-              navigator.clipboard.writeText(text).then(copied).catch(fallback);
-            }} else {{
-              fallback();
-            }}
-          }});
-        }})();
-        </script>
-        """,
-        height=42,
-    )
+                if job.get("operation_code"):
+                    _render_dealer_connect_copy_field(
+                        label="Labor operation",
+                        value=str(job["operation_code"]),
+                    )
+                if float(job.get("tech_flagged_time") or 0) > 0:
+                    _render_dealer_connect_copy_field(
+                        label="Tech flagged time",
+                        value=_format_dc_copy_number(job["tech_flagged_time"]),
+                    )
+                if float(job.get("time_allotted") or 0) > 0:
+                    _render_dealer_connect_copy_field(
+                        label="Time allotted",
+                        value=_format_dc_copy_number(job["time_allotted"]),
+                    )
+                if float(job.get("claim_value") or 0) > 0:
+                    _render_dealer_connect_copy_field(
+                        label="Claim value",
+                        value=_format_dc_copy_number(job["claim_value"]),
+                    )
 
 
 def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
@@ -4118,10 +4058,13 @@ def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
         ("correction", "Correction"),
     )
 
-    with st.expander("Dealer Connect narratives — select and copy", expanded=False):
+    with _dealer_connect_section(
+        "Dealer Connect narratives — select and copy",
+        "narratives-panel",
+    ):
         st.caption(
-            "Use **Copy Concern / Cause / Correction** for one click, or click a box and press "
-            "**⌘A** then **⌘C** (Mac) / **Ctrl+A** then **Ctrl+C** (Windows)."
+            "Click a box, press **⌘A** then **⌘C** (Mac) or **Ctrl+A** then **Ctrl+C** (Windows), "
+            "then paste into Dealer Connect."
         )
         filter_cols = st.columns(3)
         show_fields = {
@@ -4152,15 +4095,7 @@ def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
                 text = str(job.get(field_key) or "").strip()
                 if not text:
                     continue
-                head_col, copy_col = st.columns([5, 1.4])
-                with head_col:
-                    st.markdown(f"**{field_label}**")
-                with copy_col:
-                    _dealer_connect_copy_button(
-                        text,
-                        label=field_label,
-                        element_id=f"dc_copy_{field_key}_j{job_no}_fv{fv}",
-                    )
+                st.markdown(f"**{field_label}**")
                 st.text_area(
                     field_label,
                     value=text,
@@ -4168,8 +4103,6 @@ def _render_dealer_connect_narratives_export(jobs: list[dict]) -> None:
                     key=f"dc_{field_key}_j{job_no}_fv{fv}",
                     label_visibility="collapsed",
                 )
-            if multi and job != exportable[-1]:
-                st.markdown("---")
 
 
 def compute_live_audit_summary(
@@ -5295,6 +5228,10 @@ def render_review():
         jobs.append(job)
 
     st.markdown("**Dealer Connect**")
+    st.markdown(
+        '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     _render_paid_labor_op_helper(jobs)
     _render_dealer_connect_job_lines_export(jobs, ro_number=ro_number, vin=vin)
     _render_dealer_connect_narratives_export(jobs)
