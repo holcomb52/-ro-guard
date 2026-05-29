@@ -793,6 +793,21 @@ THEME_CSS = {
         border: none;
         box-shadow: none;
     }
+    div[data-testid="column"]:has(.app-top-refresh-slot) {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+    }
+    div[data-testid="column"]:has(.app-top-refresh-slot) div.stButton {
+        margin-top: 0.35rem;
+        width: 100%;
+    }
+    div[data-testid="column"]:has(.app-top-refresh-slot) div.stButton > button {
+        min-height: 2.35rem !important;
+        font-size: 0.82rem !important;
+        padding: 0.35rem 0.55rem !important;
+        white-space: nowrap;
+    }
     .review-scan-hero {
         margin-bottom: 8px;
         border-radius: 16px;

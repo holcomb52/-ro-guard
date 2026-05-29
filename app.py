@@ -36,6 +36,7 @@ from auth import (
     render_sidebar_brand,
     restore_client_session,
     sync_personnel_identity,
+    trigger_soft_refresh,
 )
 from review_store import (
     AUDIT_RULE_LABELS,
@@ -4003,20 +4004,34 @@ def _inline_text_color(color: str) -> str:
     return f' style="color: {color} !important; -webkit-text-fill-color: {color} !important;"'
 
 
-def _render_app_workspace_header(theme: str = "Dark") -> None:
+def _render_app_workspace_header(theme: str = "Dark", *, supabase_client=None) -> None:
+    if st.session_state.pop("_soft_refresh_notice", False):
+        st.toast("App refreshed — you are still signed in.", icon="✅")
+
     key = "Light" if str(theme).lower() == "light" else "Dark"
     c = BRAND_TEXT[key]
-    st.markdown(
-        f"""
+    header_col, refresh_col = st.columns([5.75, 0.75], vertical_alignment="top")
+    with header_col:
+        st.markdown(
+            f"""
 <div class="app-workspace-header">
 <div class="app-workspace-kicker"{_inline_text_color(c["workspace_kicker"])}>RO Guard · Warranty Workspace</div>
 <h2{_inline_text_color(c["workspace_h2"])}>Smarter Claims. <span{_inline_text_color(c["workspace_h2"])}>Stronger Profits.</span></h2>
 <p{_inline_text_color(c["workspace_body"])}>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
 <div class="app-workspace-accent"{_inline_text_color(c["workspace_accent"])}>Control the Claim · Protect the Profit</div>
 </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+    with refresh_col:
+        st.markdown('<div class="app-top-refresh-slot"></div>', unsafe_allow_html=True)
+        if st.button(
+            "Refresh",
+            key="app_soft_refresh_btn",
+            help="Reload app data without signing out (unlike the browser refresh button).",
+            use_container_width=True,
+        ):
+            trigger_soft_refresh(supabase_client)
 
 
 def _render_ro_scanner(theme: str | None = None):
@@ -7098,7 +7113,7 @@ def main():
     display_prefs = render_display_settings_sidebar(supabase, theme=appearance)
     apply_style(appearance, display_prefs)
 
-    _render_app_workspace_header(appearance)
+    _render_app_workspace_header(appearance, supabase_client=supabase)
 
     tab_entries: list[tuple[str, callable]] = [
         ("Review", render_review),

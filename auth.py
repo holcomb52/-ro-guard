@@ -122,6 +122,47 @@ def clear_auth_session() -> None:
         st.session_state.pop(key, None)
 
 
+_SOFT_REFRESH_PRESERVE_KEYS = frozenset({
+    AUTH_SESSION_KEY,
+    AUTH_USER_KEY,
+    "appearance",
+    "appearance_select",
+    "_display_theme",
+    "current_person_id",
+    "current_person_name",
+    "current_person_role",
+    "current_person_roles",
+    "user_display_prefs",
+    "_display_prefs_theme",
+    "user_display_font_family",
+    "user_display_font_color",
+    "user_display_font_size",
+})
+
+
+def trigger_soft_refresh(supabase) -> None:
+    """Reload app data and UI state without clearing the Supabase login session."""
+    preserved = {
+        key: st.session_state.get(key)
+        for key in list(st.session_state.keys())
+        if key in _SOFT_REFRESH_PRESERVE_KEYS
+    }
+
+    st.cache_data.clear()
+
+    for key in list(st.session_state.keys()):
+        if key not in preserved:
+            del st.session_state[key]
+
+    for key, value in preserved.items():
+        st.session_state[key] = value
+
+    st.session_state["_soft_refresh_notice"] = True
+    apply_session_to_client(supabase, get_stored_session())
+    sync_personnel_identity(supabase)
+    st.rerun()
+
+
 def apply_session_to_client(supabase, session_dict: dict | None) -> None:
     if supabase is None or not session_dict:
         return
