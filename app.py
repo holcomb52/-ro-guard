@@ -35,8 +35,9 @@ from auth import (
     render_password_reset_page,
     render_sidebar_brand,
     restore_client_session,
+    request_soft_refresh,
+    run_soft_refresh_if_requested,
     sync_personnel_identity,
-    trigger_soft_refresh,
 )
 from review_store import (
     AUDIT_RULE_LABELS,
@@ -4194,7 +4195,8 @@ def _render_app_workspace_header(theme: str = "Dark", *, supabase_client=None) -
             help="Reload app data without signing out (unlike the browser refresh button).",
             use_container_width=True,
         ):
-            trigger_soft_refresh(supabase_client)
+            request_soft_refresh()
+            st.rerun()
 
 
 def _render_ro_scanner(theme: str | None = None):
@@ -7263,6 +7265,7 @@ def main():
         st.stop()
 
     sync_personnel_identity(supabase)
+    run_soft_refresh_if_requested(supabase)
     configure_streamlit_toolbar()
 
     render_sidebar_brand()

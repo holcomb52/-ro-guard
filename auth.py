@@ -126,7 +126,6 @@ _SOFT_REFRESH_PRESERVE_KEYS = frozenset({
     AUTH_SESSION_KEY,
     AUTH_USER_KEY,
     "appearance",
-    "appearance_select",
     "_display_theme",
     "current_person_id",
     "current_person_name",
@@ -134,10 +133,19 @@ _SOFT_REFRESH_PRESERVE_KEYS = frozenset({
     "current_person_roles",
     "user_display_prefs",
     "_display_prefs_theme",
-    "user_display_font_family",
-    "user_display_font_color",
-    "user_display_font_size",
 })
+SOFT_REFRESH_REQUEST_KEY = "_soft_refresh_requested"
+
+
+def request_soft_refresh() -> None:
+    st.session_state[SOFT_REFRESH_REQUEST_KEY] = True
+
+
+def run_soft_refresh_if_requested(supabase) -> bool:
+    if not st.session_state.pop(SOFT_REFRESH_REQUEST_KEY, False):
+        return False
+    trigger_soft_refresh(supabase)
+    return True
 
 
 def trigger_soft_refresh(supabase) -> None:
@@ -158,9 +166,9 @@ def trigger_soft_refresh(supabase) -> None:
         st.session_state[key] = value
 
     st.session_state["_soft_refresh_notice"] = True
+    st.session_state["_display_widget_resync"] = True
     apply_session_to_client(supabase, get_stored_session())
     sync_personnel_identity(supabase)
-    st.rerun()
 
 
 def apply_session_to_client(supabase, session_dict: dict | None) -> None:
