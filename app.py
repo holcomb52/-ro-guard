@@ -100,7 +100,13 @@ from deployment_admin import render_deployment_secrets_admin, user_can_view_depl
 from scheduled_reports_admin import render_scheduled_reports_admin
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
-from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
+from vin_recalls import (
+    MAX_DISPLAY_RECALLS,
+    apply_job_relevance,
+    filter_actionable_recalls,
+    lookup_vin_recalls,
+    normalize_vin,
+)
 
 try:
     from dotenv import load_dotenv
@@ -236,12 +242,27 @@ def save_review(data, *, review_id: int | None = None):
         return {"ok": False, "review_id": None, "created": False}
 
 
-def load_reviews():
+def invalidate_reviews_cache() -> None:
+    st.session_state["_reviews_cache_gen"] = int(st.session_state.get("_reviews_cache_gen", 0)) + 1
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _fetch_reviews_cached(cache_generation: int) -> tuple[pd.DataFrame, str | None]:
+    del cache_generation
     try:
-        return fetch_reviews(supabase)
+        return fetch_reviews(supabase), None
     except Exception as e:
-        st.warning(f"Review load failed: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(), str(e)
+
+
+def load_reviews(*, bust_cache: bool = False) -> pd.DataFrame:
+    if bust_cache:
+        invalidate_reviews_cache()
+    generation = int(st.session_state.get("_reviews_cache_gen", 0))
+    df, err = _fetch_reviews_cached(generation)
+    if err:
+        st.warning(f"Review load failed: {err}")
+    return df
 
 
 def clear_all_reviews() -> dict:
@@ -3908,13 +3929,26 @@ def _ensure_vin_recall_lookup(vin: str, form_version: int) -> dict | None:
     return result
 
 
-def _vin_recall_save_fields(form_version: int, vin: str) -> dict:
+def _actionable_vin_recalls(
+    form_version: int,
+    job_count: int,
+    result: dict | None = None,
+) -> list[dict]:
+    payload = result if result is not None else st.session_state.get(f"vin_recall_result_{form_version}") or {}
+    if not payload.get("ok"):
+        return []
+    job_text = _review_job_text_from_session(form_version, job_count)
+    recalls = apply_job_relevance(list(payload.get("recalls") or []), job_text)
+    return filter_actionable_recalls(recalls)
+
+
+def _vin_recall_save_fields(form_version: int, vin: str, job_count: int = 1) -> dict:
     vin_clean = normalize_vin(vin)
-    result = st.session_state.get(f"vin_recall_result_{form_version}") or {}
-    count = int(result.get("recall_count") or 0) if result.get("ok") else 0
+    actionable = _actionable_vin_recalls(form_version, job_count)
+    count = len(actionable)
     campaigns = [
         str(item.get("campaign", "")).strip()
-        for item in (result.get("recalls") or [])
+        for item in actionable
         if item.get("campaign")
     ]
     return {
@@ -3939,12 +3973,10 @@ def _render_recall_details_body(
     form_version: int,
     job_count: int,
     vin_clean: str,
+    actionable: list[dict],
 ) -> None:
     vehicle = result.get("vehicle") or {}
-    recalls = list(result.get("recalls") or [])
-    job_text = _review_job_text_from_session(form_version, job_count)
-    if job_text.strip() and recalls:
-        recalls = apply_job_relevance(recalls, job_text)
+    all_on_file = int(result.get("all_recall_count") or len(result.get("recalls") or []))
 
     vehicle_label = " ".join(
         p for p in (
@@ -3956,35 +3988,45 @@ def _render_recall_details_body(
         if p
     )
     if vehicle_label:
-        st.markdown(f"**{vehicle_label}** · {result.get('recall_count', 0)} campaign(s) on file")
+        st.markdown(
+            f"**{vehicle_label}** · {len(actionable)} recall(s) may apply to this repair"
+        )
     elif result.get("from_saved_review"):
         st.caption("Recall data from the saved review — verify current status in OASIS / wiTECH.")
 
     st.caption(
-        "Verify open/completed status in **OASIS / wiTECH / DealerCONNECT** before submit."
+        "Only recalls related to this job (or flagged Park It / Park Outside) are shown. "
+        "Confirm open/completed status in **OASIS / wiTECH / DealerCONNECT** before submit."
     )
+    if all_on_file > len(actionable):
+        st.caption(
+            f"{all_on_file - len(actionable)} other campaign(s) exist for this vehicle configuration "
+            "but do not match this repair — hidden to reduce noise."
+        )
     if result.get("disclaimer"):
         st.caption(result.get("disclaimer"))
 
-    if result.get("critical_count"):
+    critical = [r for r in actionable if r.get("park_it") or r.get("park_outside")]
+    if critical:
         st.markdown(
             f'<div class="vin-recall-critical-note">'
-            f"{result.get('critical_count')} campaign(s) flagged "
+            f"{len(critical)} campaign(s) flagged "
             f"<strong>Park It / Park Outside</strong> — verify immediately."
             f"</div>",
             unsafe_allow_html=True,
         )
 
-    related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
+    related = [
+        r for r in actionable
+        if int(r.get("relevance_score") or 0) >= 12 and not (r.get("park_it") or r.get("park_outside"))
+    ]
     if related:
         st.markdown(
-            f'<div class="vin-recall-match-note">{len(related)} recall(s) may relate to this '
-            f"repair based on the job narrative.</div>",
+            f'<div class="vin-recall-match-note">{len(related)} recall(s) match the job narrative.</div>',
             unsafe_allow_html=True,
         )
 
-    show_recalls = related[:5] if related else recalls[:8]
-    for recall in show_recalls:
+    for recall in actionable[:MAX_DISPLAY_RECALLS]:
         campaign = recall.get("campaign") or "Campaign"
         component = recall.get("component") or "Component not listed"
         flags = []
@@ -3999,9 +4041,9 @@ def _render_recall_details_body(
         if recall.get("summary"):
             st.caption(recall.get("summary")[:320])
 
-    remaining = len(recalls) - len(show_recalls)
+    remaining = len(actionable) - min(len(actionable), MAX_DISPLAY_RECALLS)
     if remaining > 0:
-        st.caption(f"+ {remaining} additional campaign(s) on file.")
+        st.caption(f"+ {remaining} more matching recall(s) — verify all in OASIS / wiTECH.")
 
     if not _is_vin_recall_acknowledged(form_version, vin_clean):
         if st.button(
@@ -4042,7 +4084,8 @@ def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
     if not result or not result.get("ok"):
         return
 
-    if int(result.get("recall_count") or 0) <= 0:
+    actionable = _actionable_vin_recalls(form_version, job_count, result)
+    if not actionable:
         return
 
     if _is_vin_recall_acknowledged(form_version, vin_clean):
@@ -4050,8 +4093,12 @@ def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
 
     details_key = _vin_recall_details_open_key(form_version, vin_clean)
     st.markdown('<div class="vin-recall-alert-wrap"></div>', unsafe_allow_html=True)
+    recall_label = (
+        f"{len(actionable)} open recall{'s' if len(actionable) != 1 else ''} may apply"
+        f" — click for details"
+    )
     if st.button(
-        "Open recall on file — Click to see recall details",
+        recall_label,
         key=f"vin_recall_toggle_{form_version}_{vin_clean}",
         use_container_width=True,
     ):
@@ -4066,15 +4113,16 @@ def render_vin_recall_panel(vin: str, form_version: int, job_count: int):
                 form_version=form_version,
                 job_count=job_count,
                 vin_clean=vin_clean,
+                actionable=actionable,
             )
 
 
-def _vin_recall_blocks_audit(form_version: int, vin: str) -> bool:
+def _vin_recall_blocks_audit(form_version: int, vin: str, job_count: int = 1) -> bool:
     vin_clean = normalize_vin(vin)
     result = st.session_state.get(f"vin_recall_result_{form_version}") or {}
     if not result.get("ok"):
         return False
-    if int(result.get("recall_count") or 0) <= 0:
+    if not _actionable_vin_recalls(form_version, job_count, result):
         return False
     return not _is_vin_recall_acknowledged(form_version, vin_clean)
 
@@ -4391,7 +4439,7 @@ def compute_live_audit_summary(
         all_warn.extend(warn)
         scores.append(score)
 
-    recall_block = _vin_recall_blocks_audit(form_version, vin)
+    recall_block = _vin_recall_blocks_audit(form_version, vin, job_count)
 
     if recall_block:
         status = "🔴 DO NOT SUBMIT"
@@ -5342,10 +5390,12 @@ def render_review():
     )
     render_live_submit_status_bar(live_summary)
 
-    with st.expander("Claim outcome (optional — update later in Reporting)", expanded=False):
+    with st.expander("Claim outcome (optional — save here or in Reporting)", expanded=False):
         st.caption(
             "Record the Stellantis result when you know it. Leave all unchecked if the claim "
-            "is still pending — update outcomes on **Pending Claims** or **Reporting**."
+            "is still pending. Click **Save outcome** to update the saved review without re-running "
+            "the audit, or save together with **Run Audit + Save Review** below. "
+            "**Reporting** still offers bulk outcome updates."
         )
         fv = st.session_state.form_version
         first_pass_paid = st.checkbox(
@@ -5383,12 +5433,11 @@ def render_review():
                 placeholder="Required for 'Other' — optional detail for any reason.",
             )
             if selected_reason:
-                if selected_reason.lower().startswith("other") and not rejection_notes.strip():
-                    st.warning("Add notes when selecting **Other**.")
-                elif rejection_notes.strip():
-                    rejection_reason = f"{selected_reason} — {rejection_notes.strip()}"
+                ok_reason, composed = _compose_rejection_reason(selected_reason, rejection_notes)
+                if ok_reason:
+                    rejection_reason = composed
                 else:
-                    rejection_reason = selected_reason
+                    st.warning(composed)
 
         if paid_after_rejection:
             initial_decline_reason = st.text_area(
@@ -5408,6 +5457,38 @@ def render_review():
                 "Choose only one outcome — **First-Pass Paid**, **Rejected / Returned**, "
                 "or **Rejected — paid after first submission** — or leave all unchecked if still pending."
             )
+
+        saved_review_id = _resolve_review_id_for_outcome(fv, ro_number, vin)
+        if saved_review_id:
+            st.caption(
+                "Saved review on file for this RO. "
+                f"Selected outcome: **{review_outcome_label(first_pass_paid, rejected, paid_after_rejection)}**."
+            )
+        else:
+            st.caption(
+                "Run **Run Audit + Save Review** once before **Save outcome** can update Reporting."
+            )
+
+        if st.button(
+            "Save outcome",
+            key=f"save_review_outcome_{fv}",
+            type="secondary",
+            use_container_width=True,
+        ):
+            if not is_signed_in():
+                st.warning("Sign in with your dealership account before saving outcomes.")
+            else:
+                ok_outcome, parsed_or_msg = _parse_review_outcome_selection(
+                    first_pass_paid=first_pass_paid,
+                    rejected=rejected,
+                    paid_after_rejection=paid_after_rejection,
+                    rejection_reason=rejection_reason,
+                    initial_decline_reason=str(initial_decline_reason or ""),
+                )
+                if not ok_outcome:
+                    st.error(parsed_or_msg)
+                elif _persist_review_outcome(fv, ro_number, vin, parsed_or_msg):
+                    st.rerun()
 
     days_to_submit = (day_submitted - ro_invoiced).days
     st.caption(f"Days to submit: **{days_to_submit}**")
@@ -5545,7 +5626,7 @@ def render_review():
 
     st.markdown("---")
 
-    recall_audit_block = _vin_recall_blocks_audit(st.session_state.form_version, vin)
+    recall_audit_block = _vin_recall_blocks_audit(st.session_state.form_version, vin, job_count)
     if recall_audit_block:
         st.caption("Open the recall alert above and acknowledge before running the audit.")
 
@@ -5572,36 +5653,17 @@ def render_review():
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
     ):
-        outcome_selected = sum(
-            bool(x) for x in (first_pass_paid, rejected, paid_after_rejection)
+        ok_outcome, parsed_or_msg = _parse_review_outcome_selection(
+            first_pass_paid=first_pass_paid,
+            rejected=rejected,
+            paid_after_rejection=paid_after_rejection,
+            rejection_reason=rejection_reason,
+            initial_decline_reason=str(initial_decline_reason or ""),
         )
-        outcome_valid = outcome_selected <= 1
-        if paid_after_rejection and not str(initial_decline_reason or "").strip():
-            outcome_valid = False
-        if outcome_valid and outcome_selected <= 1:
-            save_first_pass_paid = bool(first_pass_paid) and not rejected and not paid_after_rejection
-            save_rejected = bool(rejected) and not first_pass_paid and not paid_after_rejection
-            save_paid_after_rejection = bool(paid_after_rejection) and not first_pass_paid and not rejected
-            if save_paid_after_rejection:
-                rejection_reason = str(initial_decline_reason or "").strip()
-            elif not save_rejected:
-                rejection_reason = ""
+        if not ok_outcome:
+            st.error(f"Fix claim outcome before saving: {parsed_or_msg}")
         else:
-            if outcome_selected > 1:
-                st.error(
-                    "Fix claim outcome before saving: choose only one outcome, "
-                    "or leave all unchecked if still pending."
-                )
-            elif paid_after_rejection and not str(initial_decline_reason or "").strip():
-                st.error(
-                    "Fix claim outcome before saving: enter why the claim was initially declined."
-                )
-            save_first_pass_paid = False
-            save_rejected = False
-            save_paid_after_rejection = False
-
-        if outcome_valid:
-
+            outcome = parsed_or_msg
             all_hard = []
             all_warn = []
             scores = []
@@ -5648,22 +5710,19 @@ def render_review():
 
             recall_result = st.session_state.get(f"vin_recall_result_{st.session_state.form_version}")
             if recall_result and recall_result.get("ok"):
-                job_text = _review_job_text_from_session(st.session_state.form_version, job_count)
-                recalls = apply_job_relevance(list(recall_result.get("recalls") or []), job_text)
-                related = [r for r in recalls if r.get("relevance_score", 0) >= 12]
+                related = _actionable_vin_recalls(
+                    st.session_state.form_version,
+                    job_count,
+                    recall_result,
+                )
                 if related:
                     st.markdown("### VIN Recall Alert")
                     for recall in related[:3]:
                         st.warning(
                             f"NHTSA recall **{recall.get('campaign', '—')}** "
-                            f"({recall.get('component', '')}) may relate to this repair. "
-                            "Verify campaign status in OASIS / wiTECH before warranty submit."
+                            f"({recall.get('component', '')}) may apply to this repair. "
+                            "Verify open status in OASIS / wiTECH before warranty submit."
                         )
-                elif recall_result.get("recall_count"):
-                    st.info(
-                        f"This vehicle configuration has {recall_result['recall_count']} NHTSA recall(s) on file — "
-                        "confirm VIN-specific completion status before submit."
-                    )
 
             x1, x2, x3, x4, x5 = st.columns([1.1, 1.3, 1.7, 1.7, 1.2])
 
@@ -5699,10 +5758,10 @@ def render_review():
                 "ro_invoiced": str(ro_invoiced),
                 "day_submitted": str(day_submitted),
                 "days_to_submit": days_to_submit,
-                "first_pass_paid": save_first_pass_paid,
-                "rejected": save_rejected,
-                "paid_after_rejection": save_paid_after_rejection,
-                "rejection_reason": rejection_reason,
+                "first_pass_paid": outcome["first_pass_paid"],
+                "rejected": outcome["rejected"],
+                "paid_after_rejection": outcome["paid_after_rejection"],
+                "rejection_reason": outcome["rejection_reason"],
                 "advisor": advisor,
                 "technician": technician,
                 "warranty_admin": warranty_admin,
@@ -5717,12 +5776,13 @@ def render_review():
                 "time_bypass_user": "" if smart_warranty_time_exempt else time_bypass_user,
                 "entered_by": current_person_name(),
                 "jobs": jobs,
-                **_vin_recall_save_fields(st.session_state.form_version, vin),
+                **_vin_recall_save_fields(st.session_state.form_version, vin, job_count),
             }
 
             session_review_id = _resolve_session_review_id(fv, ro_number, vin)
             save_result = save_review(report_payload, review_id=session_review_id)
             if save_result.get("ok"):
+                invalidate_reviews_cache()
                 saved_review_id = save_result.get("review_id")
                 if saved_review_id:
                     st.session_state[_active_review_id_key(fv)] = int(saved_review_id)
@@ -6197,22 +6257,18 @@ def _default_report_date_range() -> tuple[date, date]:
 def _filter_reviews_by_date(df, key_prefix="report"):
     if df.empty or "created_at" not in df.columns:
         return df
-    df = normalize_reviews_dataframe(df)
     today = date.today()
-    mtd_start, mtd_end = _default_report_date_range()
-    # Do not cap the calendar to only loaded rows — allow at least 2 prior years for reporting.
     calendar_min = date(today.year - 2, 1, 1)
-    min_d = df["created_at"].min().date()
-    picker_min = min(min_d, calendar_min)
-    picker_max = today
+    date_key = f"{key_prefix}_report_date_mtd_v3"
+    if date_key not in st.session_state:
+        st.session_state[date_key] = _default_report_date_range()
     date_range = st.date_input(
         "Report Date Range",
-        value=(mtd_start, mtd_end),
-        min_value=picker_min,
-        max_value=picker_max,
-        key=f"{key_prefix}_report_date_mtd_v2",
-        help="Defaults to month-to-date. You can select any range back to January 1, "
-        f"{today.year - 2} (or earlier if reviews exist).",
+        min_value=calendar_min,
+        max_value=today,
+        key=date_key,
+        help="Defaults to month-to-date. Select any range back to January 1, "
+        f"{today.year - 2}.",
     )
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
@@ -6453,14 +6509,16 @@ def render_roi_dashboard():
     col_refresh, col_migrate = st.columns([1, 2])
     with col_refresh:
         if st.button("Refresh ROI Dashboard", key="refresh_roi"):
+            invalidate_reviews_cache()
             st.rerun()
     with col_migrate:
         if st.button("Import old local reviews (SQLite → Supabase)", key="migrate_roi"):
             migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
+            invalidate_reviews_cache()
             st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
             st.rerun()
 
-    df = load_reviews()
+    df = normalize_reviews_dataframe(load_reviews())
     if df.empty:
         st.info("No reviews saved yet. Complete audits on the Review tab to populate ROI metrics.")
         return
@@ -6712,6 +6770,104 @@ def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, s
     return True, selected_reason
 
 
+def _parse_review_outcome_selection(
+    *,
+    first_pass_paid: bool,
+    rejected: bool,
+    paid_after_rejection: bool,
+    rejection_reason: str = "",
+    initial_decline_reason: str = "",
+) -> tuple[bool, dict | str]:
+    outcome_selected = sum(
+        1 for x in (first_pass_paid, rejected, paid_after_rejection) if x
+    )
+    if outcome_selected > 1:
+        return False, (
+            "Choose only one outcome — **First-Pass Paid**, **Rejected / Returned**, "
+            "or **Rejected — paid after first submission** — or leave all unchecked to mark pending."
+        )
+
+    save_first_pass_paid = bool(first_pass_paid) and not rejected and not paid_after_rejection
+    save_rejected = bool(rejected) and not first_pass_paid and not paid_after_rejection
+    save_paid_after_rejection = bool(paid_after_rejection) and not first_pass_paid and not rejected
+
+    final_reason = ""
+    if save_rejected:
+        final_reason = str(rejection_reason or "").strip()
+        if not final_reason:
+            return False, "Select a rejection reason (or add notes for **Other**)."
+    elif save_paid_after_rejection:
+        final_reason = str(initial_decline_reason or "").strip()
+        if not final_reason:
+            return False, "Enter why the claim was initially declined."
+
+    return True, {
+        "first_pass_paid": save_first_pass_paid,
+        "rejected": save_rejected,
+        "paid_after_rejection": save_paid_after_rejection,
+        "rejection_reason": final_reason,
+    }
+
+
+def _resolve_review_id_for_outcome(form_version: int, ro_number: str, vin: str) -> int | None:
+    review_id = _resolve_session_review_id(form_version, ro_number, vin)
+    if review_id:
+        return int(review_id)
+    if str(ro_number or "").strip():
+        found = find_review_id_for_update(supabase, ro_number, vin)
+        if found:
+            return int(found)
+    return None
+
+
+def _persist_review_outcome(
+    form_version: int,
+    ro_number: str,
+    vin: str,
+    outcome: dict,
+) -> bool:
+    review_id = _resolve_review_id_for_outcome(form_version, ro_number, vin)
+    if not review_id:
+        st.error(
+            "No saved review found for this RO yet. Run **Run Audit + Save Review** first, "
+            "or open a saved claim from **Pending Claims**."
+        )
+        return False
+
+    try:
+        update_review_outcome(
+            supabase,
+            int(review_id),
+            first_pass_paid=outcome["first_pass_paid"],
+            rejected=outcome["rejected"],
+            paid_after_rejection=outcome["paid_after_rejection"],
+            rejection_reason=outcome["rejection_reason"],
+            updated_by=current_person_name() or auth_user_email(),
+        )
+        invalidate_reviews_cache()
+        st.session_state[_active_review_id_key(form_version)] = int(review_id)
+        st.session_state[_active_review_ro_key(form_version)] = str(ro_number or "").strip()
+        st.session_state[_active_review_vin_key(form_version)] = str(vin or "").strip()
+        ro_label = str(ro_number or "—").strip() or "—"
+        label = review_outcome_label(
+            outcome["first_pass_paid"],
+            outcome["rejected"],
+            outcome["paid_after_rejection"],
+        )
+        st.success(f"Outcome saved for RO **{ro_label}**: **{label}**.")
+        return True
+    except Exception as exc:
+        message = str(exc)
+        if "outcome_updated" in message.lower() or "column" in message.lower():
+            st.error(
+                "Could not save outcome. Run the latest `docs/SUPABASE_SCHEMA.sql` migration "
+                "in Supabase (adds outcome_updated_at / outcome_updated_by), then try again."
+            )
+        else:
+            st.error(f"Could not save outcome: {exc}")
+        return False
+
+
 def _outcome_radio_index(first_pass_paid: int, rejected: int, paid_after_rejection: int = 0) -> int:
     if paid_after_rejection and not first_pass_paid and not rejected:
         return 3
@@ -6944,6 +7100,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 rejection_reason=rejection_reason,
                 updated_by=current_person_name() or auth_user_email(),
             )
+            invalidate_reviews_cache()
             st.success(f"Outcome saved for RO **{selected.get('ro_number', '—')}**.")
             st.rerun()
         except Exception as exc:
@@ -7042,7 +7199,11 @@ def render_reporting_charts(df: pd.DataFrame) -> None:
                 st.image(score_png, use_container_width=True, caption="Audit Score Distribution")
 
 
-def render_reporting_vin_recalls(df: pd.DataFrame) -> None:
+def render_reporting_vin_recalls(
+    df: pd.DataFrame,
+    *,
+    all_time_df: pd.DataFrame | None = None,
+) -> None:
     st.caption("VINs flagged with open or identified recall campaigns during the selected period.")
     if "vin_recall_identified" not in df.columns:
         st.info(
@@ -7053,11 +7214,11 @@ def render_reporting_vin_recalls(df: pd.DataFrame) -> None:
 
     recall_flag = pd.to_numeric(df["vin_recall_identified"], errors="coerce").fillna(0).astype(int)
     recall_df = df[recall_flag == 1].copy()
-    all_time_df = load_reviews()
+    all_time_source = all_time_df if all_time_df is not None else df
     all_time_total = 0
-    if not all_time_df.empty and "vin_recall_identified" in all_time_df.columns:
+    if not all_time_source.empty and "vin_recall_identified" in all_time_source.columns:
         all_time_total = int(
-            pd.to_numeric(all_time_df["vin_recall_identified"], errors="coerce").fillna(0).astype(int).sum()
+            pd.to_numeric(all_time_source["vin_recall_identified"], errors="coerce").fillna(0).astype(int).sum()
         )
 
     render_metric_rows([
@@ -7412,15 +7573,19 @@ def render_reporting():
     col_refresh, col_migrate = st.columns([1, 2])
     with col_refresh:
         if st.button("Refresh Reporting"):
+            invalidate_reviews_cache()
             st.rerun()
     with col_migrate:
         if st.button("Import old local reviews (SQLite → Supabase)"):
             migrated, skipped = migrate_sqlite_to_supabase(supabase, DB_PATH)
+            invalidate_reviews_cache()
             st.success(f"Imported {migrated} review(s). Skipped {skipped} duplicate or invalid row(s).")
             st.rerun()
 
+    all_reviews = normalize_reviews_dataframe(load_reviews())
+
     if user_can_admin_write():
-        review_count = len(load_reviews())
+        review_count = len(all_reviews)
         if review_count:
             with st.expander("Manager tools — clear test data", expanded=False):
                 st.caption(
@@ -7439,6 +7604,7 @@ def render_reporting():
                 ):
                     result = clear_all_reviews()
                     if result["removed"] > 0:
+                        invalidate_reviews_cache()
                         st.success(f"Removed {result['removed']:,} review(s) from Reporting.")
                         st.rerun()
                     elif result["errors"]:
@@ -7449,45 +7615,44 @@ def render_reporting():
                     else:
                         st.info("No reviews to remove.")
 
-    df = load_reviews()
-    if df.empty:
+    if all_reviews.empty:
         st.info("No reviews saved yet. Complete a review on the Review tab and click Run Audit + Save Review.")
         return
 
-    df = _filter_reviews_by_date(df, key_prefix="report")
+    df = _filter_reviews_by_date(all_reviews, key_prefix="report")
     if df.empty:
         st.warning("No reviews in the selected date range.")
         return
 
-    df = normalize_reviews_dataframe(df)
-
-    overview_tab, outcomes_tab, recalls_tab, rejections_tab, team_tab, log_tab = st.tabs([
+    report_views = [
         "Overview",
         "Claim Outcomes",
         "VIN Recalls",
         "Rejections",
         "Team Performance",
         "Review Log",
-    ])
+    ]
+    report_view = st.radio(
+        "Reporting view",
+        report_views,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="reporting_view_nav",
+    )
 
-    with overview_tab:
+    if report_view == "Overview":
         st.markdown("### Summary")
         render_reporting_summary(df)
         render_reporting_charts(df)
-
-    with outcomes_tab:
+    elif report_view == "Claim Outcomes":
         render_outcome_followup(df, show_title=False)
-
-    with recalls_tab:
-        render_reporting_vin_recalls(df)
-
-    with rejections_tab:
+    elif report_view == "VIN Recalls":
+        render_reporting_vin_recalls(df, all_time_df=all_reviews)
+    elif report_view == "Rejections":
         render_reporting_rejections(df)
-
-    with team_tab:
+    elif report_view == "Team Performance":
         render_reporting_team_performance(df)
-
-    with log_tab:
+    elif report_view == "Review Log":
         render_reporting_review_log(df)
 
 
@@ -8213,10 +8378,18 @@ def main():
         ("WAM", render_wam),
     ]
 
-    tabs = st.tabs([label for label, _ in tab_entries])
-    for tab, (_, render_fn) in zip(tabs, tab_entries):
-        with tab:
+    section_labels = [label for label, _ in tab_entries]
+    active_section = st.radio(
+        "Section",
+        section_labels,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="main_section_nav",
+    )
+    for label, render_fn in tab_entries:
+        if label == active_section:
             render_fn()
+            break
 
 if __name__ == "__main__":
     main()

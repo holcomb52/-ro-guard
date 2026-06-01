@@ -12,6 +12,9 @@ VPIC_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}
 RECALLS_BY_VEHICLE_URL = "https://api.nhtsa.gov/recalls/recallsByVehicle"
 USER_AGENT = "RO-Shield/1.0 (Dealership warranty audit tool)"
 
+RELATED_RECALL_MIN_SCORE = 12
+MAX_DISPLAY_RECALLS = 5
+
 RECALL_MATCH_TERMS = [
     "abs", "esc", "stability", "brake", "airbag", "seat belt", "steering",
     "transmission", "engine", "fuel", "electrical", "software", "module",
@@ -167,12 +170,40 @@ def apply_job_relevance(recalls: list[dict], job_text: str) -> list[dict]:
     return updated
 
 
+def filter_actionable_recalls(
+    recalls: list[dict],
+    *,
+    min_score: int = RELATED_RECALL_MIN_SCORE,
+) -> list[dict]:
+    """
+    Recalls worth surfacing in the UI: related to the job narrative or safety-critical.
+
+    NHTSA returns every campaign for make/model/year. This trims the list so staff only
+    see recalls that may apply to the current repair (or Park It / Park Outside alerts).
+    """
+    actionable: list[dict] = []
+    for recall in recalls:
+        score = int(recall.get("relevance_score") or 0)
+        critical = bool(recall.get("park_it") or recall.get("park_outside"))
+        if score >= min_score or critical:
+            actionable.append(recall)
+
+    actionable.sort(
+        key=lambda r: (
+            0 if (r.get("park_it") or r.get("park_outside")) else 1,
+            -int(r.get("relevance_score") or 0),
+            r.get("report_date") or "",
+        ),
+    )
+    return actionable
+
+
 def lookup_vin_recalls(vin: str, job_text: str = "") -> dict:
     """
     Decode VIN and return NHTSA recall campaigns for that vehicle configuration.
 
     Note: NHTSA returns campaigns by make/model/year — not VIN-specific completion status.
-    Dealers must still verify in OASIS / wiTECH / DealerCONNECT.
+    Dealers must still verify open/completed status in OASIS / wiTECH / DealerCONNECT.
     """
     vehicle, error = decode_vin(vin)
     if error:
@@ -210,7 +241,8 @@ def lookup_vin_recalls(vin: str, job_text: str = "") -> dict:
         recalls.append(item)
 
     recalls.sort(key=lambda r: (r.get("relevance_score", 0), r.get("report_date", "")), reverse=True)
-    critical = [r for r in recalls if r.get("park_it") or r.get("park_outside")]
+    actionable = filter_actionable_recalls(recalls)
+    critical = [r for r in actionable if r.get("park_it") or r.get("park_outside")]
 
     return {
         "ok": True,
@@ -218,12 +250,15 @@ def lookup_vin_recalls(vin: str, job_text: str = "") -> dict:
         "vin": vehicle["vin"],
         "vehicle": vehicle,
         "recalls": recalls,
-        "recall_count": len(recalls),
+        "all_recall_count": len(recalls),
+        "recall_count": len(actionable),
         "critical_count": len(critical),
-        "related_count": sum(1 for r in recalls if r.get("relevance_score", 0) >= 12),
+        "related_count": sum(
+            1 for r in actionable if int(r.get("relevance_score") or 0) >= RELATED_RECALL_MIN_SCORE
+        ),
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "disclaimer": (
-            "NHTSA lists safety recall campaigns for this vehicle's make, model, and year. "
-            "This does not confirm whether this VIN is open or complete — verify in OASIS / wiTECH / DealerCONNECT."
+            "Showing recalls that may apply to this repair or are flagged Park It / Park Outside. "
+            "NHTSA does not confirm whether this VIN is open or complete — verify in OASIS / wiTECH / DealerCONNECT."
         ),
     }
