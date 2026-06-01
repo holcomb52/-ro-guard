@@ -3836,7 +3836,9 @@ def _vin_recall_ack_key(form_version: int, vin_clean: str) -> str:
 
 
 def _is_vin_recall_acknowledged(form_version: int, vin_clean: str) -> bool:
-    ack = st.session_state.get(_vin_recall_ack_key(form_version, vin_clean)) or {}
+    ack = st.session_state.get(_vin_recall_ack_key(form_version, vin_clean))
+    if not isinstance(ack, dict):
+        return False
     return bool(ack.get("acknowledged"))
 
 
@@ -4006,7 +4008,7 @@ def _render_recall_details_body(
             "I acknowledge — continue with this claim",
             type="primary",
             use_container_width=True,
-            key=f"vin_recall_ack_{form_version}_{vin_clean}",
+            key=f"vin_recall_ack_btn_{form_version}_{vin_clean}",
         ):
             st.session_state[_vin_recall_ack_key(form_version, vin_clean)] = {
                 "acknowledged": True,
