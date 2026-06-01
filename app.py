@@ -98,6 +98,7 @@ from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
 from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
+from core.html_embed import embed_html
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
 from core.vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -2586,9 +2587,8 @@ def configure_streamlit_toolbar() -> None:
 
 def _inject_streamlit_cloud_chrome_restore() -> None:
     """Keep Share / Manage app visible for the app owner."""
-    st.html(
+    embed_html(
         """
-        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           function restoreChrome(doc) {
@@ -2638,18 +2638,14 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
           } catch (e) {}
         })();
         </script>
-        </div>
         """,
-        width="content",
-        unsafe_allow_javascript=True,
     )
 
 
 def _inject_streamlit_cloud_chrome_hide() -> None:
     """Hide Manage app / Share for dealership logins (Streamlit may still inject them)."""
-    st.html(
+    embed_html(
         """
-        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           function hideChrome(doc) {
@@ -2679,10 +2675,7 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
           } catch (e) {}
         })();
         </script>
-        </div>
         """,
-        width="content",
-        unsafe_allow_javascript=True,
     )
 
 
@@ -4205,7 +4198,7 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
     payload = json.dumps(str(text))
     safe_label = html.escape(label)
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
-    st.html(
+    embed_html(
         f"""
         <style>
           html, body {{
@@ -4267,8 +4260,7 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
         }})();
         </script>
         """,
-        width="content",
-        unsafe_allow_javascript=True,
+        height=34,
     )
 
 

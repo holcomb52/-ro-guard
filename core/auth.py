@@ -8,6 +8,7 @@ from typing import Callable
 
 import streamlit as st
 
+from core.html_embed import embed_html
 from core.personnel_roles import format_roles_display, parse_personnel_roles
 
 AUTH_SESSION_KEY = "supabase_auth_session"
@@ -47,30 +48,26 @@ def app_redirect_url() -> str:
 
 def inject_auth_hash_bridge() -> None:
     """Move Supabase recovery tokens from URL hash into query params for Streamlit."""
-    st.html(
+    embed_html(
         """
-        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           try {
-            const target = window.parent !== window ? window.parent : window;
-            const href = target.location.href;
+            const parent = window.parent;
+            const href = parent.location.href;
             if (!href.includes("#")) return;
-            const hash = target.location.hash.startsWith("#")
-              ? target.location.hash.substring(1)
-              : target.location.hash;
+            const hash = parent.location.hash.startsWith("#")
+              ? parent.location.hash.substring(1)
+              : parent.location.hash;
             const hashParams = new URLSearchParams(hash);
             if (!hashParams.get("access_token")) return;
             const url = new URL(href.split("#")[0]);
             hashParams.forEach((value, key) => url.searchParams.set(key, value));
-            target.location.replace(url.toString());
+            parent.location.replace(url.toString());
           } catch (e) {}
         })();
         </script>
-        </div>
         """,
-        width="content",
-        unsafe_allow_javascript=True,
     )
 
 
