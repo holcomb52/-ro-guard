@@ -9,7 +9,7 @@ from typing import Callable
 import streamlit as st
 import streamlit.components.v1 as components
 
-from personnel_roles import format_roles_display, parse_personnel_roles
+from core.personnel_roles import format_roles_display, parse_personnel_roles
 
 AUTH_SESSION_KEY = "supabase_auth_session"
 AUTH_USER_KEY = "supabase_auth_user"
@@ -645,6 +645,6 @@ def render_authenticated_sidebar(supabase) -> None:
         sign_out(supabase)
         st.rerun()
 
-    from deployment_admin import render_admin_profile_deployment_sidebar
+    from core.deployment_admin import render_admin_profile_deployment_sidebar
 
     render_admin_profile_deployment_sidebar()

@@ -9,8 +9,4 @@ __pycache__/
 *.db
 *.db-journal
 data/
-jarvis/.venv/
-jarvis/apps/
-jarvis/logs/*.log
-jarvis/logs/*.pid
-jarvis/scripts/config.env
+instances/*/.env

@@ -1,22 +1,23 @@
 # RO Shield — dev working copy
 
-Warranty RO review app (Streamlit + SQLite + Supabase).
+Warranty RO review app (Streamlit + Supabase).
 
-## Features
+## Layout
 
-- Branded dark UI and full review workflow
-- Admin personnel (local + shared Supabase)
-- Claim learning upload and paid-claim suggestions
-- Reporting dashboard with date filters
-- WAM document upload and lookup
-- Narrative grading (cause / correction), time validation, sublet checklist, rental warnings
+```
+ro_guard/
+├── app.py          ← Streamlit entry (do not move)
+├── core/           ← Application code
+├── instances/      ← Per-store config templates
+├── docs/           ← SQL + runbooks
+└── scripts/        ← Scheduled report cron
+```
 
 ## Setup
 
 ```bash
-cd ~/RO_Guard_DEV_WORKING_COPY/ro_shield_final_production_polish
-cp .env.example .env   # if .env does not exist yet
-# Edit .env with your Supabase URL and key
+cd ~/RO_Guard_DEV_WORKING_COPY/ro_guard
+cp .env.example .env
 python3 -m pip install -r requirements.txt
 ```
 
@@ -26,14 +27,14 @@ python3 -m pip install -r requirements.txt
 ./run.sh
 ```
 
-Or:
-
-```bash
-python3 -m streamlit run app.py --server.port 8531
-```
-
 Open: http://localhost:8531
 
-## Project docs
+## Docs
 
-See [docs/PROJECT.md](docs/PROJECT.md) for folder layout and what not to delete.
+- [docs/PROJECT.md](docs/PROJECT.md) — structure
+- [instances/README.md](instances/README.md) — add another dealership
+- [../WORKSPACE.md](../WORKSPACE.md) — whole workspace map
+
+## JARVIS
+
+Local owner assistant: **`../jarvis/`** (separate project, not in this deploy).

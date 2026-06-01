@@ -18,7 +18,7 @@ try:
 except ImportError:
     pass
 
-from scheduled_reports import run_due_scheduled_reports, smtp_config_status
+from core.scheduled_reports import run_due_scheduled_reports, smtp_config_status
 
 
 def main() -> int:

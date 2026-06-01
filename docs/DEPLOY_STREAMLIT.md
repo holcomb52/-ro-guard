@@ -5,9 +5,9 @@
 From the project folder:
 
 ```bash
-cd ~/RO_Guard_DEV_WORKING_COPY/ro_shield_final_production_polish
-git add app.py requirements.txt README.md .gitignore .env.example docs/
-git commit -m "RO Shield: claim matching, labor/parts/WAM display, Supabase secrets"
+cd ~/RO_Guard_DEV_WORKING_COPY/ro_guard
+git add app.py core/ requirements.txt README.md .gitignore .env.example docs/ instances/
+git commit -m "RO Shield: update for deploy"
 ```
 
 Create a new repo on https://github.com/new (name: `ro-guard`), then:

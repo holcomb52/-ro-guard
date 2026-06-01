@@ -41,7 +41,7 @@ def secret_is_configured(name: str) -> bool:
 
 
 def owner_emails() -> set[str]:
-    from auth import normalize_email
+    from core.auth import normalize_email
 
     raw = _read_secret("RO_SHIELD_OWNER_EMAIL")
     return {normalize_email(part) for part in raw.replace(";", ",").split(",") if part.strip()}
@@ -49,7 +49,7 @@ def owner_emails() -> set[str]:
 
 def user_can_view_deployment() -> bool:
     """True only for logins listed in RO_SHIELD_OWNER_EMAIL."""
-    from auth import auth_user_email, normalize_email
+    from core.auth import auth_user_email, normalize_email
 
     owners = owner_emails()
     if not owners:
@@ -66,7 +66,7 @@ def _render_secret_rows(items: tuple[tuple[str, str], ...]) -> None:
 
 
 def _report_smtp_status() -> tuple[bool, str]:
-    from scheduled_reports import smtp_config_status
+    from core.scheduled_reports import smtp_config_status
 
     return smtp_config_status()
 
@@ -74,7 +74,7 @@ def _report_smtp_status() -> tuple[bool, str]:
 def render_admin_profile_deployment_sidebar() -> None:
     if not user_can_view_deployment():
         return
-    from auth import auth_user_email
+    from core.auth import auth_user_email
 
     with st.sidebar.expander("Deployment & secrets", expanded=False):
         st.caption(f"App owner — {auth_user_email()}")
@@ -111,7 +111,7 @@ def render_deployment_secrets_admin() -> None:
         "and how to open the Secrets editor."
     )
 
-    from auth import auth_user_email
+    from core.auth import auth_user_email
 
     email = auth_user_email()
     owners = owner_emails()

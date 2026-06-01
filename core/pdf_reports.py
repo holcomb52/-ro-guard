@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fpdf import FPDF
 
-from review_store import finding_message
+from core.review_store import finding_message
 
 
 def _safe_text(value) -> str:
@@ -524,7 +524,7 @@ def build_roi_report_pdf(
     )
 
     try:
-        from ro_charts import (
+        from core.ro_charts import (
             advisor_hard_stops_chart,
             audit_outcomes_pie,
             first_pass_pie,
@@ -628,7 +628,7 @@ def build_review_report_pdf(df, *, period_label: str = "All reviews") -> bytes:
     _summary_metrics_table(pdf, summary_metrics)
 
     try:
-        from ro_charts import review_status_pie, score_distribution_chart
+        from core.ro_charts import review_status_pie, score_distribution_chart
 
         _section_title(pdf, "Charts")
         status_png = review_status_pie(data, compact=True)

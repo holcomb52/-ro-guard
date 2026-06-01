@@ -1,37 +1,41 @@
 # RO Shield — project layout
 
-## Canonical code
+## Product code (shared across all stores)
 
-- **`app.py`** — current application (synced from `~/Downloads/app (3).py` on 2026-05-24).
-- **`archive/app.py.pre-cleanup-2026-05-24.bak`** — previous 692-line dev copy (kept for reference).
+| Path | Purpose |
+|------|---------|
+| **`app.py`** | Streamlit entry point (Cloud runs this file) |
+| **`core/`** | Application modules — auth, data, charts, PDFs, OCR, recalls |
+| **`docs/`** | SQL migrations and runbooks |
+| **`scripts/`** | GitHub Actions / cron helpers |
+
+## Per-store config (not code)
+
+| Path | Purpose |
+|------|---------|
+| **`instances/_template/`** | Copy when adding another dealership |
+| **`instances/ro-guard-prod/`** | Notes for the live production app |
+
+See [instances/README.md](instances/README.md) and [../WORKSPACE.md](../WORKSPACE.md).
 
 ## Data
 
 | Store | Purpose |
 |-------|---------|
-| **Supabase** | Reviews, claims, personnel, WAM, bulletins (team-wide) |
-| `ro_shield_final.db` | Legacy local SQLite — use Reporting → Import to migrate old reviews |
+| **Supabase** | Reviews, claims, personnel, WAM, bulletins |
+| `ro_shield_final.db` | Legacy SQLite — migrate via Reporting → Import |
 
-### First-time Supabase setup
-
-Run `docs/SUPABASE_SCHEMA.sql` in Supabase → SQL Editor before saving reviews.
+Run `docs/SUPABASE_SCHEMA.sql` in Supabase before first save.
 
 ## Do not touch
 
-- `~/RO_Guard_LIVE_DO_NOT_TOUCH/` — production snapshot
-- `~/Downloads/` — ChatGPT iteration folders (archives only; not deleted)
+- `~/RO_Guard_LIVE_DO_NOT_TOUCH/` — frozen production snapshot
+- `../_archive/` — retired scratch copies
 
-## Run
+## Run locally
 
 ```bash
 ./run.sh
 ```
 
-Or:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 -m streamlit run app.py --server.port 8531
-```
-
-Always run from this directory so `ro_shield_final.db` is created/used here.
+Always run from this directory (`ro_guard/`).

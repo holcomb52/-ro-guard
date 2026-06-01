@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from ro_charts import (
+from core.ro_charts import (
     advisor_hard_stops_chart,
     hard_stop_rules_chart,
     audit_outcomes_pie,
@@ -22,8 +22,8 @@ from ro_charts import (
     score_distribution_chart,
     weekly_activity_chart,
 )
-from pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
-from auth import (
+from core.pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
+from core.auth import (
     auth_user_email,
     capture_recovery_from_query,
     inject_auth_hash_bridge,
@@ -40,7 +40,7 @@ from auth import (
     run_soft_refresh_if_requested,
     sync_personnel_identity,
 )
-from review_store import (
+from core.review_store import (
     AUDIT_RULE_LABELS,
     DEFAULT_AUDIT_RULES,
     active_rejection_reason_labels,
@@ -68,7 +68,7 @@ from review_store import (
     smart_warranty_punch_exempt,
     update_review_outcome,
 )
-from theme_styles import (
+from core.theme_styles import (
     BRAND_TEXT,
     THEME_CSS,
     audit_result_panel_css,
@@ -85,7 +85,7 @@ from theme_styles import (
     streamlit_primary_override_css,
     vin_recall_alert_css,
 )
-from personnel_roles import (
+from core.personnel_roles import (
     ALL_PERSONNEL_ROLES,
     DEALERSHIP_ROLES,
     PLATFORM_ADMIN_ROLES,
@@ -95,13 +95,13 @@ from personnel_roles import (
     person_has_any_role,
     primary_personnel_role,
 )
-from sales_pricing import render_pricing_roi_page
-from deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
-from scheduled_reports_admin import render_scheduled_reports_admin
-from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
-from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
-import vin_recalls
-from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
+from core.sales_pricing import render_pricing_roi_page
+from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
+from core.scheduled_reports_admin import render_scheduled_reports_admin
+from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
+from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
+from core import vin_recalls
+from core.vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
 
 MAX_DISPLAY_RECALLS = getattr(vin_recalls, "MAX_DISPLAY_RECALLS", 5)
 
