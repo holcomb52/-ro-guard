@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     time_bypass_user TEXT,
     first_pass_paid BOOLEAN DEFAULT FALSE,
     rejected BOOLEAN DEFAULT FALSE,
+    paid_after_rejection BOOLEAN DEFAULT FALSE,
     rejection_reason TEXT,
     outcome_updated_at TIMESTAMPTZ,
     outcome_updated_by TEXT,
@@ -51,6 +52,7 @@ ALTER TABLE reviews ADD COLUMN IF NOT EXISTS time_bypass BOOLEAN DEFAULT FALSE;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS time_bypass_user TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS first_pass_paid BOOLEAN DEFAULT FALSE;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS rejected BOOLEAN DEFAULT FALSE;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS paid_after_rejection BOOLEAN DEFAULT FALSE;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS outcome_updated_at TIMESTAMPTZ;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS outcome_updated_by TEXT;

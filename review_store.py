@@ -74,6 +74,7 @@ def normalize_review_record(data: dict) -> dict:
         "time_bypass_user": str(payload.get("time_bypass_user", "") or "").strip(),
         "first_pass_paid": _flag("first_pass_paid"),
         "rejected": _flag("rejected"),
+        "paid_after_rejection": _flag("paid_after_rejection"),
         "rejection_reason": str(payload.get("rejection_reason", "") or "").strip(),
         "jobs": jobs,
         "vin_recall_identified": _int("vin_recall_identified"),
@@ -84,7 +85,7 @@ def normalize_review_record(data: dict) -> dict:
     return record
 
 
-def is_pending_outcome(first_pass_paid, rejected) -> bool:
+def is_pending_outcome(first_pass_paid, rejected, paid_after_rejection=0) -> bool:
     try:
         fp = int(float(first_pass_paid or 0))
     except (TypeError, ValueError):
@@ -93,7 +94,11 @@ def is_pending_outcome(first_pass_paid, rejected) -> bool:
         rej = int(float(rejected or 0))
     except (TypeError, ValueError):
         rej = 0
-    return not fp and not rej
+    try:
+        par = int(float(paid_after_rejection or 0))
+    except (TypeError, ValueError):
+        par = 0
+    return not fp and not rej and not par
 
 
 def _parse_created_at(value) -> datetime | None:
@@ -116,7 +121,7 @@ def find_review_id_for_update(supabase, ro_number: str, vin: str = "") -> int | 
 
     rows = (
         supabase.table("reviews")
-        .select("id, vin, first_pass_paid, rejected, created_at")
+        .select("id, vin, first_pass_paid, rejected, paid_after_rejection, created_at")
         .eq("ro_number", ro_number)
         .order("created_at", desc=True)
         .limit(20)
@@ -139,7 +144,11 @@ def find_review_id_for_update(supabase, ro_number: str, vin: str = "") -> int | 
     for row in rows:
         if not _vin_matches(row.get("vin", "")):
             continue
-        if is_pending_outcome(row.get("first_pass_paid"), row.get("rejected")):
+        if is_pending_outcome(
+            row.get("first_pass_paid"),
+            row.get("rejected"),
+            row.get("paid_after_rejection"),
+        ):
             return int(row["id"])
 
     for row in rows:
@@ -181,12 +190,15 @@ def save_review(supabase, data: dict) -> bool:
     return bool(result.get("ok"))
 
 
-def review_outcome_label(first_pass_paid, rejected) -> str:
+def review_outcome_label(first_pass_paid, rejected, paid_after_rejection=0) -> str:
     fp = int(first_pass_paid or 0)
     rej = int(rejected or 0)
-    if fp and not rej:
+    par = int(paid_after_rejection or 0)
+    if par and not fp and not rej:
+        return "Paid After Rejection"
+    if fp and not rej and not par:
         return "First-Pass Paid"
-    if rej and not fp:
+    if rej and not fp and not par:
         return "Rejected / Returned"
     if fp and rej:
         return "Needs correction"
@@ -199,17 +211,28 @@ def update_review_outcome(
     *,
     first_pass_paid: bool,
     rejected: bool,
+    paid_after_rejection: bool = False,
     rejection_reason: str = "",
     updated_by: str = "",
 ) -> None:
     if supabase is None:
         raise RuntimeError("Supabase is not configured.")
-    if first_pass_paid and rejected:
-        raise ValueError("A claim cannot be both first-pass paid and rejected.")
+    selected = sum(bool(x) for x in (first_pass_paid, rejected, paid_after_rejection))
+    if selected > 1:
+        raise ValueError(
+            "Choose only one outcome: first-pass paid, rejected, or paid after rejection."
+        )
+    if paid_after_rejection and not str(rejection_reason or "").strip():
+        raise ValueError("Enter why the claim was initially declined.")
     payload = {
         "first_pass_paid": 1 if first_pass_paid else 0,
         "rejected": 1 if rejected else 0,
-        "rejection_reason": str(rejection_reason or "").strip() if rejected else "",
+        "paid_after_rejection": 1 if paid_after_rejection else 0,
+        "rejection_reason": (
+            str(rejection_reason or "").strip()
+            if rejected or paid_after_rejection
+            else ""
+        ),
         "outcome_updated_at": _utc_now_iso(),
         "outcome_updated_by": str(updated_by or "").strip(),
     }
@@ -263,7 +286,7 @@ def load_reviews(supabase, limit: int = 5000) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame()
         df = pd.DataFrame(rows)
-        for col in ("first_pass_paid", "rejected", "time_bypass"):
+        for col in ("first_pass_paid", "rejected", "paid_after_rejection", "time_bypass"):
             if col in df.columns:
                 df[col] = df[col].fillna(False).astype(int)
         return df
@@ -936,7 +959,7 @@ def normalize_reviews_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0)
 
-    for col in ("first_pass_paid", "rejected", "time_bypass"):
+    for col in ("first_pass_paid", "rejected", "paid_after_rejection", "time_bypass"):
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0).astype(int)
 
@@ -947,9 +970,10 @@ def normalize_reviews_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         out["is_ready"] = status.str.contains("READY", case=False, na=False).astype(int)
 
     if "first_pass_paid" in out.columns and "rejected" in out.columns:
+        par_series = out.get("paid_after_rejection", pd.Series([0] * len(out)))
         out["outcome_status"] = [
-            review_outcome_label(fp, rej)
-            for fp, rej in zip(out["first_pass_paid"], out["rejected"])
+            review_outcome_label(fp, rej, par)
+            for fp, rej, par in zip(out["first_pass_paid"], out["rejected"], par_series)
         ]
 
     return out
@@ -971,6 +995,7 @@ def compute_roi_metrics(
         "first_pass_pct": 0.0,
         "first_pass_pct_resolved": 0.0,
         "first_pass_count": 0,
+        "paid_after_rejection_count": 0,
         "rejected_pct": 0.0,
         "rejected_count": 0,
         "rejected_value": 0.0,
@@ -1000,8 +1025,13 @@ def compute_roi_metrics(
 
     first_pass_count = int(data.get("first_pass_paid", pd.Series([0])).sum())
     rejected_count = int(data.get("rejected", pd.Series([0])).sum())
+    paid_after_rejection_count = int(data.get("paid_after_rejection", pd.Series([0])).sum())
     pending_outcome_count = int(
-        ((data.get("first_pass_paid", pd.Series([0])) == 0) & (data.get("rejected", pd.Series([0])) == 0)).sum()
+        (
+            (data.get("first_pass_paid", pd.Series([0])) == 0)
+            & (data.get("rejected", pd.Series([0])) == 0)
+            & (data.get("paid_after_rejection", pd.Series([0])) == 0)
+        ).sum()
         if "first_pass_paid" in data.columns and "rejected" in data.columns else 0
     )
     resolved_count = max(count - pending_outcome_count, 0)
@@ -1066,6 +1096,7 @@ def compute_roi_metrics(
         "first_pass_pct": first_pass_pct,
         "first_pass_pct_resolved": first_pass_pct_resolved,
         "first_pass_count": first_pass_count,
+        "paid_after_rejection_count": paid_after_rejection_count,
         "rejected_pct": rejected_pct,
         "rejected_count": rejected_count,
         "rejected_value": rejected_value,

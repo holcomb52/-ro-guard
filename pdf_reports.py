@@ -390,6 +390,10 @@ def build_audit_report_pdf(data: dict) -> bytes:
 
     if data.get("first_pass_paid"):
         _body_text(pdf, "Paid on First Submission: Yes")
+    if data.get("paid_after_rejection"):
+        _body_text(pdf, "Paid After Rejection: Yes")
+        if data.get("rejection_reason"):
+            _body_text(pdf, f"Initial Decline Reason: {data.get('rejection_reason')}")
     if data.get("rejected"):
         _body_text(pdf, f"Rejected / Returned: Yes")
         if data.get("rejection_reason"):

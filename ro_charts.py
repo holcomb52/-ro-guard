@@ -124,14 +124,23 @@ def audit_outcomes_pie(metrics: dict, *, compact: bool = False) -> bytes:
 
 def first_pass_pie(metrics: dict, *, compact: bool = False) -> bytes:
     fig, ax = _prep_figure(compact=compact)
-    tracked = metrics.get("first_pass_count", 0) + metrics.get("rejected_count", 0)
+    tracked = (
+        metrics.get("first_pass_count", 0)
+        + metrics.get("rejected_count", 0)
+        + metrics.get("paid_after_rejection_count", 0)
+    )
     other = max(0, metrics.get("review_count", 0) - tracked)
     _pie_or_placeholder(
         ax,
-        ["First-Pass Paid", "Rejected", "Not Tracked"],
-        [metrics.get("first_pass_count", 0), metrics.get("rejected_count", 0), other],
+        ["First-Pass Paid", "Rejected", "Paid After Rejection", "Not Tracked"],
+        [
+            metrics.get("first_pass_count", 0),
+            metrics.get("rejected_count", 0),
+            metrics.get("paid_after_rejection_count", 0),
+            other,
+        ],
         "Submission Results",
-        [COLORS["ready"], COLORS["stop"], COLORS["muted"]],
+        [COLORS["ready"], COLORS["stop"], COLORS["review"], COLORS["muted"]],
         compact=compact,
     )
     return fig_to_png_bytes(fig, compact=compact)

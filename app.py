@@ -4542,9 +4542,14 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
 
     st.session_state[f"first_pass_paid_{fv}"] = _truthy_flag(review.get("first_pass_paid"))
     st.session_state[f"rejected_{fv}"] = _truthy_flag(review.get("rejected"))
+    st.session_state[f"paid_after_rejection_{fv}"] = _truthy_flag(review.get("paid_after_rejection"))
 
     rejection_reason = str(review.get("rejection_reason") or "").strip()
-    if rejection_reason:
+    if _truthy_flag(review.get("paid_after_rejection")):
+        st.session_state[f"initial_decline_reason_{fv}"] = rejection_reason
+    else:
+        st.session_state[f"initial_decline_reason_{fv}"] = ""
+    if rejection_reason and not _truthy_flag(review.get("paid_after_rejection")):
         primary, _, notes = rejection_reason.partition(" — ")
         st.session_state[f"rejection_reason_select_{fv}"] = primary.strip()
         if notes.strip():
@@ -4610,7 +4615,14 @@ def _pending_claims_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     work = df.copy()
     work["first_pass_paid"] = pd.to_numeric(work.get("first_pass_paid", 0), errors="coerce").fillna(0).astype(int)
     work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
-    pending = work[(work["first_pass_paid"] == 0) & (work["rejected"] == 0)].copy()
+    work["paid_after_rejection"] = pd.to_numeric(
+        work.get("paid_after_rejection", 0), errors="coerce"
+    ).fillna(0).astype(int)
+    pending = work[
+        (work["first_pass_paid"] == 0)
+        & (work["rejected"] == 0)
+        & (work["paid_after_rejection"] == 0)
+    ].copy()
     if pending.empty:
         return pending
 
@@ -5226,7 +5238,7 @@ def render_pending_claims():
     info_cols[3].metric("Audit Status", str(selected.get("status") or "—"))
 
     st.caption(
-        f"OEM outcome: **{review_outcome_label(selected.get('first_pass_paid'), selected.get('rejected'))}** · "
+        f"OEM outcome: **{review_outcome_label(selected.get('first_pass_paid'), selected.get('rejected'), selected.get('paid_after_rejection'))}** · "
         f"{len(_parse_review_jobs(selected))} job(s) on file"
     )
 
@@ -5330,26 +5342,33 @@ def render_review():
 
     with st.expander("Claim outcome (optional — update later in Reporting)", expanded=False):
         st.caption(
-            "Record the Stellantis result when you know it. Leave both unchecked if the claim "
+            "Record the Stellantis result when you know it. Leave all unchecked if the claim "
             "is still pending — update outcomes on **Pending Claims** or **Reporting**."
         )
+        fv = st.session_state.form_version
         first_pass_paid = st.checkbox(
             "Paid on First Submission",
-            key=f"first_pass_paid_{st.session_state.form_version}",
+            key=f"first_pass_paid_{fv}",
         )
 
         rejected = st.checkbox(
             "Rejected / Returned",
-            key=f"rejected_{st.session_state.form_version}",
+            key=f"rejected_{fv}",
+        )
+
+        paid_after_rejection = st.checkbox(
+            "Rejected — paid after first submission",
+            key=f"paid_after_rejection_{fv}",
+            help="Use when the claim was declined initially but later paid after correction.",
         )
 
         rejection_reason = ""
+        initial_decline_reason = ""
         if rejected:
             reason_labels = active_rejection_reason_labels(rejection_library)
             if not reason_labels:
                 reason_labels = active_rejection_reason_labels({})
 
-            fv = st.session_state.form_version
             selected_reason = st.selectbox(
                 "Rejection Reason",
                 options=[""] + reason_labels,
@@ -5369,8 +5388,24 @@ def render_review():
                 else:
                     rejection_reason = selected_reason
 
-        if first_pass_paid and rejected:
-            st.error("Choose **either** First-Pass Paid **or** Rejected — not both.")
+        if paid_after_rejection:
+            initial_decline_reason = st.text_area(
+                "Why was it initially declined?",
+                key=f"initial_decline_reason_{fv}",
+                placeholder="Enter the OEM decline reason from the first submission.",
+                height=100,
+            )
+            if not str(initial_decline_reason or "").strip():
+                st.warning("Enter why the claim was initially declined.")
+
+        outcome_selected = sum(
+            bool(x) for x in (first_pass_paid, rejected, paid_after_rejection)
+        )
+        if outcome_selected > 1:
+            st.error(
+                "Choose only one outcome — **First-Pass Paid**, **Rejected / Returned**, "
+                "or **Rejected — paid after first submission** — or leave all unchecked if still pending."
+            )
 
     days_to_submit = (day_submitted - ro_invoiced).days
     st.caption(f"Days to submit: **{days_to_submit}**")
@@ -5535,12 +5570,35 @@ def render_review():
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
     ):
-        if first_pass_paid and rejected:
-            st.error(
-                "Fix claim outcome before saving: choose First-Pass Paid **or** Rejected, "
-                "or leave both unchecked if still pending."
-            )
-        if not (first_pass_paid and rejected):
+        outcome_selected = sum(
+            bool(x) for x in (first_pass_paid, rejected, paid_after_rejection)
+        )
+        outcome_valid = outcome_selected <= 1
+        if paid_after_rejection and not str(initial_decline_reason or "").strip():
+            outcome_valid = False
+        if outcome_valid and outcome_selected <= 1:
+            save_first_pass_paid = bool(first_pass_paid) and not rejected and not paid_after_rejection
+            save_rejected = bool(rejected) and not first_pass_paid and not paid_after_rejection
+            save_paid_after_rejection = bool(paid_after_rejection) and not first_pass_paid and not rejected
+            if save_paid_after_rejection:
+                rejection_reason = str(initial_decline_reason or "").strip()
+            elif not save_rejected:
+                rejection_reason = ""
+        else:
+            if outcome_selected > 1:
+                st.error(
+                    "Fix claim outcome before saving: choose only one outcome, "
+                    "or leave all unchecked if still pending."
+                )
+            elif paid_after_rejection and not str(initial_decline_reason or "").strip():
+                st.error(
+                    "Fix claim outcome before saving: enter why the claim was initially declined."
+                )
+            save_first_pass_paid = False
+            save_rejected = False
+            save_paid_after_rejection = False
+
+        if outcome_valid:
 
             all_hard = []
             all_warn = []
@@ -5639,8 +5697,9 @@ def render_review():
                 "ro_invoiced": str(ro_invoiced),
                 "day_submitted": str(day_submitted),
                 "days_to_submit": days_to_submit,
-                "first_pass_paid": first_pass_paid,
-                "rejected": rejected,
+                "first_pass_paid": save_first_pass_paid,
+                "rejected": save_rejected,
+                "paid_after_rejection": save_paid_after_rejection,
                 "rejection_reason": rejection_reason,
                 "advisor": advisor,
                 "technician": technician,
@@ -6588,10 +6647,12 @@ def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, s
     return True, selected_reason
 
 
-def _outcome_radio_index(first_pass_paid: int, rejected: int) -> int:
-    if first_pass_paid and not rejected:
+def _outcome_radio_index(first_pass_paid: int, rejected: int, paid_after_rejection: int = 0) -> int:
+    if paid_after_rejection and not first_pass_paid and not rejected:
+        return 3
+    if first_pass_paid and not rejected and not paid_after_rejection:
         return 1
-    if rejected and not first_pass_paid:
+    if rejected and not first_pass_paid and not paid_after_rejection:
         return 2
     return 0
 
@@ -6601,7 +6662,7 @@ def _review_option_label(row: dict) -> str:
     advisor = str(row.get("advisor") or "—").strip() or "—"
     claim_value = float(row.get("total_claim_value") or 0)
     status = str(row.get("outcome_status") or review_outcome_label(
-        row.get("first_pass_paid"), row.get("rejected")
+        row.get("first_pass_paid"), row.get("rejected"), row.get("paid_after_rejection")
     ))
     audited = row.get("created_at")
     audited_label = ""
@@ -6632,15 +6693,26 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     work = df.copy()
     work["first_pass_paid"] = pd.to_numeric(work.get("first_pass_paid", 0), errors="coerce").fillna(0).astype(int)
     work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
+    work["paid_after_rejection"] = pd.to_numeric(
+        work.get("paid_after_rejection", 0), errors="coerce"
+    ).fillna(0).astype(int)
     if "outcome_status" not in work.columns:
         work["outcome_status"] = [
-            review_outcome_label(fp, rej) for fp, rej in zip(work["first_pass_paid"], work["rejected"])
+            review_outcome_label(fp, rej, par)
+            for fp, rej, par in zip(
+                work["first_pass_paid"], work["rejected"], work["paid_after_rejection"]
+            )
         ]
 
-    pending_mask = (work["first_pass_paid"] == 0) & (work["rejected"] == 0)
+    pending_mask = (
+        (work["first_pass_paid"] == 0)
+        & (work["rejected"] == 0)
+        & (work["paid_after_rejection"] == 0)
+    )
     pending_count = int(pending_mask.sum())
     first_pass_count = int(work["first_pass_paid"].sum())
     rejected_count = int(work["rejected"].sum())
+    paid_after_count = int(work["paid_after_rejection"].sum())
     resolved_count = len(work) - pending_count
 
     render_metric_rows([
@@ -6648,6 +6720,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
             ("Pending Outcome", f"{pending_count:,}"),
             ("First-Pass Paid", f"{first_pass_count:,}"),
             ("Rejected / Returned", f"{rejected_count:,}"),
+            ("Paid After Rejection", f"{paid_after_count:,}"),
         ],
         [
             (
@@ -6660,7 +6733,13 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
 
     filter_choice = st.radio(
         "Show reviews",
-        ["Pending only", "All in date range", "First-Pass Paid", "Rejected / Returned"],
+        [
+            "Pending only",
+            "All in date range",
+            "First-Pass Paid",
+            "Rejected / Returned",
+            "Paid After Rejection",
+        ],
         horizontal=True,
         key="outcome_followup_filter",
     )
@@ -6672,6 +6751,8 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
         filtered = filtered[work["first_pass_paid"] == 1]
     elif filter_choice == "Rejected / Returned":
         filtered = filtered[work["rejected"] == 1]
+    elif filter_choice == "Paid After Rejection":
+        filtered = filtered[work["paid_after_rejection"] == 1]
 
     if filtered.empty:
         st.info(f"No reviews match **{filter_choice}** for this date range.")
@@ -6694,6 +6775,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     selected = next(row for row in option_rows if int(row["id"]) == int(selected_id))
     current_fp = int(selected.get("first_pass_paid") or 0)
     current_rej = int(selected.get("rejected") or 0)
+    current_par = int(selected.get("paid_after_rejection") or 0)
     current_reason = str(selected.get("rejection_reason") or "").strip()
 
     info_cols = st.columns(4)
@@ -6703,7 +6785,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
         "Claim Value",
         f"${float(selected.get('total_claim_value') or 0):,.2f}",
     )
-    info_cols[3].metric("Current", review_outcome_label(current_fp, current_rej))
+    info_cols[3].metric("Current", review_outcome_label(current_fp, current_rej, current_par))
 
     if selected.get("outcome_updated_by") or selected.get("outcome_updated_at"):
         updated_by = str(selected.get("outcome_updated_by") or "—")
@@ -6727,13 +6809,19 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     with st.form("outcome_followup_form", clear_on_submit=False):
         outcome_choice = st.radio(
             "OEM outcome",
-            ["Pending", "First-Pass Paid", "Rejected / Returned"],
-            index=_outcome_radio_index(current_fp, current_rej),
+            [
+                "Pending",
+                "First-Pass Paid",
+                "Rejected / Returned",
+                "Paid After Rejection",
+            ],
+            index=_outcome_radio_index(current_fp, current_rej, current_par),
             horizontal=True,
         )
 
         selected_reason = ""
         rejection_notes = ""
+        initial_decline_reason = ""
         if outcome_choice == "Rejected / Returned":
             reason_default = existing_primary if existing_primary in reason_labels else ""
             reason_index = reason_labels.index(reason_default) + 1 if reason_default in reason_labels else 0
@@ -6748,17 +6836,30 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 value=existing_notes,
                 placeholder="Required for 'Other' — optional detail for any reason.",
             )
+        elif outcome_choice == "Paid After Rejection":
+            initial_decline_reason = st.text_area(
+                "Why was it initially declined?",
+                value=current_reason if current_par else "",
+                placeholder="Enter the OEM decline reason from the first submission.",
+                height=100,
+            )
 
         submitted = st.form_submit_button("Save outcome", type="primary", use_container_width=True)
 
     if submitted:
         first_pass_paid = outcome_choice == "First-Pass Paid"
         rejected = outcome_choice == "Rejected / Returned"
+        paid_after_rejection = outcome_choice == "Paid After Rejection"
         rejection_reason = ""
         if rejected:
             ok, rejection_reason = _compose_rejection_reason(selected_reason, rejection_notes)
             if not ok:
                 st.error(rejection_reason)
+                return
+        elif paid_after_rejection:
+            rejection_reason = str(initial_decline_reason or "").strip()
+            if not rejection_reason:
+                st.error("Enter why the claim was initially declined.")
                 return
 
         try:
@@ -6767,6 +6868,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 int(selected_id),
                 first_pass_paid=first_pass_paid,
                 rejected=rejected,
+                paid_after_rejection=paid_after_rejection,
                 rejection_reason=rejection_reason,
                 updated_by=current_person_name() or auth_user_email(),
             )
