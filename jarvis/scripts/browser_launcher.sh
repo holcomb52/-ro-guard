@@ -41,6 +41,6 @@ for _ in $(seq 1 30); do
   sleep 0.5
 done
 
-open "$URL"
+open "$URL" 2>/dev/null || true
 notify "JARVIS Browser" "Running at ${URL}"
 exit 0

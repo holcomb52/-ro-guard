@@ -10,8 +10,8 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 cd "$PROJECT_ROOT"
 
-VENV_PYTHON="$PROJECT_ROOT/jarvis/.venv/bin/python"
-if [[ ! -x "$VENV_PYTHON" ]]; then
+JARVIS_PY="$PROJECT_ROOT/jarvis/bin/jarvis-python"
+if [[ ! -x "$JARVIS_PY" ]]; then
   "$PROJECT_ROOT/jarvis/setup.sh"
 fi
-PYTHON="$VENV_PYTHON"
+PYTHON="$JARVIS_PY"

@@ -6198,18 +6198,21 @@ def _filter_reviews_by_date(df, key_prefix="report"):
     if df.empty or "created_at" not in df.columns:
         return df
     df = normalize_reviews_dataframe(df)
-    min_d = df["created_at"].min().date()
-    max_d = df["created_at"].max().date()
+    today = date.today()
     mtd_start, mtd_end = _default_report_date_range()
-    picker_min = min(min_d, mtd_start)
-    picker_max = max(max_d, mtd_end)
+    # Do not cap the calendar to only loaded rows — allow at least 2 prior years for reporting.
+    calendar_min = date(today.year - 2, 1, 1)
+    min_d = df["created_at"].min().date()
+    picker_min = min(min_d, calendar_min)
+    picker_max = today
     date_range = st.date_input(
         "Report Date Range",
         value=(mtd_start, mtd_end),
         min_value=picker_min,
         max_value=picker_max,
         key=f"{key_prefix}_report_date_mtd_v2",
-        help="Defaults to month-to-date. Change either date for a custom range.",
+        help="Defaults to month-to-date. You can select any range back to January 1, "
+        f"{today.year - 2} (or earlier if reviews exist).",
     )
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range

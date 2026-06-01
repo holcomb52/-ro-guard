@@ -9,11 +9,7 @@ if [[ ! -f "$ROOT/.env" ]]; then
 fi
 
 "$ROOT/jarvis/setup.sh"
-export PYTHONNOUSERSITE=1
-unset PYTHONPATH
-PYTHON="$ROOT/jarvis/.venv/bin/python"
-
-"$PYTHON" -m streamlit run jarvis/app.py \
+exec "$ROOT/jarvis/bin/jarvis-python" -m streamlit run jarvis/app.py \
   --server.port "${JARVIS_PORT:-8765}" \
   --server.address 127.0.0.1 \
   --browser.gatherUsageStats false

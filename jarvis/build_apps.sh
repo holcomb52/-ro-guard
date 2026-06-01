@@ -8,15 +8,17 @@ APPS="$JARVIS/apps"
 mkdir -p "$APPS" "$JARVIS/logs"
 
 echo "Setting up isolated JARVIS Python environment…"
-"$JARVIS/setup.sh"
+"$ROOT/jarvis/setup.sh"
 
-PYTHON="$JARVIS/.venv/bin/python"
+PYTHON="$JARVIS/bin/jarvis-python"
 
 cat >"$JARVIS/scripts/config.env" <<EOF
 PROJECT_ROOT=$ROOT
 PYTHON=$PYTHON
 JARVIS_PORT=8765
 EOF
+
+chmod +x "$JARVIS/bin/jarvis-python"
 
 chmod +x "$JARVIS/scripts/"*.sh
 

@@ -24,7 +24,7 @@ fi
 
 "$PYTHON" -m pip install -r jarvis/requirements.txt -q 2>/dev/null || true
 
-nohup "$PYTHON" -m jarvis.listen >>"$LOG_FILE" 2>&1 &
+nohup env JARVIS_SKIP_MIC_TEST=1 "$PYTHON" -m jarvis.listen >>"$LOG_FILE" 2>&1 &
 echo $! >"$PID_FILE"
 
 notify "JARVIS Voice" "Listening for Hey Jarvis — no Terminal needed"

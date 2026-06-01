@@ -356,16 +356,17 @@ def run_listener(*, debug: bool = False, device: int | None = None) -> int:
     sample_rate = _device_sample_rate(active_device)
     print(f"Listening on [{active_device}] {_device_name(active_device)} @ {sample_rate} Hz.\n")
 
-    test_peak, test_err = _test_microphone(active_device, seconds=2.0)
-    if test_err:
-        print(test_err, file=sys.stderr)
-        return 1
-    if test_peak < 0.003:
-        _mic_permission_help(active_device, test_peak)
-        if os.getenv("JARVIS_SKIP_MIC_TEST", "").strip().lower() not in ("1", "true", "yes"):
-            return 1
-        print("Continuing anyway (JARVIS_SKIP_MIC_TEST is set)…", flush=True)
+    skip_mic_test = os.getenv("JARVIS_SKIP_MIC_TEST", "").strip().lower() in ("1", "true", "yes")
+    if skip_mic_test:
+        print("Mic test skipped (app/background mode).\n", flush=True)
     else:
+        test_peak, test_err = _test_microphone(active_device, seconds=2.0)
+        if test_err:
+            print(test_err, file=sys.stderr)
+            return 1
+        if test_peak < 0.003:
+            _mic_permission_help(active_device, test_peak)
+            return 1
         print(f"Mic test OK (peak level {test_peak:.4f}) on device [{active_device}] @ {sample_rate} Hz.\n", flush=True)
 
     print("JARVIS is listening hands-free on this Mac.")
