@@ -1064,9 +1064,15 @@ def compute_roi_metrics(
 
     rejection_reasons = pd.DataFrame()
     if "rejection_reason" in data.columns:
-        reasons = data[data["rejection_reason"].astype(str).str.strip() != ""]
+        declined_mask = (
+            (pd.to_numeric(data.get("rejected", 0), errors="coerce").fillna(0).astype(int) == 1)
+            | (
+                pd.to_numeric(data.get("paid_after_rejection", 0), errors="coerce").fillna(0).astype(int)
+                == 1
+            )
+        )
+        reasons = data[declined_mask & data["rejection_reason"].astype(str).str.strip().astype(bool)].copy()
         if not reasons.empty:
-            reasons = reasons.copy()
             reasons["rejection_reason_primary"] = (
                 reasons["rejection_reason"].astype(str).str.split(" — ").str[0].str.strip()
             )

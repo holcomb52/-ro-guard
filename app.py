@@ -6594,14 +6594,17 @@ def render_roi_dashboard():
         if not reasons.empty:
             st.dataframe(
                 reasons.head(8).rename(columns={
-                    "rejection_reason": "Reason",
+                    "rejection_reason": "Reason Category",
                     "count": "Count",
                     "total_value": "Claim Value",
                 }),
                 use_container_width=True,
             )
+            st.caption("See **Rejections** tab for full decline text and user notes per claim.")
         else:
-            st.caption("Mark rejections on the Review tab to track reasons and cost here.")
+            st.caption(
+                "Mark rejections on Review or Claim Outcomes — reasons and notes appear under **Rejections**."
+            )
 
     st.markdown("### How We Calculate ROI")
     st.info(
@@ -6638,6 +6641,63 @@ def render_roi_dashboard():
         st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
     except Exception as e:
         st.warning(f"ROI PDF could not be generated: {e}")
+
+
+def _split_rejection_reason(reason: str) -> tuple[str, str]:
+    """Return (category, notes) from stored rejection_reason text."""
+    text = str(reason or "").strip()
+    if not text:
+        return "", ""
+    if " — " in text:
+        primary, _, notes = text.partition(" — ")
+        return primary.strip(), notes.strip()
+    return text, ""
+
+
+def _declined_outcome_reviews(df: pd.DataFrame) -> pd.DataFrame:
+    """Reviews marked rejected or paid-after-rejection (OEM decline tracking)."""
+    if df.empty:
+        return df.copy()
+    work = df.copy()
+    work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
+    work["paid_after_rejection"] = pd.to_numeric(
+        work.get("paid_after_rejection", 0), errors="coerce"
+    ).fillna(0).astype(int)
+    declined = (work["rejected"] == 1) | (work["paid_after_rejection"] == 1)
+    return work[declined].copy()
+
+
+def _rejection_detail_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Build a reporting table with outcome, category, and full user notes preserved."""
+    declined = _declined_outcome_reviews(df)
+    if declined.empty:
+        return declined
+
+    rows = []
+    for _, row in declined.iterrows():
+        fp = int(row.get("first_pass_paid") or 0)
+        rej = int(row.get("rejected") or 0)
+        par = int(row.get("paid_after_rejection") or 0)
+        reason = str(row.get("rejection_reason") or "").strip()
+        category, notes = _split_rejection_reason(reason)
+        rows.append(
+            {
+                "created_at": row.get("created_at"),
+                "ro_number": row.get("ro_number"),
+                "advisor": row.get("advisor"),
+                "outcome": review_outcome_label(fp, rej, par),
+                "decline_category": category or "—",
+                "decline_notes": notes or "—",
+                "full_decline_reason": reason or "—",
+                "total_claim_value": float(row.get("total_claim_value") or 0),
+            }
+        )
+    detail = pd.DataFrame(rows)
+    if "created_at" in detail.columns:
+        detail["created_at"] = pd.to_datetime(detail["created_at"], errors="coerce").dt.strftime(
+            "%Y-%m-%d %H:%M"
+        )
+    return detail.sort_values("created_at", ascending=False)
 
 
 def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, str]:
@@ -6792,6 +6852,13 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     )
     info_cols[3].metric("Current", review_outcome_label(current_fp, current_rej, current_par))
 
+    if current_reason:
+        category, notes = _split_rejection_reason(current_reason)
+        st.info(
+            f"**Recorded decline reason:** {current_reason}"
+            + (f"\n\nCategory: **{category}** · Notes: {notes}" if notes else "")
+        )
+
     if selected.get("outcome_updated_by") or selected.get("outcome_updated_at"):
         updated_by = str(selected.get("outcome_updated_by") or "—")
         updated_at = selected.get("outcome_updated_at")
@@ -6902,6 +6969,36 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
         ]
         st.dataframe(pending_view[pending_cols].head(15), use_container_width=True, hide_index=True)
 
+    rejection_detail = _rejection_detail_frame(work)
+    if not rejection_detail.empty:
+        st.markdown("**Recorded rejections & decline reasons**")
+        st.caption(
+            "Every reason entered on Review or Claim Outcomes is kept here — category, notes, "
+            "and the full text as entered."
+        )
+        missing_reason = int((rejection_detail["full_decline_reason"] == "—").sum())
+        if missing_reason:
+            st.warning(
+                f"{missing_reason} declined claim(s) have **no reason recorded** yet. "
+                "Select the review above and add the OEM decline reason."
+            )
+        st.dataframe(
+            rejection_detail.rename(
+                columns={
+                    "created_at": "Audited",
+                    "ro_number": "RO",
+                    "advisor": "Advisor",
+                    "outcome": "Outcome",
+                    "decline_category": "Reason Category",
+                    "decline_notes": "User Notes",
+                    "full_decline_reason": "Full Decline Reason (as entered)",
+                    "total_claim_value": "Claim Value",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
 
 def render_reporting_summary(df: pd.DataFrame) -> None:
     review_count = len(df)
@@ -6994,37 +7091,80 @@ def render_reporting_vin_recalls(df: pd.DataFrame) -> None:
 
 
 def render_reporting_rejections(df: pd.DataFrame) -> None:
-    st.caption("Rejected and returned claims grouped by standard rejection reason.")
-    fp_df = df.copy()
-    fp_df["rejection_reason"] = fp_df.get("rejection_reason", "").astype(str)
-    fp_df["total_claim_value"] = pd.to_numeric(fp_df.get("total_claim_value", 0), errors="coerce").fillna(0)
-
-    reasons = fp_df[fp_df["rejection_reason"].str.strip() != ""].copy()
-    if reasons.empty:
-        st.info("No rejection reasons recorded yet. Mark rejections on Review or under Claim Outcomes.")
+    st.caption(
+        "Track why claims were declined — standard reason, user notes, and paid-after-rejection "
+        "initial decline text are all preserved exactly as entered."
+    )
+    declined = _declined_outcome_reviews(df)
+    if declined.empty:
+        st.info(
+            "No rejected or paid-after-rejection outcomes in this date range. "
+            "Mark outcomes on **Review** or **Claim Outcomes**."
+        )
         return
 
-    reasons["rejection_reason_primary"] = (
-        reasons["rejection_reason"].astype(str).str.split(" — ").str[0].str.strip()
-    )
-    reason_summary = reasons.groupby("rejection_reason_primary").agg(
-        count=("ro_number", "count"),
-        total_value=("total_claim_value", "sum"),
-    ).reset_index().sort_values("count", ascending=False)
-    reason_summary = reason_summary.rename(columns={"rejection_reason_primary": "rejection_reason"})
-    st.dataframe(reason_summary, use_container_width=True)
+    detail = _rejection_detail_frame(df)
+    with_reason = detail[detail["full_decline_reason"] != "—"]
+    missing = len(detail) - len(with_reason)
 
-    with st.expander("All rejection detail (including notes)"):
-        detail = reasons.copy()
-        if "created_at" in detail.columns:
-            detail["created_at"] = pd.to_datetime(
-                detail["created_at"], errors="coerce"
-            ).dt.strftime("%Y-%m-%d %H:%M")
-        detail_cols = [
-            c for c in ("created_at", "ro_number", "rejection_reason", "total_claim_value", "advisor")
-            if c in detail.columns
-        ]
-        st.dataframe(detail[detail_cols], use_container_width=True)
+    render_metric_rows([
+        [
+            ("Declined Claims", f"{len(declined):,}"),
+            ("With Decline Reason", f"{len(with_reason):,}"),
+            ("Missing Reason", f"{missing:,}"),
+        ],
+    ])
+
+    if not with_reason.empty:
+        summary = with_reason.copy()
+        summary["decline_category"] = summary["decline_category"].replace("—", "Uncategorized")
+        reason_summary = summary.groupby("decline_category", as_index=False).agg(
+            count=("ro_number", "count"),
+            total_value=("total_claim_value", "sum"),
+        ).sort_values(["count", "total_value"], ascending=[False, False])
+        st.markdown("**Decline reasons by category**")
+        st.dataframe(
+            reason_summary.rename(
+                columns={
+                    "decline_category": "Reason Category",
+                    "count": "Claims",
+                    "total_value": "Claim Value",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.markdown("**All decline detail (full text preserved)**")
+    if missing:
+        st.warning(
+            f"{missing} declined claim(s) are missing a reason — update them under **Claim Outcomes**."
+        )
+    st.dataframe(
+        detail.rename(
+            columns={
+                "created_at": "Audited",
+                "ro_number": "RO",
+                "advisor": "Advisor",
+                "outcome": "Outcome",
+                "decline_category": "Reason Category",
+                "decline_notes": "User Notes",
+                "full_decline_reason": "Full Decline Reason (as entered)",
+                "total_claim_value": "Claim Value",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.download_button(
+        "Download Decline Reasons CSV",
+        detail.to_csv(index=False),
+        "ro_shield_decline_reasons.csv",
+        "text/csv",
+        use_container_width=True,
+        key="decline_reasons_csv",
+    )
 
 
 _SCORE_BAND_GREEN = "background-color: #dcfce7; color: #166534; font-weight: 700"
@@ -7195,7 +7335,35 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
 
 def render_reporting_review_log(df: pd.DataFrame) -> None:
     st.caption("Full review history for the selected date range. Export for meetings or records.")
-    display_df = df.drop(columns=["jobs"], errors="ignore")
+    display_df = df.drop(columns=["jobs"], errors="ignore").copy()
+    if "outcome_status" not in display_df.columns and "first_pass_paid" in display_df.columns:
+        display_df["outcome_status"] = [
+            review_outcome_label(fp, rej, par)
+            for fp, rej, par in zip(
+                display_df.get("first_pass_paid", 0),
+                display_df.get("rejected", 0),
+                display_df.get("paid_after_rejection", 0),
+            )
+        ]
+    priority_cols = [
+        c for c in (
+            "created_at",
+            "ro_number",
+            "advisor",
+            "outcome_status",
+            "rejection_reason",
+            "score",
+            "status",
+            "total_claim_value",
+            "hard_stop_count",
+            "rejected",
+            "paid_after_rejection",
+            "first_pass_paid",
+        )
+        if c in display_df.columns
+    ]
+    other_cols = [c for c in display_df.columns if c not in priority_cols]
+    display_df = display_df[priority_cols + other_cols]
     st.dataframe(display_df, use_container_width=True)
 
     if "created_at" in df.columns and df["created_at"].notna().any():
