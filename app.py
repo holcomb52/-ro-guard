@@ -100,13 +100,36 @@ from deployment_admin import render_deployment_secrets_admin, user_can_view_depl
 from scheduled_reports_admin import render_scheduled_reports_admin
 from display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
-from vin_recalls import (
-    MAX_DISPLAY_RECALLS,
-    apply_job_relevance,
-    filter_actionable_recalls,
-    lookup_vin_recalls,
-    normalize_vin,
-)
+import vin_recalls
+from vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
+
+MAX_DISPLAY_RECALLS = getattr(vin_recalls, "MAX_DISPLAY_RECALLS", 5)
+
+
+def filter_actionable_recalls(
+    recalls: list[dict],
+    *,
+    min_score: int = getattr(vin_recalls, "RELATED_RECALL_MIN_SCORE", 12),
+) -> list[dict]:
+    """Use vin_recalls filter when available; keep a local fallback for older deploys."""
+    module_fn = getattr(vin_recalls, "filter_actionable_recalls", None)
+    if module_fn is not None:
+        return module_fn(recalls, min_score=min_score)
+
+    actionable: list[dict] = []
+    for recall in recalls:
+        score = int(recall.get("relevance_score") or 0)
+        critical = bool(recall.get("park_it") or recall.get("park_outside"))
+        if score >= min_score or critical:
+            actionable.append(recall)
+    actionable.sort(
+        key=lambda r: (
+            0 if (r.get("park_it") or r.get("park_outside")) else 1,
+            -int(r.get("relevance_score") or 0),
+            r.get("report_date") or "",
+        ),
+    )
+    return actionable
 
 try:
     from dotenv import load_dotenv

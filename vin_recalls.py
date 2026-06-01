@@ -7,6 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from typing import Optional, Tuple
 
 VPIC_DECODE_URL = "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}?format=json"
 RECALLS_BY_VEHICLE_URL = "https://api.nhtsa.gov/recalls/recallsByVehicle"
@@ -39,7 +40,7 @@ def _http_get_json(url: str, timeout: int = 25) -> dict:
         return json.loads(resp.read().decode("utf-8", errors="replace"))
 
 
-def decode_vin(vin: str) -> tuple[dict | None, str | None]:
+def decode_vin(vin: str) -> Tuple[Optional[dict], Optional[str]]:
     """Decode VIN via NHTSA vPIC. Returns (vehicle_dict, error_message)."""
     vin_clean = normalize_vin(vin)
     if len(vin_clean) < 11:
