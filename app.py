@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core.ro_charts import (
     advisor_hard_stops_chart,
@@ -2587,7 +2586,7 @@ def configure_streamlit_toolbar() -> None:
 
 def _inject_streamlit_cloud_chrome_restore() -> None:
     """Keep Share / Manage app visible for the app owner."""
-    components.html(
+    st.html(
         """
         <script>
         (function () {
@@ -2646,7 +2645,7 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
 
 def _inject_streamlit_cloud_chrome_hide() -> None:
     """Hide Manage app / Share for dealership logins (Streamlit may still inject them)."""
-    components.html(
+    st.html(
         """
         <script>
         (function () {
@@ -4202,7 +4201,7 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
     payload = json.dumps(str(text))
     safe_label = html.escape(label)
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
-    components.html(
+    st.html(
         f"""
         <style>
           html, body {{

@@ -7,7 +7,6 @@ import re
 from typing import Callable
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core.personnel_roles import format_roles_display, parse_personnel_roles
 
@@ -48,7 +47,7 @@ def app_redirect_url() -> str:
 
 def inject_auth_hash_bridge() -> None:
     """Move Supabase recovery tokens from URL hash into query params for Streamlit."""
-    components.html(
+    st.html(
         """
         <script>
         (function () {
