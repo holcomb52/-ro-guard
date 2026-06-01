@@ -49,26 +49,28 @@ def inject_auth_hash_bridge() -> None:
     """Move Supabase recovery tokens from URL hash into query params for Streamlit."""
     st.html(
         """
+        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           try {
-            const parent = window.parent;
-            const href = parent.location.href;
+            const target = window.parent !== window ? window.parent : window;
+            const href = target.location.href;
             if (!href.includes("#")) return;
-            const hash = parent.location.hash.startsWith("#")
-              ? parent.location.hash.substring(1)
-              : parent.location.hash;
+            const hash = target.location.hash.startsWith("#")
+              ? target.location.hash.substring(1)
+              : target.location.hash;
             const hashParams = new URLSearchParams(hash);
             if (!hashParams.get("access_token")) return;
             const url = new URL(href.split("#")[0]);
             hashParams.forEach((value, key) => url.searchParams.set(key, value));
-            parent.location.replace(url.toString());
+            target.location.replace(url.toString());
           } catch (e) {}
         })();
         </script>
+        </div>
         """,
-        height=0,
-        width=0,
+        width="content",
+        unsafe_allow_javascript=True,
     )
 
 

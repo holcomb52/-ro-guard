@@ -2588,6 +2588,7 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
     """Keep Share / Manage app visible for the app owner."""
     st.html(
         """
+        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           function restoreChrome(doc) {
@@ -2637,9 +2638,10 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
           } catch (e) {}
         })();
         </script>
+        </div>
         """,
-        height=0,
-        width=0,
+        width="content",
+        unsafe_allow_javascript=True,
     )
 
 
@@ -2647,6 +2649,7 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
     """Hide Manage app / Share for dealership logins (Streamlit may still inject them)."""
     st.html(
         """
+        <div aria-hidden="true" style="height:0;width:0;overflow:hidden;margin:0;padding:0;border:0">
         <script>
         (function () {
           function hideChrome(doc) {
@@ -2676,9 +2679,10 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
           } catch (e) {}
         })();
         </script>
+        </div>
         """,
-        height=0,
-        width=0,
+        width="content",
+        unsafe_allow_javascript=True,
     )
 
 
@@ -4263,7 +4267,8 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
         }})();
         </script>
         """,
-        height=34,
+        width="content",
+        unsafe_allow_javascript=True,
     )
 
 
