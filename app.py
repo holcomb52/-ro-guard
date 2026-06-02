@@ -4877,7 +4877,11 @@ def _render_app_workspace_header(theme: str = "Dark", *, supabase_client=None) -
         st.markdown(
             f"""
 <div class="app-workspace-header">
-<div class="app-workspace-kicker"{_inline_text_color(c["workspace_kicker"])}>RO Guard · Warranty Workspace</div>
+<div class="app-workspace-kicker">
+<span class="app-workspace-brand"{_inline_text_color(c["workspace_brand"])}>RO Guard</span>
+<span class="app-workspace-sep" aria-hidden="true">·</span>
+<span class="app-workspace-title"{_inline_text_color(c["workspace_title"])}>Warranty Workspace</span>
+</div>
 <h2{_inline_text_color(c["workspace_h2"])}>Smarter Claims. <span{_inline_text_color(c["workspace_h2"])}>Stronger Profits.</span></h2>
 <p{_inline_text_color(c["workspace_body"])}>Audit warranty ROs, protect claim dollars, and prove ROI across review, reporting, and admin tools.</p>
 <div class="app-workspace-accent"{_inline_text_color(c["workspace_accent"])}>Control the Claim · Protect the Profit</div>

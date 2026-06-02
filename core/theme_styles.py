@@ -1,6 +1,8 @@
 BRAND_TEXT = {
     "Dark": {
         "workspace_kicker": "#94a3b8",
+        "workspace_brand": "#f8fbff",
+        "workspace_title": "#93c5fd",
         "workspace_h2": "#f8fbff",
         "workspace_body": "#94a3b8",
         "workspace_accent": "#60a5fa",
@@ -14,6 +16,8 @@ BRAND_TEXT = {
     },
     "Light": {
         "workspace_kicker": "#64748b",
+        "workspace_brand": "#1e3a8a",
+        "workspace_title": "#475569",
         "workspace_h2": "#0f172a",
         "workspace_body": "#475569",
         "workspace_accent": "#1d4ed8",
@@ -52,8 +56,12 @@ def brand_color_lock_css(theme: str = "Dark") -> str:
     )
     return (
         lock(
-            f"{header_sel} .app-workspace-kicker, div.app-workspace-kicker",
-            c["workspace_kicker"],
+            f"{header_sel} .app-workspace-brand, div.app-workspace-brand",
+            c["workspace_brand"],
+        )
+        + lock(
+            f"{header_sel} .app-workspace-title, div.app-workspace-title",
+            c["workspace_title"],
         )
         + lock(
             f"{header_sel} h2, {header_sel} h2 span, div.app-workspace-header h2, div.app-workspace-header h2 span",
@@ -1399,7 +1407,45 @@ THEME_CSS = {
     .review-scan-hero-top {
         padding: 12px 18px 10px;
     }
-    .app-workspace-kicker,
+    .app-workspace-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 12px 0;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        border-left: 4px solid #3b82f6;
+        background: linear-gradient(
+            105deg,
+            rgba(37, 99, 235, 0.22) 0%,
+            rgba(15, 23, 42, 0.55) 55%,
+            rgba(2, 9, 19, 0.75) 100%
+        );
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    }
+    .app-workspace-brand {
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        color: #f8fbff !important;
+        text-shadow: 0 0 24px rgba(96, 165, 250, 0.45);
+    }
+    .app-workspace-sep {
+        font-size: 1.1rem;
+        font-weight: 300;
+        color: rgba(148, 163, 184, 0.85) !important;
+        user-select: none;
+    }
+    .app-workspace-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #93c5fd !important;
+    }
     .review-scan-kicker {
         margin-bottom: 6px;
         font-size: 11px;
@@ -2367,11 +2413,37 @@ THEME_CSS = {
         padding: 0;
     }
     .app-workspace-kicker {
-        margin-bottom: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        color: #64748b !important;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 12px 0;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: 1px solid #bfdbfe;
+        border-left: 4px solid #2563eb;
+        background: linear-gradient(105deg, #eff6ff 0%, #f8fafc 100%);
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.12);
+    }
+    .app-workspace-brand {
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        color: #1e3a8a !important;
+    }
+    .app-workspace-sep {
+        font-size: 1.1rem;
+        font-weight: 300;
+        color: #94a3b8 !important;
+        user-select: none;
+    }
+    .app-workspace-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #475569 !important;
     }
     .app-workspace-header h2 {
         margin: 0 0 8px 0;
