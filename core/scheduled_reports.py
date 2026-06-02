@@ -11,10 +11,10 @@ from email.mime.text import MIMEText
 
 import pandas as pd
 
-from core.auth import is_valid_email, normalize_email
-from core.pdf_reports import build_review_report_pdf, build_roi_report_pdf
-from core.personnel_roles import parse_personnel_roles
-from core.review_store import compute_roi_metrics, load_reviews, normalize_reviews_dataframe
+from .auth import is_valid_email, normalize_email
+from .pdf_reports import build_review_report_pdf, build_roi_report_pdf
+from .personnel_roles import parse_personnel_roles
+from .review_store import compute_roi_metrics, load_reviews, normalize_reviews_dataframe
 
 SCHEDULE_FREQUENCIES = ("daily", "monthly", "yearly")
 REPORT_TYPES = ("reporting", "roi")

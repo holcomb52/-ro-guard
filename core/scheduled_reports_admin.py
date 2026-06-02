@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from core.auth import auth_user_email
-from core.scheduled_reports import (
+from .auth import auth_user_email
+from .scheduled_reports import (
     FREQUENCY_HELP,
     FREQUENCY_LABELS,
     REPORT_TYPE_LABELS,
