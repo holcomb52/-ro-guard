@@ -5084,7 +5084,6 @@ def _render_review_job_panel(
         tech_flagged_time = st.number_input(
             "Tech flagged time",
             min_value=0.0,
-            value=0.0,
             step=0.1,
             key=f"tech_time_{job_no}",
         )
@@ -5092,7 +5091,6 @@ def _render_review_job_panel(
         time_allotted = st.number_input(
             "Time allotted",
             min_value=0.0,
-            value=0.0,
             step=0.1,
             key=f"allotted_{job_no}",
         )
@@ -5100,7 +5098,6 @@ def _render_review_job_panel(
         claim_value = st.number_input(
             "Claim value",
             min_value=0.0,
-            value=0.0,
             step=1.0,
             key=f"claim_value_{job_no}",
         )
@@ -5131,7 +5128,6 @@ def _render_review_job_panel(
         rental_days = st.number_input(
             "Rental days billed",
             min_value=0,
-            value=0,
             step=1,
             key=f"rental_days_{job_no}",
         )
@@ -5377,7 +5373,6 @@ def render_review():
         "How many warranty jobs are on this RO?",
         min_value=1,
         max_value=10,
-        value=st.session_state.job_count,
         step=1,
         key="job_count",
     )
@@ -6569,11 +6564,12 @@ def render_roi_dashboard():
                 key="roi_minutes_saved",
             )
         with c3:
+            if "roi_hourly_rate" not in st.session_state:
+                st.session_state.roi_hourly_rate = 38.0
             hourly_rate = st.number_input(
                 "Warranty admin loaded hourly cost ($)",
                 min_value=20.0,
                 max_value=100.0,
-                value=38.0,
                 step=1.0,
                 key="roi_hourly_rate",
             )
