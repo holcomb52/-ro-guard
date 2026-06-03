@@ -599,7 +599,11 @@ def dealer_connect_panel_css(theme: str = "Dark") -> str:
         word-break: break-word;
         user-select: all;
         -webkit-user-select: all;
-        cursor: text;
+        cursor: pointer;
+    }}
+    {scope} div[data-testid="stColumn"]:has(iframe) iframe {{
+        width: 100% !important;
+        min-width: 72px !important;
     }}
     {scope} div[data-testid="stCaptionContainer"] p {{
         color: {label_muted} !important;
@@ -794,6 +798,8 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
     {scope} iframe {{
         background: transparent !important;
         background-color: transparent !important;
+        width: 100% !important;
+        min-width: 72px !important;
     }}
     {scope} div[data-testid="stColumn"]:has(iframe) {{
         display: flex !important;

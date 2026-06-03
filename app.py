@@ -1579,18 +1579,13 @@ def _render_paid_labor_op_body(jobs: list[dict]) -> None:
                 f"**{op_code}**"
                 + (f" · {' · '.join(detail_parts)}" if detail_parts else "")
             )
-            st.markdown(
-                f'<div class="dc-copy-value">{html.escape(op_code)}</div>',
-                unsafe_allow_html=True,
-            )
             safe_op = re.sub(r"[^a-zA-Z0-9_-]", "_", op_code)
-            _, copy_col = st.columns([5, 1])
-            with copy_col:
-                _render_field_copy_button(
-                    op_code,
-                    label=f"Labor op {op_code}",
-                    element_id=f"copy_labor_op_j{job_no}_{idx}_{safe_op}",
-                )
+            _render_field_copy_button(
+                op_code,
+                label=f"Labor op {op_code}",
+                element_id=f"copy_labor_op_j{job_no}_{idx}_{safe_op}",
+                show_value_box=True,
+            )
 
         if len(similar) > 1:
             others = len(similar) - 1
@@ -4191,13 +4186,33 @@ def _format_dc_copy_number(value: float | int | str) -> str:
     return f"{number:.2f}".rstrip("0").rstrip(".")
 
 
-def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None:
-    """Compact copy button for narrative / Dealer Connect fields (transparent iframe)."""
-    if not str(text or "").strip():
+def _render_field_copy_button(
+    text: str,
+    *,
+    label: str,
+    element_id: str,
+    show_value_box: bool = False,
+) -> None:
+    """Copy control for narrative / Dealer Connect fields (iframe — clipboard needs JS)."""
+    payload_text = str(text or "").strip()
+    if not payload_text:
         return
-    payload = json.dumps(str(text))
+    payload = json.dumps(payload_text)
     safe_label = html.escape(label)
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
+    safe_display = html.escape(payload_text)
+    value_box = ""
+    if show_value_box:
+        value_box = f"""
+        <div class="copy-value-box" id="{safe_id}_box" title="Click to copy {safe_label}">
+          {safe_display}
+        </div>
+        """
+    iframe_height = 34
+    if show_value_box:
+        line_count = max(1, payload_text.count("\n") + 1, (len(payload_text) // 48) + 1)
+        iframe_height = min(220, 78 + (line_count * 22))
+
     embed_html(
         f"""
         <style>
@@ -4206,6 +4221,25 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
             padding: 0;
             background: transparent !important;
             overflow: hidden;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+          }}
+          .copy-value-box {{
+            margin: 0 0 8px 0;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(7, 19, 34, .92);
+            border: 1px solid rgba(62, 150, 255, .28);
+            color: #f8fbff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.92rem;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+            cursor: pointer;
+          }}
+          .copy-value-box:hover {{
+            border-color: rgba(96, 165, 250, .55);
+            background: rgba(13, 30, 55, .95);
           }}
           button {{
             width: 100%;
@@ -4222,45 +4256,59 @@ def _render_field_copy_button(text: str, *, label: str, element_id: str) -> None
             background: rgba(13, 30, 55, .95);
           }}
         </style>
+        {value_box}
         <button id="{safe_id}" type="button" title="Copy {safe_label}">Copy</button>
         <script>
         (function() {{
           const btn = document.getElementById("{safe_id}");
+          const box = document.getElementById("{safe_id}_box");
           if (!btn) return;
           const text = {payload};
           const reset = () => {{ btn.textContent = "Copy"; }};
-          btn.addEventListener("click", function() {{
-            const copied = () => {{
-              btn.textContent = "Copied!";
-              setTimeout(reset, 1200);
-            }};
-            const fallback = () => {{
-              const ta = document.createElement("textarea");
-              ta.value = text;
-              ta.setAttribute("readonly", "");
-              ta.style.position = "fixed";
-              ta.style.left = "-9999px";
-              document.body.appendChild(ta);
-              ta.select();
-              try {{
-                document.execCommand("copy");
-                copied();
-              }} catch (e) {{
-                btn.textContent = "Select text";
-                setTimeout(reset, 1600);
+          const copied = () => {{
+            btn.textContent = "Copied!";
+            if (box) {{
+              box.style.borderColor = "rgba(74, 222, 128, .65)";
+            }}
+            setTimeout(() => {{
+              reset();
+              if (box) {{
+                box.style.borderColor = "rgba(62, 150, 255, .28)";
               }}
-              document.body.removeChild(ta);
-            }};
+            }}, 1200);
+          }};
+          const fallback = () => {{
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            try {{
+              document.execCommand("copy");
+              copied();
+            }} catch (e) {{
+              btn.textContent = "Select text";
+              setTimeout(reset, 1600);
+            }}
+            document.body.removeChild(ta);
+          }};
+          const copyText = () => {{
             if (navigator.clipboard && navigator.clipboard.writeText) {{
               navigator.clipboard.writeText(text).then(copied).catch(fallback);
             }} else {{
               fallback();
             }}
-          }});
+          }};
+          btn.addEventListener("click", copyText);
+          if (box) {{
+            box.addEventListener("click", copyText);
+          }}
         }})();
         </script>
         """,
-        height=34,
+        height=iframe_height,
     )
 
 
@@ -4272,28 +4320,29 @@ def _render_narrative_field(
     height: int = 72,
 ) -> str:
     """Narrative text area with Copy button using the current field value."""
-    st.markdown(f"**{label}**")
+    head_col, copy_col = st.columns([5.5, 1])
+    with head_col:
+        st.markdown(f"**{label}**")
     value = st.text_area(label, key=session_key, height=height, label_visibility="collapsed")
     if str(value or "").strip():
-        _, copy_col = st.columns([5, 1])
-        with copy_col:
+        _, copy_btn_col = st.columns([5.5, 1])
+        with copy_btn_col:
             _render_field_copy_button(str(value), label=label, element_id=copy_id)
     return str(value or "")
 
 
 def _render_dealer_connect_copy_field(*, label: str, value: str, copy_id: str) -> None:
-    """Label + dark value block with Copy button for Dealer Connect paste."""
+    """Label + clickable value block with Copy button for Dealer Connect paste."""
     text = str(value or "").strip()
     if not text:
         return
     st.markdown(f"**{label}**")
-    st.markdown(
-        f'<div class="dc-copy-value">{html.escape(text)}</div>',
-        unsafe_allow_html=True,
+    _render_field_copy_button(
+        text,
+        label=label,
+        element_id=copy_id,
+        show_value_box=True,
     )
-    _, copy_col = st.columns([5, 1])
-    with copy_col:
-        _render_field_copy_button(text, label=label, element_id=copy_id)
 
 
 def _render_dealer_connect_job_lines_body(
