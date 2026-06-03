@@ -97,12 +97,7 @@ from core.personnel_roles import (
 from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
-from core.display_prefs import (
-    build_user_display_css,
-    default_display_prefs,
-    render_display_settings_sidebar,
-    request_display_widget_resync,
-)
+from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
 from core.html_embed import embed_html, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
@@ -2724,8 +2719,8 @@ def _inject_dealer_connect_expander_header_fix(theme: str = "Dark") -> None:
 
 def apply_style(theme="Dark", display_prefs: dict | None = None):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
-    prefs = display_prefs or default_display_prefs(theme)
-    css += build_user_display_css(prefs, theme=theme)
+    if display_prefs:
+        css += build_user_display_css(display_prefs, theme=theme)
     css += brand_color_lock_css(theme)
     css += metric_display_css()
     css += claim_learning_css(theme)
@@ -6726,6 +6721,166 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
     st.caption("Advisor coaching areas will appear once reviews include advisor names and audit findings.")
 
 
+def _top_rules_detail_frame(
+    rule_summary: pd.DataFrame,
+    advisor_rule: pd.DataFrame,
+    *,
+    severity: str,
+    limit: int = 5,
+) -> pd.DataFrame:
+    subset = rule_summary[rule_summary["severity"] == severity].head(limit)
+    if subset.empty:
+        return pd.DataFrame()
+
+    type_total = int(subset["count"].sum())
+    rows = []
+    for _, row in subset.iterrows():
+        rule_label = str(row["rule_label"])
+        adv = advisor_rule[advisor_rule["rule_label"] == rule_label]
+        rows.append(
+            {
+                "Audit Rule": rule_label,
+                "Type": "Hard Stop" if severity == "hard" else "Warning",
+                "Findings": int(row["count"]),
+                "% of Type": round(float(row["count"]) / type_total * 100, 1) if type_total else 0.0,
+                "Advisors Affected": int(adv["advisor"].nunique()) if not adv.empty else 0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _advisor_finding_count_table(breakdown: dict) -> pd.DataFrame:
+    rule_summary = breakdown.get("rule_summary")
+    advisor_rule = breakdown.get("advisor_rule_summary")
+    if (
+        rule_summary is None
+        or advisor_rule is None
+        or rule_summary.empty
+        or advisor_rule.empty
+    ):
+        return pd.DataFrame()
+
+    severity_map = rule_summary.set_index("rule_label")["severity"].to_dict()
+    work = advisor_rule.copy()
+    work["severity"] = work["rule_label"].map(severity_map)
+    work = work[work["severity"].isin(["hard", "warn"])]
+    if work.empty:
+        return pd.DataFrame()
+
+    pivot = work.pivot_table(
+        index="advisor",
+        columns="severity",
+        values="count",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    for col, label in (("hard", "Hard Stop Findings"), ("warn", "Warning Findings")):
+        if col not in pivot.columns:
+            pivot[col] = 0
+    pivot["Total Findings"] = pivot["hard"] + pivot["warn"]
+    pivot = pivot.sort_values("Total Findings", ascending=False)
+    return pivot.rename(columns={"hard": "Hard Stop Findings", "warn": "Warning Findings"})
+
+
+def _render_rule_advisor_breakdown(
+    rule_label: str,
+    advisor_rule: pd.DataFrame,
+) -> None:
+    adv = advisor_rule[advisor_rule["rule_label"] == rule_label].copy()
+    if adv.empty:
+        st.caption("No advisor attribution recorded for this rule.")
+        return
+    adv = adv.sort_values("count", ascending=False)
+    adv["advisor"] = adv["advisor"].replace("", "Unknown")
+    display = adv.rename(columns={"advisor": "Advisor", "count": "Findings"})[
+        ["Advisor", "Findings"]
+    ]
+    st.dataframe(
+        _style_advisor_rule_pivot(display.set_index("Advisor")),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def _render_coaching_top_findings(df: pd.DataFrame) -> None:
+    breakdown = compute_hard_stop_breakdown(df)
+    if breakdown["finding_count"] <= 0:
+        st.info(
+            "No hard stops or warnings recorded in saved reviews for this period. "
+            "Complete audits on the **Review** tab to populate coaching detail."
+        )
+        return
+
+    rule_summary = breakdown["rule_summary"]
+    advisor_rule = breakdown["advisor_rule_summary"]
+
+    st.markdown("### Top Hard Stops & Warnings")
+    st.caption(
+        "Top 5 hard stops and top 5 warnings in this date range, with advisor counts and per-rule breakdown."
+    )
+
+    render_metric_rows([
+        [
+            ("Hard Stops", f"{breakdown['hard_count']:,}"),
+            ("Warnings", f"{breakdown['warn_count']:,}"),
+            ("ROs With Issues", f"{breakdown['reviews_with_findings']:,}"),
+        ],
+    ])
+
+    hard_detail = _top_rules_detail_frame(rule_summary, advisor_rule, severity="hard")
+    warn_detail = _top_rules_detail_frame(rule_summary, advisor_rule, severity="warn")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Top 5 Hard Stops**")
+        if hard_detail.empty:
+            st.caption("No hard stops in this period.")
+        else:
+            st.dataframe(
+                _style_audit_rule_breakdown(hard_detail),
+                use_container_width=True,
+                hide_index=True,
+            )
+            for rule_label in hard_detail["Audit Rule"].tolist():
+                count = int(
+                    hard_detail.loc[
+                        hard_detail["Audit Rule"] == rule_label, "Findings"
+                    ].iloc[0]
+                )
+                with st.expander(f"{rule_label} · advisor breakdown ({count} finding(s))"):
+                    _render_rule_advisor_breakdown(rule_label, advisor_rule)
+
+    with c2:
+        st.markdown("**Top 5 Warnings**")
+        if warn_detail.empty:
+            st.caption("No warnings in this period.")
+        else:
+            st.dataframe(
+                _style_audit_rule_breakdown(warn_detail),
+                use_container_width=True,
+                hide_index=True,
+            )
+            for rule_label in warn_detail["Audit Rule"].tolist():
+                count = int(
+                    warn_detail.loc[
+                        warn_detail["Audit Rule"] == rule_label, "Findings"
+                    ].iloc[0]
+                )
+                with st.expander(f"{rule_label} · advisor breakdown ({count} finding(s))"):
+                    _render_rule_advisor_breakdown(rule_label, advisor_rule)
+
+    advisor_counts = _advisor_finding_count_table(breakdown)
+    st.markdown("#### By Advisor — Finding Counts")
+    st.caption("Hard stop and warning findings attributed to each advisor in this date range.")
+    if advisor_counts.empty:
+        st.caption("Advisor counts will appear once reviews include advisor names and audit findings.")
+    else:
+        st.dataframe(
+            _style_advisor_rule_pivot(advisor_counts),
+            use_container_width=True,
+        )
+
+
 def _render_coaching_focus_section(df: pd.DataFrame, metrics: dict) -> None:
     st.markdown("### Where to Focus Coaching")
     c1, c2 = st.columns(2)
@@ -6772,6 +6927,7 @@ def render_coaching():
         return
 
     metrics = compute_roi_metrics(df)
+    _render_coaching_top_findings(df)
     _render_coaching_focus_section(df, metrics)
 
 

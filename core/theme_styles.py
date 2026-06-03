@@ -938,8 +938,6 @@ THEME_CSS = {
         position: relative;
         isolation: isolate;
         color: #f8fbff;
-        --rg-user-font-size: 15px;
-        font-size: 15px;
         --primary-color: #3b82f6;
         --border-color: rgba(62, 150, 255, 0.28);
         --secondary-background-color: #071322;
@@ -1954,8 +1952,6 @@ THEME_CSS = {
         position: relative;
         isolation: isolate;
         color: #0f172a;
-        --rg-user-font-size: 15px;
-        font-size: 15px;
         background-color: #c8d6e4;
         background-image:
             radial-gradient(ellipse 85% 50% at 50% -12%, rgba(147, 197, 253, 0.34), transparent 55%),
