@@ -98,7 +98,7 @@ from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
 from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
-from core.html_embed import embed_html
+from core.html_embed import embed_html, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
 from core.vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -4208,15 +4208,23 @@ def _format_dc_copy_date(value) -> str:
 
 
 def _render_input_copy_slot(*, label: str, element_id: str, text: str) -> None:
-    if not str(text or "").strip():
-        return
+    payload = str(text or "").strip()
     st.markdown('<div class="field-copy-slot" aria-hidden="true"></div>', unsafe_allow_html=True)
-    _render_field_copy_button(
-        str(text),
-        label=label,
-        element_id=element_id,
-        iframe_width=88,
-    )
+    if payload:
+        _render_field_copy_button(
+            payload,
+            label=label,
+            element_id=element_id,
+            iframe_width=88,
+        )
+    else:
+        _render_field_copy_button(
+            "",
+            label=label,
+            element_id=element_id,
+            iframe_width=88,
+            disabled=True,
+        )
 
 
 def _render_text_input_with_copy(
@@ -4286,15 +4294,18 @@ def _render_field_copy_button(
     element_id: str,
     show_value_box: bool = False,
     iframe_width: int = 100,
+    disabled: bool = False,
 ) -> None:
     """Copy control for narrative / Dealer Connect fields (iframe — clipboard needs JS)."""
     payload_text = str(text or "").strip()
-    if not payload_text:
+    if not payload_text and not disabled:
         return
     payload = json.dumps(payload_text)
     safe_label = html.escape(label)
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", element_id)
     safe_display = html.escape(payload_text)
+    disabled_attr = " disabled" if disabled or not payload_text else ""
+    button_label = "Copy" if not disabled else "Copy"
     value_box = ""
     if show_value_box:
         value_box = f"""
@@ -4349,14 +4360,19 @@ def _render_field_copy_button(
           button:hover {{
             background: rgba(13, 30, 55, .95);
           }}
+          button:disabled {{
+            opacity: 0.45;
+            cursor: not-allowed;
+          }}
         </style>
         {value_box}
-        <button id="{safe_id}" type="button" title="Copy {safe_label}">Copy</button>
+        <button id="{safe_id}" type="button" title="Copy {safe_label}"{disabled_attr}>{button_label}</button>
         <script>
         (function() {{
           const btn = document.getElementById("{safe_id}");
           const box = document.getElementById("{safe_id}_box");
           if (!btn) return;
+          if (btn.disabled) return;
           const text = {payload};
           const reset = () => {{ btn.textContent = "Copy"; }};
           const copied = () => {{
@@ -8546,6 +8562,8 @@ def main():
     render_sidebar_brand()
 
     render_authenticated_sidebar(supabase)
+
+    ensure_sidebar_expanded()
 
     st.sidebar.divider()
 

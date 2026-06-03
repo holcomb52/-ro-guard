@@ -995,6 +995,10 @@ THEME_CSS = {
             radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.18), transparent 58%),
             linear-gradient(180deg, #071322, #030811) !important;
         border-right: 1px solid rgba(36,135,255,.30);
+        flex: 0 0 21rem !important;
+        min-width: 21rem !important;
+        width: 21rem !important;
+        transform: translateX(0) !important;
         visibility: visible !important;
         opacity: 1 !important;
     }
@@ -1002,7 +1006,7 @@ THEME_CSS = {
     section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
         visibility: visible !important;
         opacity: 1 !important;
-        display: block !important;
+        overflow: visible !important;
         padding-top: 0.75rem;
         padding-left: 0.85rem !important;
         padding-right: 0.85rem !important;
@@ -1350,7 +1354,9 @@ THEME_CSS = {
         padding-right: clamp(14px, 2.8vw, 32px) !important;
         padding-top: 1.1rem !important;
         padding-bottom: 2rem !important;
-        max-width: 1360px;
+        max-width: min(1360px, 100%);
+        margin-left: 0;
+        margin-right: 0;
     }
     .reporting-hero {
         padding: 22px 26px;
@@ -2004,6 +2010,10 @@ THEME_CSS = {
             radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.26), transparent 58%),
             linear-gradient(180deg, #e8eff6, #d8e4ef) !important;
         border-right: 1px solid #cbd5e1;
+        flex: 0 0 21rem !important;
+        min-width: 21rem !important;
+        width: 21rem !important;
+        transform: translateX(0) !important;
         visibility: visible !important;
         opacity: 1 !important;
     }
@@ -2011,7 +2021,7 @@ THEME_CSS = {
     section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
         visibility: visible !important;
         opacity: 1 !important;
-        display: block !important;
+        overflow: visible !important;
         padding-top: 0.75rem;
         padding-left: 0.85rem !important;
         padding-right: 0.85rem !important;
@@ -2321,7 +2331,9 @@ THEME_CSS = {
         padding-right: clamp(14px, 2.8vw, 32px) !important;
         padding-top: 1.1rem !important;
         padding-bottom: 2rem !important;
-        max-width: 1360px;
+        max-width: min(1360px, 100%);
+        margin-left: 0;
+        margin-right: 0;
     }
     .reporting-hero {
         padding: 22px 26px;
