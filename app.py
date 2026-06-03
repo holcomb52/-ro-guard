@@ -97,7 +97,12 @@ from core.personnel_roles import (
 from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
-from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
+from core.display_prefs import (
+    build_user_display_css,
+    default_display_prefs,
+    render_display_settings_sidebar,
+    request_display_widget_resync,
+)
 from core.html_embed import embed_html, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
@@ -2719,8 +2724,8 @@ def _inject_dealer_connect_expander_header_fix(theme: str = "Dark") -> None:
 
 def apply_style(theme="Dark", display_prefs: dict | None = None):
     css = THEME_CSS.get(theme, THEME_CSS["Dark"])
-    if display_prefs:
-        css += build_user_display_css(display_prefs, theme=theme)
+    prefs = display_prefs or default_display_prefs(theme)
+    css += build_user_display_css(prefs, theme=theme)
     css += brand_color_lock_css(theme)
     css += metric_display_css()
     css += claim_learning_css(theme)

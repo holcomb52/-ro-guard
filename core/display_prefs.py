@@ -288,7 +288,7 @@ def render_display_settings_sidebar(supabase, *, theme: str = "Dark") -> dict:
         min_value=FONT_SIZE_MIN,
         max_value=FONT_SIZE_MAX,
         step=1,
-        help=f"Limited to {FONT_SIZE_MAX}px so text fits the layout without clipping.",
+        help=f"Default is {FONT_SIZE_DEFAULT}px. Limited to {FONT_SIZE_MAX}px so text fits the layout without clipping.",
         key="user_display_font_size",
     )
     if st.sidebar.button("Reset display defaults", key="user_display_reset", use_container_width=True):
