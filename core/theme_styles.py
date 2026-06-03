@@ -791,8 +791,10 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
     btn_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .35)"
     btn_text = "#0f172a" if is_light else "#f8fbff"
     scope = (
-        'div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker), '
-        'div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
+        'section.main div[data-testid="stVerticalBlock"]:has(.review-workspace-marker), '
+        'section.main div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker), '
+        'section.main div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker), '
+        'section.main div[data-testid="stColumn"]:has(.field-copy-slot)'
     )
     return f"""
     {scope} iframe {{
@@ -801,12 +803,14 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
         width: 100% !important;
         min-width: 72px !important;
     }}
+    {scope} div[data-testid="stColumn"]:has(.field-copy-slot),
     {scope} div[data-testid="stColumn"]:has(iframe) {{
         display: flex !important;
         align-items: flex-start !important;
         justify-content: flex-end !important;
         padding-top: 2px !important;
-        min-width: 88px !important;
+        min-width: 72px !important;
+        flex: 0 0 auto !important;
     }}
     {scope} div[data-testid="stColumn"]:has(iframe) iframe {{
         display: block !important;
@@ -1334,6 +1338,11 @@ THEME_CSS = {
     div[data-testid="stMainBlockContainer"],
     div[data-testid="stAppViewContainer"] > section.main {
         background: transparent !important;
+        padding-left: clamp(14px, 2.8vw, 32px) !important;
+        padding-right: clamp(14px, 2.8vw, 32px) !important;
+        padding-top: 1.1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1360px;
     }
     .reporting-hero {
         padding: 22px 26px;
@@ -2292,6 +2301,11 @@ THEME_CSS = {
     div[data-testid="stMainBlockContainer"],
     div[data-testid="stAppViewContainer"] > section.main {
         background: transparent !important;
+        padding-left: clamp(14px, 2.8vw, 32px) !important;
+        padding-right: clamp(14px, 2.8vw, 32px) !important;
+        padding-top: 1.1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1360px;
     }
     .reporting-hero {
         padding: 22px 26px;
