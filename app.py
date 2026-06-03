@@ -2586,6 +2586,13 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
         """
         <script>
         (function () {
+          function chromeRoots(doc) {
+            return [
+              doc.querySelector('[data-testid="stHeader"]'),
+              doc.querySelector('[data-testid="stBottomBlock"]'),
+              doc.querySelector("footer")
+            ].filter(Boolean);
+          }
           function restoreChrome(doc) {
             if (!doc || !doc.body) return;
             var selectors = [
@@ -2604,17 +2611,15 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
                 el.style.removeProperty("opacity");
               });
             });
-            doc.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
-              var text = (el.textContent || "").trim();
-              if (text === "Share" || text === "Manage app" || text === "Manage App") {
-                var target = el.closest("a, button, [role='button']") || el;
-                target.style.removeProperty("display");
-                target.style.removeProperty("visibility");
-                if (target.parentElement) {
-                  target.parentElement.style.removeProperty("display");
-                  target.parentElement.style.removeProperty("visibility");
+            chromeRoots(doc).forEach(function (root) {
+              root.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
+                var text = (el.textContent || "").trim();
+                if (text === "Share" || text === "Manage app" || text === "Manage App") {
+                  var target = el.closest("a, button, [role='button']") || el;
+                  target.style.removeProperty("display");
+                  target.style.removeProperty("visibility");
                 }
-              }
+              });
             });
           }
           function sweep() {
@@ -2643,17 +2648,24 @@ def _inject_streamlit_cloud_chrome_hide() -> None:
         """
         <script>
         (function () {
+          function chromeRoots(doc) {
+            return [
+              doc.querySelector('[data-testid="stHeader"]'),
+              doc.querySelector('[data-testid="stBottomBlock"]'),
+              doc.querySelector("footer")
+            ].filter(Boolean);
+          }
           function hideChrome(doc) {
             if (!doc || !doc.body) return;
-            doc.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
-              var text = (el.textContent || "").trim();
-              if (text === "Share" || text === "Manage app" || text === "Manage App") {
-                var target = el.closest("a, button, [role='button']") || el;
-                target.style.setProperty("display", "none", "important");
-                if (target.parentElement) {
-                  target.parentElement.style.setProperty("display", "none", "important");
+            chromeRoots(doc).forEach(function (root) {
+              root.querySelectorAll("a, button, span, p, div, label").forEach(function (el) {
+                var text = (el.textContent || "").trim();
+                if (text === "Share" || text === "Manage app" || text === "Manage App") {
+                  var target = el.closest("a, button, [role='button']") || el;
+                  if (target.closest('section[data-testid="stSidebar"]')) return;
+                  target.style.setProperty("display", "none", "important");
                 }
-              }
+              });
             });
           }
           function sweep() {

@@ -995,9 +995,17 @@ THEME_CSS = {
             radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.18), transparent 58%),
             linear-gradient(180deg, #071322, #030811) !important;
         border-right: 1px solid rgba(36,135,255,.30);
+        visibility: visible !important;
+        opacity: 1 !important;
     }
-    section[data-testid="stSidebar"] > div {
+    section[data-testid="stSidebar"] > div,
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: block !important;
         padding-top: 0.75rem;
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
     }
     section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
         gap: 0.45rem !important;
@@ -1996,9 +2004,17 @@ THEME_CSS = {
             radial-gradient(circle at 50% 0%, rgba(147, 197, 253, 0.26), transparent 58%),
             linear-gradient(180deg, #e8eff6, #d8e4ef) !important;
         border-right: 1px solid #cbd5e1;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
-    section[data-testid="stSidebar"] > div {
+    section[data-testid="stSidebar"] > div,
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: block !important;
         padding-top: 0.75rem;
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
     }
     section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
         gap: 0.45rem !important;
