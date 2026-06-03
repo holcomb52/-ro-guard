@@ -6726,6 +6726,55 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
     st.caption("Advisor coaching areas will appear once reviews include advisor names and audit findings.")
 
 
+def _render_coaching_focus_section(df: pd.DataFrame, metrics: dict) -> None:
+    st.markdown("### Where to Focus Coaching")
+    c1, c2 = st.columns(2)
+    with c1:
+        render_advisor_coaching_focus(df, metrics["advisor_summary"])
+
+    with c2:
+        st.markdown("**Top Rejection Reasons**")
+        reasons = metrics["rejection_reasons"]
+        if not reasons.empty:
+            st.dataframe(
+                reasons.head(8).rename(columns={
+                    "rejection_reason": "Reason Category",
+                    "count": "Count",
+                    "total_value": "Claim Value",
+                }),
+                use_container_width=True,
+            )
+            st.caption("See **Rejections** tab for full decline text and user notes per claim.")
+        else:
+            st.caption(
+                "Mark rejections on Review or Claim Outcomes — reasons and notes appear under **Rejections**."
+            )
+
+
+def render_coaching():
+    st.header("Coaching")
+    st.caption("Advisor focus areas and top rejection reasons for the selected date range.")
+
+    col_refresh, _ = st.columns([1, 3])
+    with col_refresh:
+        if st.button("Refresh Coaching", key="refresh_coaching"):
+            invalidate_reviews_cache()
+            st.rerun()
+
+    df = normalize_reviews_dataframe(load_reviews())
+    if df.empty:
+        st.info("No reviews saved yet. Complete audits on the Review tab to populate coaching insights.")
+        return
+
+    df = _filter_reviews_by_date(df, key_prefix="coaching")
+    if df.empty:
+        st.warning("No reviews in the selected date range.")
+        return
+
+    metrics = compute_roi_metrics(df)
+    _render_coaching_focus_section(df, metrics)
+
+
 def render_pricing_roi():
     render_pricing_roi_page(reviews_df=load_reviews())
 
@@ -6869,29 +6918,6 @@ def render_roi_dashboard():
     advisor_png = advisor_hard_stops_chart(advisor_df)
     if advisor_png:
         st.image(advisor_png, use_container_width=True, caption="Hard Stops by Advisor")
-
-    st.markdown("### Where to Focus Coaching")
-    c1, c2 = st.columns(2)
-    with c1:
-        render_advisor_coaching_focus(df, metrics["advisor_summary"])
-
-    with c2:
-        st.markdown("**Top Rejection Reasons**")
-        reasons = metrics["rejection_reasons"]
-        if not reasons.empty:
-            st.dataframe(
-                reasons.head(8).rename(columns={
-                    "rejection_reason": "Reason Category",
-                    "count": "Count",
-                    "total_value": "Claim Value",
-                }),
-                use_container_width=True,
-            )
-            st.caption("See **Rejections** tab for full decline text and user notes per claim.")
-        else:
-            st.caption(
-                "Mark rejections on Review or Claim Outcomes — reasons and notes appear under **Rejections**."
-            )
 
     st.markdown("### How We Calculate ROI")
     st.info(
@@ -8601,6 +8627,7 @@ def main():
         ("Review", render_review),
         ("Pending Claims", render_pending_claims),
         ("ROI Dashboard", render_roi_dashboard),
+        ("Coaching", render_coaching),
         ("Claim Learning", render_claims),
         ("Reporting", render_reporting),
         ("Admin", render_admin),
