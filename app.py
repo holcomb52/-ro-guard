@@ -81,6 +81,8 @@ from core.theme_styles import (
     narrative_copy_button_css,
     review_collapsible_css,
     review_open_claims_strip_css,
+    script_embed_collapse_css,
+    main_scroll_fix_css,
     streamlit_primary_override_css,
     vin_recall_alert_css,
 )
@@ -98,7 +100,7 @@ from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
 from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
-from core.html_embed import embed_html, ensure_sidebar_expanded
+from core.html_embed import embed_html, embed_script, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
 from core.vin_recalls import apply_job_relevance, lookup_vin_recalls, normalize_vin
@@ -2582,7 +2584,7 @@ def configure_streamlit_toolbar() -> None:
 
 def _inject_streamlit_cloud_chrome_restore() -> None:
     """Keep Share / Manage app visible for the app owner."""
-    embed_html(
+    embed_script(
         """
         <script>
         (function () {
@@ -2644,7 +2646,7 @@ def _inject_streamlit_cloud_chrome_restore() -> None:
 
 def _inject_streamlit_cloud_chrome_hide() -> None:
     """Hide Manage app / Share for dealership logins (Streamlit may still inject them)."""
-    embed_html(
+    embed_script(
         """
         <script>
         (function () {
@@ -2734,6 +2736,8 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += narrative_copy_button_css(theme)
     css += review_collapsible_css(theme)
     css += streamlit_primary_override_css(theme)
+    css += main_scroll_fix_css()
+    css += script_embed_collapse_css()
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -6749,6 +6753,34 @@ def _top_rules_detail_frame(
     return pd.DataFrame(rows)
 
 
+def _top_rules_advisor_detail_frame(
+    rule_summary: pd.DataFrame,
+    advisor_rule: pd.DataFrame,
+    *,
+    severity: str,
+    limit: int = 5,
+) -> pd.DataFrame:
+    top_rules = rule_summary[rule_summary["severity"] == severity].head(limit)
+    if top_rules.empty:
+        return pd.DataFrame()
+
+    labels = top_rules["rule_label"].tolist()
+    scoped = advisor_rule[advisor_rule["rule_label"].isin(labels)].copy()
+    if scoped.empty:
+        return pd.DataFrame()
+
+    type_label = "Hard Stop" if severity == "hard" else "Warning"
+    scoped["advisor"] = scoped["advisor"].replace("", "Unknown")
+    scoped = scoped.sort_values(["rule_label", "count"], ascending=[True, False])
+    return scoped.rename(
+        columns={
+            "rule_label": "Audit Rule",
+            "advisor": "Advisor",
+            "count": "Findings",
+        }
+    ).assign(Type=type_label)[["Audit Rule", "Type", "Advisor", "Findings"]]
+
+
 def _advisor_finding_count_table(breakdown: dict) -> pd.DataFrame:
     rule_summary = breakdown.get("rule_summary")
     advisor_rule = breakdown.get("advisor_rule_summary")
@@ -6782,26 +6814,6 @@ def _advisor_finding_count_table(breakdown: dict) -> pd.DataFrame:
     return pivot.rename(columns={"hard": "Hard Stop Findings", "warn": "Warning Findings"})
 
 
-def _render_rule_advisor_breakdown(
-    rule_label: str,
-    advisor_rule: pd.DataFrame,
-) -> None:
-    adv = advisor_rule[advisor_rule["rule_label"] == rule_label].copy()
-    if adv.empty:
-        st.caption("No advisor attribution recorded for this rule.")
-        return
-    adv = adv.sort_values("count", ascending=False)
-    adv["advisor"] = adv["advisor"].replace("", "Unknown")
-    display = adv.rename(columns={"advisor": "Advisor", "count": "Findings"})[
-        ["Advisor", "Findings"]
-    ]
-    st.dataframe(
-        _style_advisor_rule_pivot(display.set_index("Advisor")),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
 def _render_coaching_top_findings(df: pd.DataFrame) -> None:
     breakdown = compute_hard_stop_breakdown(df)
     if breakdown["finding_count"] <= 0:
@@ -6829,6 +6841,12 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
 
     hard_detail = _top_rules_detail_frame(rule_summary, advisor_rule, severity="hard")
     warn_detail = _top_rules_detail_frame(rule_summary, advisor_rule, severity="warn")
+    hard_advisor_detail = _top_rules_advisor_detail_frame(
+        rule_summary, advisor_rule, severity="hard"
+    )
+    warn_advisor_detail = _top_rules_advisor_detail_frame(
+        rule_summary, advisor_rule, severity="warn"
+    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -6841,14 +6859,6 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
                 use_container_width=True,
                 hide_index=True,
             )
-            for rule_label in hard_detail["Audit Rule"].tolist():
-                count = int(
-                    hard_detail.loc[
-                        hard_detail["Audit Rule"] == rule_label, "Findings"
-                    ].iloc[0]
-                )
-                with st.expander(f"{rule_label} · advisor breakdown ({count} finding(s))"):
-                    _render_rule_advisor_breakdown(rule_label, advisor_rule)
 
     with c2:
         st.markdown("**Top 5 Warnings**")
@@ -6860,14 +6870,32 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
                 use_container_width=True,
                 hide_index=True,
             )
-            for rule_label in warn_detail["Audit Rule"].tolist():
-                count = int(
-                    warn_detail.loc[
-                        warn_detail["Audit Rule"] == rule_label, "Findings"
-                    ].iloc[0]
-                )
-                with st.expander(f"{rule_label} · advisor breakdown ({count} finding(s))"):
-                    _render_rule_advisor_breakdown(rule_label, advisor_rule)
+
+    st.markdown("#### Advisor Detail — Top Rules")
+    st.caption("Finding counts by advisor for each top hard stop and warning rule.")
+    detail_c1, detail_c2 = st.columns(2)
+    with detail_c1:
+        st.markdown("**Hard stops by advisor**")
+        if hard_advisor_detail.empty:
+            st.caption("No advisor attribution for top hard stops.")
+        else:
+            st.dataframe(
+                _style_advisor_rule_pivot(
+                    hard_advisor_detail.set_index(["Audit Rule", "Advisor"])
+                ),
+                use_container_width=True,
+            )
+    with detail_c2:
+        st.markdown("**Warnings by advisor**")
+        if warn_advisor_detail.empty:
+            st.caption("No advisor attribution for top warnings.")
+        else:
+            st.dataframe(
+                _style_advisor_rule_pivot(
+                    warn_advisor_detail.set_index(["Audit Rule", "Advisor"])
+                ),
+                use_container_width=True,
+            )
 
     advisor_counts = _advisor_finding_count_table(breakdown)
     st.markdown("#### By Advisor — Finding Counts")

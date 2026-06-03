@@ -27,9 +27,14 @@ def embed_html(
     components.html(html, **kwargs)
 
 
+def embed_script(html: str) -> None:
+    """Zero-size iframe for JS that must not affect page layout or scroll."""
+    embed_html(html, height=0, width=0)
+
+
 def ensure_sidebar_expanded() -> None:
     """Keep the desktop sidebar open so account/settings stay visible."""
-    embed_html(
+    embed_script(
         """
         <script>
         (function () {

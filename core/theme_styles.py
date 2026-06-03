@@ -932,6 +932,54 @@ def streamlit_primary_override_css(theme: str = "Dark") -> str:
     """
 
 
+def main_scroll_fix_css() -> str:
+    """Keep the main page scrollable through all content on Streamlit Cloud."""
+    return """
+    html, body {
+        height: auto !important;
+        overflow-y: auto !important;
+    }
+    .stApp {
+        height: auto !important;
+        min-height: 100vh;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+    }
+    div[data-testid="stAppViewContainer"],
+    section.main,
+    div[data-testid="stMainBlockContainer"],
+    div[data-testid="stMain"] {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+    section.main .block-container,
+    div[data-testid="stMainBlockContainer"] {
+        padding-bottom: 5rem !important;
+    }
+    """
+
+
+def script_embed_collapse_css() -> str:
+    """Hide zero-size script iframes so they do not inflate page height or trap scroll."""
+    return """
+    div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stElementContainer"]:has(iframe[height="0"]) iframe {
+        height: 0 !important;
+        width: 0 !important;
+        border: 0 !important;
+    }
+    """
+
+
 THEME_CSS = {
     "Dark": """
     .stApp {

@@ -8,7 +8,7 @@ from typing import Callable
 
 import streamlit as st
 
-from .html_embed import embed_html
+from .html_embed import embed_script
 from .personnel_roles import format_roles_display, parse_personnel_roles
 
 AUTH_SESSION_KEY = "supabase_auth_session"
@@ -48,7 +48,7 @@ def app_redirect_url() -> str:
 
 def inject_auth_hash_bridge() -> None:
     """Move Supabase recovery tokens from URL hash into query params for Streamlit."""
-    embed_html(
+    embed_script(
         """
         <script>
         (function () {
