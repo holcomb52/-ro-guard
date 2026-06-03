@@ -6662,6 +6662,54 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
         st.line_chart(pivot_weekly)
 
 
+def _render_coaching_issue_item(issue, *, advisor: str, index: int) -> None:
+    """Render one coaching issue with expandable RO examples."""
+    if isinstance(issue, str):
+        st.markdown(f"- {issue}")
+        return
+
+    label = str(issue.get("label") or "").strip()
+    if not label:
+        return
+
+    examples = issue.get("examples") or []
+    if not examples:
+        st.markdown(f"- {label}")
+        return
+
+    with st.expander(label, expanded=False):
+        st.caption("Review these ROs — note what was missing so the same issue is not repeated.")
+        for example in examples:
+            ro_number = str(example.get("ro_number") or "—")
+            job_nos = example.get("job_nos") or []
+            job_label = ", ".join(str(job) for job in job_nos) if job_nos else "—"
+            severity = str(example.get("severity") or "warn")
+            is_hard = severity == "hard"
+            icon = "🔴" if is_hard else "🟡"
+            severity_label = "Hard stop" if is_hard else "Warning"
+
+            date_label = ""
+            created = example.get("created_at")
+            if created is not None and not pd.isna(created):
+                try:
+                    date_label = pd.to_datetime(created).strftime("%Y/%m/%d")
+                except Exception:
+                    date_label = str(created)[:10]
+
+            claim_value = float(example.get("claim_value") or 0)
+            meta_parts = [f"**{icon} RO {ro_number}**", f"Job {job_label}"]
+            if date_label:
+                meta_parts.append(date_label)
+            if claim_value:
+                meta_parts.append(f"${claim_value:,.0f} claim")
+            meta_parts.append(severity_label)
+            st.markdown(" · ".join(meta_parts))
+
+            for message in example.get("messages") or []:
+                st.markdown(f"- {message}")
+            st.markdown("")
+
+
 def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFrame) -> None:
     """Show each advisor's specific audit issue areas for manager coaching."""
     breakdown = compute_hard_stop_breakdown(df)
@@ -6681,7 +6729,7 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
 
     st.markdown("**Advisor Coaching Focus**")
     st.caption(
-        "Specific areas each advisor needs to tighten — counted by distinct ROs in this date range."
+        "Specific areas each advisor needs to tighten — expand an issue to see the RO examples to learn from."
     )
 
     if coaching:
@@ -6698,8 +6746,8 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
             if reviews and avg_score:
                 title_parts.append(f"avg score {avg_score:.0f}")
             with st.expander(" · ".join(title_parts), expanded=len(coaching) <= 3):
-                for issue in entry["issues"]:
-                    st.markdown(f"- {issue}")
+                for index, issue in enumerate(entry["issues"]):
+                    _render_coaching_issue_item(issue, advisor=advisor, index=index)
         return
 
     if advisor_summary is not None and not advisor_summary.empty:

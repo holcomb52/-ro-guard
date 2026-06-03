@@ -522,6 +522,59 @@ def format_coaching_issue(claim_count: int, rule_key: str) -> str:
     return f"{claim_count} {noun} with {phrase}"
 
 
+def _coaching_examples_for_rule(
+    findings: pd.DataFrame,
+    *,
+    advisor: str,
+    rule_key: str,
+) -> list[dict]:
+    """Distinct RO examples for one advisor + audit rule (for coaching drill-down)."""
+    subset = findings[
+        (findings["advisor"] == advisor) & (findings["rule_key"] == rule_key)
+    ].copy()
+    if subset.empty:
+        return []
+
+    examples: list[dict] = []
+    for ro_number, ro_group in subset.groupby("ro_number", sort=False):
+        jobs = sorted(
+            {
+                str(job_no).strip()
+                for job_no in ro_group["job_no"].tolist()
+                if str(job_no).strip() not in {"", "nan", "None", "—"}
+            }
+        )
+        messages: list[str] = []
+        seen_messages: set[str] = set()
+        for msg in ro_group["message"].tolist():
+            text = str(msg or "").strip()
+            if text and text not in seen_messages:
+                seen_messages.add(text)
+                messages.append(text)
+        if not messages:
+            continue
+
+        severities = ro_group["severity"].astype(str).tolist()
+        severity = "hard" if "hard" in severities else (severities[0] if severities else "warn")
+        created = ro_group["created_at"].max()
+        claim_value = float(pd.to_numeric(ro_group["claim_value"], errors="coerce").max() or 0)
+        examples.append(
+            {
+                "ro_number": str(ro_number),
+                "job_nos": jobs,
+                "severity": severity,
+                "messages": messages,
+                "claim_value": claim_value,
+                "created_at": created,
+            }
+        )
+
+    examples.sort(
+        key=lambda item: pd.to_datetime(item["created_at"], errors="coerce"),
+        reverse=True,
+    )
+    return examples
+
 def _valid_advisor_name(name: str) -> bool:
     cleaned = str(name or "").strip()
     return bool(cleaned) and cleaned not in {"—", "-", "Unknown", "unknown", "N/A", "n/a"}
@@ -746,18 +799,31 @@ def _compute_advisor_coaching_details(findings: pd.DataFrame) -> list[dict]:
 
     coaching: list[dict] = []
     for advisor, group in claim_counts.groupby("advisor", sort=False):
-        issues = [
-            format_coaching_issue(int(row["claim_count"]), row["rule_key"])
-            for _, row in group.iterrows()
-            if int(row["claim_count"]) > 0
-        ]
-        if not issues:
+        issue_items: list[dict] = []
+        for _, row in group.iterrows():
+            claim_count = int(row["claim_count"])
+            if claim_count <= 0:
+                continue
+            rule_key = str(row["rule_key"])
+            issue_items.append(
+                {
+                    "label": format_coaching_issue(claim_count, rule_key),
+                    "rule_key": rule_key,
+                    "claim_count": claim_count,
+                    "examples": _coaching_examples_for_rule(
+                        scoped,
+                        advisor=advisor,
+                        rule_key=rule_key,
+                    ),
+                }
+            )
+        if not issue_items:
             continue
         coaching.append(
             {
                 "advisor": advisor,
                 "ros_with_issues": int(ros_with_issues.get(advisor, 0)),
-                "issues": issues,
+                "issues": issue_items,
             }
         )
 
