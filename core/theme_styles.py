@@ -806,6 +806,13 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
         align-items: flex-start !important;
         justify-content: flex-end !important;
         padding-top: 2px !important;
+        min-width: 88px !important;
+    }}
+    {scope} div[data-testid="stColumn"]:has(iframe) iframe {{
+        display: block !important;
+        min-height: 34px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }}
     {scope} div[data-testid="stColumn"]:has(iframe) button {{
         background: {btn_bg} !important;

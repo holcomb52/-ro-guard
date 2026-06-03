@@ -4192,6 +4192,7 @@ def _render_field_copy_button(
     label: str,
     element_id: str,
     show_value_box: bool = False,
+    iframe_width: int = 100,
 ) -> None:
     """Copy control for narrative / Dealer Connect fields (iframe — clipboard needs JS)."""
     payload_text = str(text or "").strip()
@@ -4309,6 +4310,7 @@ def _render_field_copy_button(
         </script>
         """,
         height=iframe_height,
+        width=iframe_width if not show_value_box else None,
     )
 
 
@@ -4319,15 +4321,19 @@ def _render_narrative_field(
     copy_id: str,
     height: int = 72,
 ) -> str:
-    """Narrative text area with Copy button using the current field value."""
-    head_col, copy_col = st.columns([5.5, 1])
-    with head_col:
-        st.markdown(f"**{label}**")
-    value = st.text_area(label, key=session_key, height=height, label_visibility="collapsed")
-    if str(value or "").strip():
-        _, copy_btn_col = st.columns([5.5, 1])
-        with copy_btn_col:
-            _render_field_copy_button(str(value), label=label, element_id=copy_id)
+    """Narrative text area with Copy beside the box for Dealer Connect paste."""
+    st.markdown(f"**{label}**")
+    field_col, copy_col = st.columns([11, 1], gap="small", vertical_alignment="top")
+    with field_col:
+        value = st.text_area(label, key=session_key, height=height, label_visibility="collapsed")
+    with copy_col:
+        if str(value or "").strip():
+            _render_field_copy_button(
+                str(value),
+                label=label,
+                element_id=copy_id,
+                iframe_width=88,
+            )
     return str(value or "")
 
 
