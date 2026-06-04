@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-daze-colors"
+POPPS_UI_VERSION = "2026-06-02-daze-cards"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -100,14 +100,15 @@ def _render_daze_colored_metric(
 ) -> None:
     display = str(value or "").strip() or "—"
     hint_html = f'<div class="popps-daze-metric-hint">{hint}</div>' if hint else ""
-    st.markdown(
-        f'<div class="popps-daze-metric">'
-        f'<div class="popps-daze-metric-label">{label}</div>'
-        f'<div class="popps-daze-metric-value popps-daze-{tone}">{display}</div>'
-        f"{hint_html}"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="popps-daze-metric-card">'
+            f'<div class="popps-daze-metric-label">{label}</div>'
+            f'<div class="popps-daze-metric-value popps-daze-{tone}">{display}</div>'
+            f"{hint_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
     if help_text:
         st.caption(help_text)
 
@@ -1537,18 +1538,23 @@ def popps_page_css(theme: str = "Dark") -> str:
         border-radius: 3px;
         display: inline-block;
     }}
-    .popps-daze-metric {{
-        margin-bottom: 0.65rem;
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        margin-bottom: 0.55rem;
+    }}
+    .popps-daze-metric-card {{
+        padding: 2px 0 0 0;
     }}
     .popps-daze-metric-label {{
         color: {muted} !important;
-        font-size: 0.82rem !important;
-        margin-bottom: 2px !important;
+        font-size: 0.84rem !important;
+        line-height: 1.35 !important;
+        margin-bottom: 6px !important;
     }}
     .popps-daze-metric-value {{
-        font-size: 1.65rem !important;
+        font-size: 1.75rem !important;
         font-weight: 700 !important;
-        line-height: 1.2 !important;
+        line-height: 1.15 !important;
+        margin: 0 !important;
     }}
     .popps-daze-metric-hint {{
         color: {muted} !important;
@@ -1570,6 +1576,12 @@ def popps_page_css(theme: str = "Dark") -> str:
     .popps-daze-swatch-good {{ background: #34d399; }}
     .popps-daze-swatch-watch {{ background: #fbbf24; }}
     .popps-daze-swatch-high {{ background: #f87171; }}
+    .popps-daze-month-heading {{
+        color: {text} !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        margin: 0 0 0.65rem 0 !important;
+    }}
     """
 
 
@@ -1759,7 +1771,10 @@ def render_popps_report(
     expense = [report.daze.expense_march, report.daze.expense_april, report.daze.expense_may]
     for idx, col in enumerate(overview):
         with col:
-            st.markdown(f"**{months[idx]}**")
+            st.markdown(
+                f'<div class="popps-daze-month-heading">{months[idx]}</div>',
+                unsafe_allow_html=True,
+            )
             dealer_tone, dealer_hint = _daze_compare_zone(dealership[idx], business_center[idx])
             _render_daze_colored_metric(
                 f"Dealership {DAZE_LABEL}",
