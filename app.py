@@ -100,6 +100,7 @@ from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
 from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
+from core.popps_report import render_popps_report
 from core.html_embed import embed_html, embed_script, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
 from core import vin_recalls
@@ -7072,6 +7073,11 @@ def render_coaching():
     _render_coaching_focus_section(df, metrics)
 
 
+def render_popps():
+    appearance = st.session_state.get("appearance", "Dark")
+    render_popps_report(theme=appearance)
+
+
 def render_pricing_roi():
     render_pricing_roi_page(reviews_df=load_reviews())
 
@@ -8925,6 +8931,7 @@ def main():
         ("Pending Claims", render_pending_claims),
         ("ROI Dashboard", render_roi_dashboard),
         ("Coaching", render_coaching),
+        ("POPPS Report", render_popps),
         ("Claim Learning", render_claims),
         ("Reporting", render_reporting),
         ("Admin", render_admin),
