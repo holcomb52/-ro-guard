@@ -1643,7 +1643,7 @@ def render_popps_report(
 
     if report.top_problems:
         st.markdown('<div class="popps-section-title">Quarterly top problem summary</div>', unsafe_allow_html=True)
-        st.caption("Mark each area after you review sample repair orders in DealerCONNECT.")
+        st.caption("Summary only — add notes under each repair group with sample claims below.")
         for row in report.top_problems:
             label = (
                 f"{row.rank_label} — Labor Operation {row.labor_operation_code} — "
@@ -1655,22 +1655,12 @@ def render_popps_report(
                     use_container_width=True,
                     hide_index=True,
                 )
-                _render_popps_review_controls(
-                    entry_key=summary_review_entry_key(row, group="top"),
-                    category_label=label,
-                    reviews_store=reviews_store,
-                    supabase=supabase,
-                    report_fingerprint=report_fp,
-                    reviewer=reviewer_name,
-                    report_context=report_ctx,
-                    labor_operation_code=row.labor_operation_code,
-                )
 
     if report.early_warning:
         st.markdown('<div class="popps-section-title">Early warning indicators</div>', unsafe_allow_html=True)
         st.caption(
             "Early warning flags a labor operation that escalated quickly during the quarter. "
-            "Review matching claims in DealerCONNECT."
+            "Add review notes on matching claims in the repair groups section below."
         )
         for row in report.early_warning:
             label = (
@@ -1683,20 +1673,9 @@ def render_popps_report(
                     use_container_width=True,
                     hide_index=True,
                 )
-                _render_popps_review_controls(
-                    entry_key=summary_review_entry_key(row, group="early_warning"),
-                    category_label=label,
-                    reviews_store=reviews_store,
-                    supabase=supabase,
-                    report_fingerprint=report_fp,
-                    reviewer=reviewer_name,
-                    report_context=report_ctx,
-                    labor_operation_code=row.labor_operation_code,
-                )
 
     if report.customer_care:
         st.markdown('<div class="popps-section-title">Customer care metrics (summary)</div>', unsafe_allow_html=True)
-        st.caption("Add review notes for each customer care metric after you verify related repair orders.")
         for row in report.customer_care:
             label = row.metric_name
             with st.expander(label, expanded=False):
@@ -1717,15 +1696,6 @@ def render_popps_report(
                     )
                 elif row.notes:
                     st.markdown(row.notes)
-                _render_popps_review_controls(
-                    entry_key=customer_care_review_entry_key(row),
-                    category_label=label,
-                    reviews_store=reviews_store,
-                    supabase=supabase,
-                    report_fingerprint=report_fp,
-                    reviewer=reviewer_name,
-                    report_context=report_ctx,
-                )
 
     with st.expander("Concern code reference (plain language)", expanded=False):
         st.dataframe(
