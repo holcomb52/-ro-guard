@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-daze-help"
+POPPS_UI_VERSION = "2026-06-02-popps-archive-key"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -1312,7 +1312,11 @@ def _render_popps_archive_panel(
     archive_title = f"POPPS archive — {archive_count} month(s) on file"
     _render_popps_expander_header(archive_title, "archive")
     _popps_expander_anchor("popps-anchor-archive")
-    with st.expander("Open archive — preview older quarters", expanded=False, key="popps_archive_open"):
+    with st.expander(
+        "Open archive — preview older quarters",
+        expanded=False,
+        key="popps_archive_expander",
+    ):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
             "Use this list to preview older quarters or other months in the archive."
@@ -1358,7 +1362,11 @@ def _render_popps_archive_panel(
                 format_func=lambda fp: "Select a report…" if not fp else options.get(fp, fp),
                 key="popps_archive_pick",
             )
-            if st.button("Open selected report", key="popps_archive_open", use_container_width=True):
+            if st.button(
+                "Open selected report",
+                key="popps_archive_open_btn",
+                use_container_width=True,
+            ):
                 if pick:
                     st.session_state.popps_viewing_fingerprint = pick
                     reset_popps_hydrate_attempt_flags()
