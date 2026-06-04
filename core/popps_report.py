@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-daze-labels"
+POPPS_UI_VERSION = "2026-06-02-daze-colors"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -34,6 +34,83 @@ DAZE_WAM_DEFINITION = (
     "included in that calculation for the month."
 )
 DAZE_METRIC_HELP = DAZE_WAM_DEFINITION
+
+# Compare dealership index to Business Center (zone) each month — lower vs zone is favorable.
+DAZE_COMPARE_MARGIN_PCT = 0.35
+
+
+def _parse_percent_number(raw: str) -> float | None:
+    match = re.search(r"([\d.]+)", str(raw or "").replace(",", ""))
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _parse_money_number(raw: str) -> float | None:
+    match = re.search(r"([\d,]+(?:\.\d+)?)", str(raw or "").replace("$", ""))
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _daze_compare_zone(dealer_raw: str, zone_raw: str) -> tuple[str, str]:
+    """Return (css_tone, short_hint) for dealership DAZE vs zone benchmark."""
+    dealer = _parse_percent_number(dealer_raw)
+    zone = _parse_percent_number(zone_raw)
+    if dealer is None or zone is None:
+        return "neutral", ""
+    if zone > 75 and dealer < 25:
+        return "neutral", "Zone benchmark unavailable for color compare"
+    diff = dealer - zone
+    zone_display = str(zone_raw or "").strip() or f"{zone:g}%"
+    if diff <= -DAZE_COMPARE_MARGIN_PCT:
+        return "good", f"At or below zone ({zone_display})"
+    if diff <= DAZE_COMPARE_MARGIN_PCT:
+        return "watch", f"Near zone average ({zone_display})"
+    return "high", f"Above zone ({zone_display})"
+
+
+def _daze_expense_trend(current_raw: str, prior_raw: str | None) -> tuple[str, str]:
+    """Month-over-month DAZE expense dollars — down is favorable."""
+    current = _parse_money_number(current_raw)
+    prior = _parse_money_number(prior_raw) if prior_raw else None
+    if current is None or prior is None:
+        return "neutral", ""
+    diff = current - prior
+    if diff < -1:
+        return "good", f"Down ${abs(diff):,.0f} vs prior month"
+    if diff > 1:
+        return "high", f"Up ${diff:,.0f} vs prior month"
+    return "watch", "Flat vs prior month"
+
+
+def _render_daze_colored_metric(
+    label: str,
+    value: str,
+    *,
+    tone: str,
+    hint: str = "",
+    help_text: str = "",
+) -> None:
+    display = str(value or "").strip() or "—"
+    hint_html = f'<div class="popps-daze-metric-hint">{hint}</div>' if hint else ""
+    st.markdown(
+        f'<div class="popps-daze-metric">'
+        f'<div class="popps-daze-metric-label">{label}</div>'
+        f'<div class="popps-daze-metric-value popps-daze-{tone}">{display}</div>'
+        f"{hint_html}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    if help_text:
+        st.caption(help_text)
+
 
 CONCERN_CODE_DESCRIPTIONS: dict[str, str] = {
     "1": "High frequency of repair conditions per vehicle serviced",
@@ -1441,6 +1518,58 @@ def popps_page_css(theme: str = "Dark") -> str:
         color: {text} !important;
         font-size: 1.05rem !important;
     }}
+    .popps-daze-legend {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        margin: 0.35rem 0 0.85rem 0;
+        font-size: 0.88rem !important;
+        color: {muted} !important;
+    }}
+    .popps-daze-legend span {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }}
+    .popps-daze-swatch {{
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        display: inline-block;
+    }}
+    .popps-daze-metric {{
+        margin-bottom: 0.65rem;
+    }}
+    .popps-daze-metric-label {{
+        color: {muted} !important;
+        font-size: 0.82rem !important;
+        margin-bottom: 2px !important;
+    }}
+    .popps-daze-metric-value {{
+        font-size: 1.65rem !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+    }}
+    .popps-daze-metric-hint {{
+        color: {muted} !important;
+        font-size: 0.78rem !important;
+        margin-top: 4px !important;
+    }}
+    .popps-daze-good {{
+        color: #34d399 !important;
+    }}
+    .popps-daze-watch {{
+        color: #fbbf24 !important;
+    }}
+    .popps-daze-high {{
+        color: #f87171 !important;
+    }}
+    .popps-daze-neutral {{
+        color: {text} !important;
+    }}
+    .popps-daze-swatch-good {{ background: #34d399; }}
+    .popps-daze-swatch-watch {{ background: #fbbf24; }}
+    .popps-daze-swatch-high {{ background: #f87171; }}
     """
 
 
@@ -1604,6 +1733,17 @@ def render_popps_report(
         unsafe_allow_html=True,
     )
     st.caption(DAZE_WAM_DEFINITION)
+    st.markdown(
+        '<div class="popps-daze-legend">'
+        '<span><i class="popps-daze-swatch popps-daze-swatch-good"></i> '
+        "At or below zone — favorable</span>"
+        '<span><i class="popps-daze-swatch popps-daze-swatch-watch"></i> '
+        "Near zone average</span>"
+        '<span><i class="popps-daze-swatch popps-daze-swatch-high"></i> '
+        "Above zone — higher spend vs benchmark</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
     overview = st.columns(3)
     months = MONTH_LABELS
     dealership = [
@@ -1620,26 +1760,26 @@ def render_popps_report(
     for idx, col in enumerate(overview):
         with col:
             st.markdown(f"**{months[idx]}**")
-            st.metric(
+            dealer_tone, dealer_hint = _daze_compare_zone(dealership[idx], business_center[idx])
+            _render_daze_colored_metric(
                 f"Dealership {DAZE_LABEL}",
                 dealership[idx] or "—",
-                help=DAZE_METRIC_HELP,
+                tone=dealer_tone,
+                hint=dealer_hint,
             )
-            st.metric(
-                f"Business Center {DAZE_LABEL}",
+            _render_daze_colored_metric(
+                f"Business Center {DAZE_LABEL} (zone benchmark)",
                 business_center[idx] or "—",
-                help=(
-                    f"{DAZE_METRIC_HELP} This value is the zone (Business Center) benchmark "
-                    "for comparison."
-                ),
+                tone="neutral",
+                hint="Compare to your dealership index above",
             )
-            st.metric(
+            prior_expense = expense[idx - 1] if idx > 0 else None
+            expense_tone, expense_hint = _daze_expense_trend(expense[idx], prior_expense)
+            _render_daze_colored_metric(
                 f"{DAZE_LABEL} — warranty dollars",
                 expense[idx] or "—",
-                help=(
-                    f"{DAZE_FULL_NAME} (DAZE) expense dollars for this month — warranty costs "
-                    "counted in the DAZE measure per WAM / DWIN POPPS reporting."
-                ),
+                tone=expense_tone,
+                hint=expense_hint,
             )
 
     if report.top_problems:
