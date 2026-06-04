@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-quarter-import"
+POPPS_UI_VERSION = "2026-06-02-popps-expander-highlight"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1237,6 +1237,7 @@ def _render_popps_archive_panel(
                 hydrate_popps_report_from_cloud(supabase, force=True)
                 st.rerun()
 
+    _popps_expander_anchor("popps-anchor-archive")
     with st.expander(f"POPPS archive — {archive_count} month(s) on file", expanded=False):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
@@ -1748,6 +1749,7 @@ def _render_popps_priority_section(
     )
 
     open_by_default = bool(section.claims) or section.priority_rank == "1"
+    _popps_expander_anchor("popps-anchor-priority")
     with st.expander(title, expanded=open_by_default):
         c1, c2, c3 = st.columns(3)
         c1.metric("Quarters on POPPS", section.quarters_on_popps or "—")
@@ -1917,13 +1919,113 @@ def _summary_dataframe(rows: list[PoppsSummaryRow]) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 
+def _popps_expander_anchor(css_class: str) -> None:
+    """Hidden marker so the next Streamlit expander can be styled via CSS."""
+    st.markdown(
+        f'<div class="popps-expander-anchor {css_class}" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def popps_page_css(theme: str = "Dark") -> str:
     is_light = str(theme).lower() == "light"
     card_bg = "rgba(244, 248, 252, 0.96)" if is_light else "rgba(7, 19, 34, 0.88)"
     border = "#b6c7da" if is_light else "rgba(62, 150, 255, 0.28)"
     text = "#0f172a" if is_light else "#f8fbff"
     muted = "#475569" if is_light else "#94a3b8"
+    popps_scope = ".stApp:has(.popps-workspace-marker)"
+    archive_summary_bg = (
+        "linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(59, 130, 246, 0.08))"
+        if is_light
+        else "linear-gradient(135deg, rgba(14, 165, 233, 0.42), rgba(37, 99, 235, 0.14))"
+    )
+    archive_border = "#0284c7" if is_light else "rgba(56, 189, 248, 0.85)"
+    archive_glow = "0 4px 22px rgba(2, 132, 199, 0.18)" if is_light else "0 4px 28px rgba(56, 189, 248, 0.22)"
+    priority_summary_bg = (
+        "linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.06))"
+        if is_light
+        else "linear-gradient(135deg, rgba(245, 158, 11, 0.34), rgba(251, 191, 36, 0.1))"
+    )
+    priority_border = "#d97706" if is_light else "rgba(251, 191, 36, 0.75)"
+    priority_glow = "0 4px 22px rgba(217, 119, 6, 0.16)" if is_light else "0 4px 28px rgba(251, 191, 36, 0.18)"
+    anchor_container = f'{popps_scope} div[data-testid="stElementContainer"]'
+    expander_block = f"{anchor_container}:has(.popps-anchor-archive) + div[data-testid='stElementContainer'] details[data-testid='stExpander']"
+    expander_priority = (
+        f"{anchor_container}:has(.popps-anchor-priority) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
     return f"""
+    .popps-expander-anchor {{
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }}
+    {expander_block},
+    {expander_priority} {{
+        margin: 0.55rem 0 0.85rem 0 !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        box-shadow: {archive_glow} !important;
+    }}
+    {anchor_container}:has(.popps-anchor-priority) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] {{
+        box-shadow: {priority_glow} !important;
+    }}
+    {expander_block} {{
+        border: 2px solid {archive_border} !important;
+        background: {card_bg} !important;
+    }}
+    {expander_priority} {{
+        border: 2px solid {priority_border} !important;
+        border-left: 5px solid #fbbf24 !important;
+        background: {card_bg} !important;
+    }}
+    {expander_block} > summary,
+    {expander_block}[open] > summary,
+    {expander_block} > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {archive_summary_bg} !important;
+        background-image: {archive_summary_bg} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-size: 1.06rem !important;
+        font-weight: 700 !important;
+        padding: 0.85rem 1.1rem !important;
+        border-bottom: 1px solid {archive_border} !important;
+    }}
+    {expander_priority} > summary,
+    {expander_priority}[open] > summary,
+    {expander_priority} > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {priority_summary_bg} !important;
+        background-image: {priority_summary_bg} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-size: 1.04rem !important;
+        font-weight: 700 !important;
+        padding: 0.8rem 1.05rem !important;
+        border-bottom: 1px solid {priority_border} !important;
+    }}
+    {expander_block} > summary *,
+    {expander_block} > summary p,
+    {expander_block} > summary span,
+    {expander_block} > summary div,
+    {expander_priority} > summary *,
+    {expander_priority} > summary p,
+    {expander_priority} > summary span,
+    {expander_priority} > summary div {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-weight: 700 !important;
+        background: transparent !important;
+        opacity: 1 !important;
+    }}
+    {expander_block} [data-testid="stExpanderToggleIcon"],
+    {expander_priority} [data-testid="stExpanderToggleIcon"] {{
+        color: {text} !important;
+        opacity: 1 !important;
+    }}
     .popps-hero {{
         padding: 18px 22px;
         border-radius: 16px;
