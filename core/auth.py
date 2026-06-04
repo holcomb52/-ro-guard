@@ -118,6 +118,12 @@ def clear_auth_session() -> None:
         st.session_state.pop(key, None)
     for key in ("current_person_id", "current_person_name", "current_person_role", "current_person_roles"):
         st.session_state.pop(key, None)
+    try:
+        from .popps_report import clear_popps_session_state
+
+        clear_popps_session_state()
+    except Exception:
+        pass
 
 
 _SOFT_REFRESH_PRESERVE_KEYS = frozenset({
@@ -131,6 +137,10 @@ _SOFT_REFRESH_PRESERVE_KEYS = frozenset({
     "current_person_roles",
     "user_display_prefs",
     "_display_prefs_theme",
+    "popps_parsed_report",
+    "popps_upload_name",
+    "popps_restored_from_cloud",
+    "popps_restored_meta",
 })
 SOFT_REFRESH_REQUEST_KEY = "_soft_refresh_requested"
 
@@ -152,6 +162,7 @@ def trigger_soft_refresh(supabase) -> None:
         key: st.session_state.get(key)
         for key in list(st.session_state.keys())
         if key in _SOFT_REFRESH_PRESERVE_KEYS
+        or str(key).startswith("_popps_hydrate_")
     }
 
     st.cache_data.clear()
@@ -232,6 +243,12 @@ def sign_in_with_password(supabase, email: str, password: str) -> tuple[bool, st
     _store_session(response.session)
     _store_auth_user(response.user)
     apply_session_to_client(supabase, get_stored_session())
+    try:
+        from .popps_report import clear_popps_session_state
+
+        clear_popps_session_state()
+    except Exception:
+        pass
     return True, ""
 
 

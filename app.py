@@ -7075,7 +7075,13 @@ def render_coaching():
 
 def render_popps():
     appearance = st.session_state.get("appearance", "Dark")
-    render_popps_report(theme=appearance)
+    reviewer = current_person_name() or auth_user_email() or "User"
+    render_popps_report(
+        theme=appearance,
+        supabase=supabase,
+        reviewer=reviewer,
+        auth_user=auth_user_email(),
+    )
 
 
 def render_pricing_roi():
@@ -8889,7 +8895,14 @@ def main():
         st.stop()
 
     sync_personnel_identity(supabase)
+    apply_session_to_client(supabase, get_stored_session())
     run_soft_refresh_if_requested(supabase)
+    try:
+        from core.popps_report import hydrate_popps_report_from_cloud
+
+        hydrate_popps_report_from_cloud(supabase, auth_user=auth_user_email())
+    except Exception:
+        pass
     _ensure_review_form_session()
     configure_streamlit_toolbar()
 

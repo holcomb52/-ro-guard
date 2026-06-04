@@ -132,6 +132,44 @@ ON CONFLICT (id) DO NOTHING;
 
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS audit_rules JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS rejection_reasons JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reviews JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_active_report JSONB;
+
+-- Append-only POPPS review audit log (one row per Save review)
+CREATE TABLE IF NOT EXISTS popps_review_log (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    report_fingerprint TEXT NOT NULL,
+    entry_key TEXT NOT NULL,
+    dealer_code TEXT,
+    report_period TEXT,
+    source_file TEXT,
+    priority_label TEXT,
+    labor_operation_code TEXT,
+    ro_or_claim_number TEXT,
+    vehicle_identification TEXT,
+    category_label TEXT,
+    reviewed_no_issues BOOLEAN DEFAULT FALSE,
+    reviewed_charged_back BOOLEAN DEFAULT FALSE,
+    notes TEXT,
+    reviewed_by TEXT,
+    review_updated_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_popps_review_log_report ON popps_review_log (report_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_popps_review_log_ro ON popps_review_log (ro_or_claim_number);
+CREATE INDEX IF NOT EXISTS idx_popps_review_log_created ON popps_review_log (created_at DESC);
+
+ALTER TABLE popps_review_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "popps_review_log_read" ON popps_review_log;
+DROP POLICY IF EXISTS "popps_review_log_write" ON popps_review_log;
+
+CREATE POLICY "popps_review_log_read" ON popps_review_log
+    FOR SELECT USING (true);
+
+CREATE POLICY "popps_review_log_write" ON popps_review_log
+    FOR ALL USING (true) WITH CHECK (true);
 
 -- If save fails with "row-level security policy", run this block:
 ALTER TABLE dealer_settings ENABLE ROW LEVEL SECURITY;
