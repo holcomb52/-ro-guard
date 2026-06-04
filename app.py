@@ -23,8 +23,10 @@ from core.ro_charts import (
 )
 from core.pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
 from core.auth import (
+    apply_session_to_client,
     auth_user_email,
     capture_recovery_from_query,
+    get_stored_session,
     inject_auth_hash_bridge,
     is_authenticated,
     is_password_recovery_mode,
