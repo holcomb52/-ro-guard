@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import io
 import re
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
@@ -20,7 +21,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-expander-highlight"
+POPPS_UI_VERSION = "2026-06-02-popps-tab-load"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1134,6 +1135,42 @@ def clear_active_popps_report(supabase) -> None:
         pass
 
 
+def prepare_popps_tab_on_enter(supabase, *, auth_user: str = "") -> None:
+    """When the user opens the POPPS tab, load the current active report from cloud."""
+    current = str(st.session_state.get("main_section_nav") or "")
+    previous = str(st.session_state.get("_popps_nav_previous") or "")
+    st.session_state["_popps_nav_previous"] = current
+
+    if current != "POPPS Report" or previous == "POPPS Report":
+        return
+
+    st.session_state.pop("popps_viewing_fingerprint", None)
+    reset_popps_hydrate_attempt_flags()
+    for key in (
+        "popps_parsed_report",
+        "popps_upload_name",
+        "popps_restored_from_cloud",
+        "popps_restored_meta",
+        "popps_cloud_load_error",
+    ):
+        st.session_state.pop(key, None)
+
+    if supabase is None:
+        return
+
+    library = load_popps_library(supabase)
+    entry = _active_library_entry(library)
+    if not entry:
+        user_marker = re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
+        st.session_state[f"_popps_hydrate_empty_{user_marker}"] = True
+        return
+
+    user_marker = re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
+    st.session_state[f"_popps_hydrate_ok_{user_marker}"] = True
+    st.session_state.pop(f"_popps_hydrate_empty_{user_marker}", None)
+    apply_popps_entry_to_session(entry, restored_from_cloud=True)
+
+
 def hydrate_popps_report_from_cloud(
     supabase,
     *,
@@ -1237,8 +1274,10 @@ def _render_popps_archive_panel(
                 hydrate_popps_report_from_cloud(supabase, force=True)
                 st.rerun()
 
+    archive_title = f"POPPS archive — {archive_count} month(s) on file"
+    _render_popps_expander_header(archive_title, "archive")
     _popps_expander_anchor("popps-anchor-archive")
-    with st.expander(f"POPPS archive — {archive_count} month(s) on file", expanded=False):
+    with st.expander("View archive", expanded=False):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
             "Use this list to preview older quarters or other months in the archive."
@@ -1748,9 +1787,9 @@ def _render_popps_priority_section(
         f"{section.repair_description}"
     )
 
-    open_by_default = bool(section.claims) or section.priority_rank == "1"
+    _render_popps_expander_header(title, "priority")
     _popps_expander_anchor("popps-anchor-priority")
-    with st.expander(title, expanded=open_by_default):
+    with st.expander("View claims and notes", expanded=False):
         c1, c2, c3 = st.columns(3)
         c1.metric("Quarters on POPPS", section.quarters_on_popps or "—")
         c2.metric("Total Conditions", section.total_conditions or "—")
@@ -1927,6 +1966,16 @@ def _popps_expander_anchor(css_class: str) -> None:
     )
 
 
+def _render_popps_expander_header(title: str, variant: str) -> None:
+    """Prominent label row above a POPPS expander (archive or priority section)."""
+    st.markdown(
+        f'<div class="popps-expander-header popps-expander-header--{variant}">'
+        f'<span class="popps-expander-header-text">{html.escape(title)}</span>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def popps_page_css(theme: str = "Dark") -> str:
     is_light = str(theme).lower() == "light"
     card_bg = "rgba(244, 248, 252, 0.96)" if is_light else "rgba(7, 19, 34, 0.88)"
@@ -1949,12 +1998,59 @@ def popps_page_css(theme: str = "Dark") -> str:
     priority_border = "#d97706" if is_light else "rgba(251, 191, 36, 0.75)"
     priority_glow = "0 4px 22px rgba(217, 119, 6, 0.16)" if is_light else "0 4px 28px rgba(251, 191, 36, 0.18)"
     anchor_container = f'{popps_scope} div[data-testid="stElementContainer"]'
-    expander_block = f"{anchor_container}:has(.popps-anchor-archive) + div[data-testid='stElementContainer'] details[data-testid='stExpander']"
-    expander_priority = (
+    expander_adjacent_archive = (
+        f"{anchor_container}:has(.popps-anchor-archive) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
+    expander_adjacent_priority = (
         f"{anchor_container}:has(.popps-anchor-priority) + div[data-testid='stElementContainer'] "
         "details[data-testid='stExpander']"
     )
+    expander_in_archive = (
+        f"{anchor_container}:has(.popps-anchor-archive) details[data-testid='stExpander']"
+    )
+    expander_in_priority = (
+        f"{anchor_container}:has(.popps-anchor-priority) details[data-testid='stExpander']"
+    )
+    expander_archive = f"{expander_adjacent_archive}, {expander_in_archive}"
+    expander_priority = f"{expander_adjacent_priority}, {expander_in_priority}"
+    archive_header_bg = (
+        "linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.12))"
+        if is_light
+        else "linear-gradient(135deg, rgba(14, 165, 233, 0.55), rgba(30, 64, 175, 0.22))"
+    )
+    priority_header_bg = (
+        "linear-gradient(135deg, rgba(245, 158, 11, 0.32), rgba(251, 191, 36, 0.1))"
+        if is_light
+        else "linear-gradient(135deg, rgba(245, 158, 11, 0.48), rgba(180, 83, 9, 0.18))"
+    )
     return f"""
+    .popps-expander-header {{
+        margin: 0.65rem 0 0 !important;
+        padding: 0.95rem 1.15rem !important;
+        border-radius: 14px 14px 0 0 !important;
+        border: 2px solid transparent !important;
+        box-sizing: border-box !important;
+    }}
+    .popps-expander-header-text {{
+        display: block !important;
+        color: {text} !important;
+        font-size: 1.08rem !important;
+        font-weight: 700 !important;
+        line-height: 1.35 !important;
+        letter-spacing: 0.01em !important;
+    }}
+    .popps-expander-header--archive {{
+        background: {archive_header_bg} !important;
+        border-color: {archive_border} !important;
+        box-shadow: {archive_glow} !important;
+    }}
+    .popps-expander-header--priority {{
+        background: {priority_header_bg} !important;
+        border-color: {priority_border} !important;
+        border-left: 6px solid #fbbf24 !important;
+        box-shadow: {priority_glow} !important;
+    }}
     .popps-expander-anchor {{
         display: none !important;
         height: 0 !important;
@@ -1964,28 +2060,28 @@ def popps_page_css(theme: str = "Dark") -> str:
         overflow: hidden !important;
         pointer-events: none !important;
     }}
-    {expander_block},
+    {expander_archive},
     {expander_priority} {{
-        margin: 0.55rem 0 0.85rem 0 !important;
-        border-radius: 14px !important;
+        margin: 0 0 0.85rem 0 !important;
+        border-radius: 0 0 14px 14px !important;
         overflow: hidden !important;
-        box-shadow: {archive_glow} !important;
     }}
-    {anchor_container}:has(.popps-anchor-priority) + div[data-testid="stElementContainer"] details[data-testid="stExpander"] {{
-        box-shadow: {priority_glow} !important;
-    }}
-    {expander_block} {{
+    {expander_archive} {{
         border: 2px solid {archive_border} !important;
+        border-top: none !important;
         background: {card_bg} !important;
+        box-shadow: {archive_glow} !important;
     }}
     {expander_priority} {{
         border: 2px solid {priority_border} !important;
-        border-left: 5px solid #fbbf24 !important;
+        border-top: none !important;
+        border-left: 6px solid #fbbf24 !important;
         background: {card_bg} !important;
+        box-shadow: {priority_glow} !important;
     }}
-    {expander_block} > summary,
-    {expander_block}[open] > summary,
-    {expander_block} > summary:not(:hover):not(:focus):not(:focus-visible) {{
+    {expander_archive} > summary,
+    {expander_archive}[open] > summary,
+    {expander_archive} > summary:not(:hover):not(:focus):not(:focus-visible) {{
         background: {archive_summary_bg} !important;
         background-image: {archive_summary_bg} !important;
         color: {text} !important;
@@ -2007,10 +2103,10 @@ def popps_page_css(theme: str = "Dark") -> str:
         padding: 0.8rem 1.05rem !important;
         border-bottom: 1px solid {priority_border} !important;
     }}
-    {expander_block} > summary *,
-    {expander_block} > summary p,
-    {expander_block} > summary span,
-    {expander_block} > summary div,
+    {expander_archive} > summary *,
+    {expander_archive} > summary p,
+    {expander_archive} > summary span,
+    {expander_archive} > summary div,
     {expander_priority} > summary *,
     {expander_priority} > summary p,
     {expander_priority} > summary span,
@@ -2021,7 +2117,7 @@ def popps_page_css(theme: str = "Dark") -> str:
         background: transparent !important;
         opacity: 1 !important;
     }}
-    {expander_block} [data-testid="stExpanderToggleIcon"],
+    {expander_archive} [data-testid="stExpanderToggleIcon"],
     {expander_priority} [data-testid="stExpanderToggleIcon"] {{
         color: {text} !important;
         opacity: 1 !important;
@@ -2162,6 +2258,7 @@ def render_popps_report(
         st.caption(
             "Cloud save is unavailable — POPPS uploads will only persist until this browser session ends."
         )
+    prepare_popps_tab_on_enter(supabase, auth_user=auth_user)
     hydrate_popps_report_from_cloud(supabase, auth_user=auth_user)
 
     load_error = str(st.session_state.get("popps_cloud_load_error") or "").strip()
