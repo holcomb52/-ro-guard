@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-tab-load"
+POPPS_UI_VERSION = "2026-06-02-popps-review-keys"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1342,11 +1342,11 @@ def _slug_token(text: str, *, max_len: int = 48) -> str:
     return slug[:max_len] or "item"
 
 
-def _safe_widget_suffix(entry_key: str, report_fingerprint: str) -> str:
+def _safe_widget_suffix(entry_key: str, report_fingerprint: str, *, scope: str = "") -> str:
     """Stable unique Streamlit widget key (avoids truncation collisions)."""
-    raw = f"{report_fingerprint}|{entry_key}"
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
-    return f"popps_{digest}"
+    raw = f"{report_fingerprint}|{entry_key}|{scope}"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    return f"w_{digest}"
 
 
 def section_review_entry_key(section: PoppsPrioritySection) -> str:
@@ -1356,9 +1356,22 @@ def section_review_entry_key(section: PoppsPrioritySection) -> str:
     return f"section:{rank}:{lop}:{desc}"
 
 
-def claim_review_entry_key(section: PoppsPrioritySection, claim: PoppsClaimRow) -> str:
-    claim_id = re.sub(r"\s+", "_", claim.claim_condition_or_number)
-    return f"{section_review_entry_key(section)}:claim:{claim_id}"
+def claim_review_entry_key(
+    section: PoppsPrioritySection,
+    claim: PoppsClaimRow,
+    *,
+    claim_index: int,
+) -> str:
+    """Unique per claim row (RO numbers may repeat or be blank in the PDF)."""
+    claim_id = re.sub(r"\s+", "_", str(claim.claim_condition_or_number or "").strip())
+    if not claim_id:
+        claim_id = "no_number"
+    vin = _slug_token(claim.vehicle_identification, max_len=24)
+    lop = _slug_token(claim.labor_operation_or_message_code, max_len=24)
+    return (
+        f"{section_review_entry_key(section)}:claim:{claim_index}:{claim_id}:"
+        f"vin:{vin}:lop:{lop}"
+    )
 
 
 def summary_review_entry_key(row: PoppsSummaryRow, *, group: str) -> str:
@@ -1701,10 +1714,11 @@ def _render_popps_review_controls(
     ro_or_claim_number: str = "",
     vehicle_identification: str = "",
     heading: str | None = None,
+    widget_scope: str = "",
 ) -> None:
     """Notes and review checkboxes for one POPPS category or claim."""
     stored = reviews_store.get(entry_key) or {}
-    suffix = _safe_widget_suffix(entry_key, report_fingerprint)
+    suffix = _safe_widget_suffix(entry_key, report_fingerprint, scope=widget_scope)
     no_key = f"popps_no_issues_{suffix}"
     charge_key = f"popps_charged_{suffix}"
     notes_key = f"popps_notes_{suffix}"
@@ -1824,8 +1838,8 @@ def _render_popps_priority_section(
 
         st.markdown("**Review each repair order / claim**")
         tab_labels: list[str] = []
-        for claim in section.claims:
-            claim_key = claim_review_entry_key(section, claim)
+        for claim_index, claim in enumerate(section.claims):
+            claim_key = claim_review_entry_key(section, claim, claim_index=claim_index)
             stored = reviews_store.get(claim_key) or {}
             status = _review_status_label(stored)
             label = _claim_select_label(claim)
@@ -1834,8 +1848,9 @@ def _render_popps_priority_section(
             tab_labels.append(label)
 
         claim_tabs = st.tabs(tab_labels)
-        for claim, tab in zip(section.claims, claim_tabs):
-            claim_key = claim_review_entry_key(section, claim)
+        for claim_index, (claim, tab) in enumerate(zip(section.claims, claim_tabs)):
+            claim_key = claim_review_entry_key(section, claim, claim_index=claim_index)
+            widget_scope = f"pr{section.priority_rank}_c{claim_index}"
             with tab:
                 st.markdown(f"#### {_claim_select_label(claim)}")
                 _render_claim_detail_fields(claim)
@@ -1852,6 +1867,7 @@ def _render_popps_priority_section(
                     ro_or_claim_number=_claim_ro_or_claim_number(claim),
                     vehicle_identification=claim.vehicle_identification,
                     heading="Notes and review status",
+                    widget_scope=widget_scope,
                 )
 
 
