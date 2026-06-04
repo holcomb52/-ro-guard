@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-note-thread"
+POPPS_UI_VERSION = "2026-06-02-popps-exempt-sections"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1447,6 +1447,20 @@ def _is_message_code_priority_section(section: PoppsPrioritySection) -> bool:
     return str(section.labor_operation_code or "").strip().lower() == "message code"
 
 
+def _is_popps_review_exempt_section(section: PoppsPrioritySection) -> bool:
+    """Sections shown as plain summary only — no gold header or per-claim notes."""
+    if _is_message_code_priority_section(section):
+        return True
+    rank = str(section.priority_rank or "").strip()
+    if rank == "5":
+        return True
+    lop = str(section.labor_operation_code or "").strip()
+    desc = str(section.repair_description or "").upper()
+    if lop == "0200" and "SUSPENSION" in desc:
+        return True
+    return not section.claims
+
+
 def _note_thread_from_entry(entry: dict | None) -> list[dict]:
     entry = entry or {}
     thread = entry.get("note_thread")
@@ -2055,9 +2069,9 @@ def _render_popps_priority_section(
         f"Labor Operation {section.labor_operation_code} — "
         f"{section.repair_description}"
     )
-    message_code_section = _is_message_code_priority_section(section)
+    review_exempt = _is_popps_review_exempt_section(section)
 
-    if message_code_section:
+    if review_exempt:
         _render_popps_expander_header(title, "plain")
         _popps_expander_anchor("popps-anchor-plain")
         expander_label = "View details"
@@ -2090,7 +2104,7 @@ def _render_popps_priority_section(
             hide_index=True,
         )
 
-        if message_code_section:
+        if review_exempt:
             return
 
         st.markdown(
