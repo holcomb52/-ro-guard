@@ -796,12 +796,24 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
         'section.main div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
     )
     copy_slot = f'{scope} div[data-testid="stElementContainer"]:has(.field-copy-slot)'
+    copy_slot_right = f'{scope} div[data-testid="stElementContainer"]:has(.field-copy-align-right)'
     return f"""
     {copy_slot} {{
         margin-top: 0.15rem !important;
         margin-bottom: 0.55rem !important;
         max-width: 7.25rem !important;
         padding: 0 !important;
+    }}
+    {scope} div[data-testid="stVerticalBlock"]:has(.field-copy-align-right) {{
+        align-items: stretch !important;
+        width: 100% !important;
+    }}
+    {copy_slot_right} {{
+        align-self: flex-end !important;
+        margin-left: auto !important;
+        margin-right: 0 !important;
+        width: 7.25rem !important;
+        max-width: 7.25rem !important;
     }}
     {copy_slot} .field-copy-slot {{
         display: none !important;

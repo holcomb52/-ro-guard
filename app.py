@@ -4211,9 +4211,19 @@ def _format_dc_copy_date(value) -> str:
     return str(value).strip()
 
 
-def _render_input_copy_slot(*, label: str, element_id: str, text: str) -> None:
+def _render_input_copy_slot(
+    *,
+    label: str,
+    element_id: str,
+    text: str,
+    align: str = "left",
+) -> None:
     payload = str(text or "").strip()
-    st.markdown('<div class="field-copy-slot" aria-hidden="true"></div>', unsafe_allow_html=True)
+    align_class = " field-copy-align-right" if align == "right" else ""
+    st.markdown(
+        f'<div class="field-copy-slot{align_class}" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     if payload:
         _render_field_copy_button(
             payload,
@@ -4238,6 +4248,7 @@ def _render_field_with_copy_column(
     render_field,
     format_copy=lambda value: str(value or ""),
     show_label: bool = True,
+    copy_align: str = "left",
 ):
     """Label, full-width input, then Copy tucked underneath."""
     if show_label and label:
@@ -4247,6 +4258,7 @@ def _render_field_with_copy_column(
         label=label,
         element_id=copy_id,
         text=format_copy(value),
+        align=copy_align,
     )
     return value
 
@@ -4502,6 +4514,7 @@ def _render_narrative_field(
         label,
         copy_id=copy_id,
         show_label=True,
+        copy_align="right",
         render_field=lambda: st.text_area(
             label,
             key=session_key,
