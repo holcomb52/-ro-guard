@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-archive-key"
+POPPS_UI_VERSION = "2026-06-02-popps-widget-keys"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -1273,6 +1273,7 @@ def _render_popps_archive_panel(
     active_quarter_label = str(active_entry.get("quarter_label") or "").strip()
     active_period_label = str(active_entry.get("period_label") or "").strip()
     active_quarter_sort = int(active_entry.get("quarter_sort") or 0)
+    archive_scope = _safe_widget_suffix(active_fingerprint or "none", "popps_archive", scope="panel")
 
     if active_quarter_label and active_period_label:
         st.caption(
@@ -1297,7 +1298,11 @@ def _render_popps_archive_panel(
         with c1:
             st.info(f"Previewing archived report: **{label}**. Reviews still save per month.")
         with c2:
-            if st.button("Current quarter", key="popps_back_to_latest", use_container_width=True):
+            if st.button(
+                "Current quarter",
+                key=f"popps_back_to_latest_{archive_scope}",
+                use_container_width=True,
+            ):
                 st.session_state.pop("popps_viewing_fingerprint", None)
                 reset_popps_hydrate_attempt_flags()
                 st.session_state.pop("popps_parsed_report", None)
@@ -1315,7 +1320,7 @@ def _render_popps_archive_panel(
     with st.expander(
         "Open archive — preview older quarters",
         expanded=False,
-        key="popps_archive_expander",
+        key=f"popps_archive_expander_{archive_scope}",
     ):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
@@ -1360,11 +1365,11 @@ def _render_popps_archive_panel(
                 "Preview an older quarter or month",
                 options=[""] + list(options.keys()),
                 format_func=lambda fp: "Select a report…" if not fp else options.get(fp, fp),
-                key="popps_archive_pick",
+                key=f"popps_archive_pick_{archive_scope}",
             )
             if st.button(
                 "Open selected report",
-                key="popps_archive_open_btn",
+                key=f"popps_archive_open_btn_{archive_scope}",
                 use_container_width=True,
             ):
                 if pick:
@@ -2441,7 +2446,8 @@ def _render_popps_priority_section(
         _popps_expander_anchor("popps-anchor-priority")
         expander_label = "View claims and notes"
 
-    with st.expander(expander_label, expanded=False):
+    expander_key = f"popps_pri_{_safe_widget_suffix(section_review_entry_key(section), report_fp, scope='exp')}"
+    with st.expander(expander_label, expanded=False, key=expander_key):
         c1, c2, c3 = st.columns(3)
         c1.metric("Quarters on POPPS", section.quarters_on_popps or "—")
         c2.metric("Total Conditions", section.total_conditions or "—")
@@ -2525,7 +2531,12 @@ def _render_popps_audit_panel(
     history = fetch_popps_audit_history(supabase, report_fp)
     history_df = build_popps_audit_history_df(history)
 
-    with st.expander("POPPS review audit trail", expanded=bool(len(snapshot))):
+    audit_key = f"popps_audit_{_safe_widget_suffix(report_fp, file_name, scope='trail')}"
+    with st.expander(
+        "POPPS review audit trail",
+        expanded=bool(len(snapshot)),
+        key=audit_key,
+    ):
         st.caption(
             "Every **Save review status** or **Add note** writes an append-only audit record (cloud table when configured). "
             "Download the snapshot for audits and factory inquiries."
@@ -2545,7 +2556,7 @@ def _render_popps_audit_panel(
                     " ", "_"
                 ),
                 mime="text/csv",
-                key="popps_audit_snapshot_csv",
+                key=f"popps_audit_snapshot_csv_{audit_key}",
             )
         if not history_df.empty:
             st.markdown("**Full save history (newest first)**")
@@ -2555,7 +2566,7 @@ def _render_popps_audit_panel(
                 history_df.to_csv(index=False),
                 file_name=f"popps_audit_history_{report.dealer_code}.csv".replace(" ", "_"),
                 mime="text/csv",
-                key="popps_audit_history_csv",
+                key=f"popps_audit_history_csv_{audit_key}",
             )
 
 
@@ -3272,7 +3283,7 @@ def render_popps_report(
             "No POPPS report is loaded. Click **Reload saved POPPS report** above or upload the PDF again. "
             "Once saved, every advisor and manager on your team will see the same report."
         )
-        with st.expander("What is POPPS?", expanded=False):
+        with st.expander("What is POPPS?", expanded=False, key="popps_what_is"):
             st.markdown(
                 """
                 **POPPS** is the factory **Performance Overview & Potential Problem Summary**.
@@ -3550,10 +3561,16 @@ def render_popps_report(
         report=report,
     )
 
-    with st.expander("View extracted PDF text (troubleshooting)", expanded=False):
+    raw_key = f"popps_raw_text_{_safe_widget_suffix(report_fp, file_name, scope='raw')}"
+    with st.expander(
+        "View extracted PDF text (troubleshooting)",
+        expanded=False,
+        key=raw_key,
+    ):
         st.text_area(
             "Extracted text",
             value=report.raw_text[:120000],
             height=280,
             label_visibility="collapsed",
+            key=f"popps_raw_text_area_{raw_key}",
         )
