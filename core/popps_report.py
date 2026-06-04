@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-notes-compliance"
+POPPS_UI_VERSION = "2026-06-02-popps-key-tabs"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -1288,12 +1288,10 @@ def _render_popps_archive_panel(
         "to preview older quarters or switch months."
     )
     st.markdown('<div class="popps-archive-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
-    archive_title = (
-        f"POPPS archive — {archive_count} month(s) on file · "
-        "open to preview older quarters"
-    )
+    archive_title = f"POPPS archive — {archive_count} month(s) on file"
+    _render_popps_expander_header(archive_title, "archive")
     _popps_expander_anchor("popps-anchor-archive")
-    with st.expander(archive_title, expanded=False):
+    with st.expander("Open archive — preview older quarters", expanded=False, key="popps_archive_open"):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
             "Use this list to preview older quarters or other months in the archive."
@@ -2688,8 +2686,32 @@ def popps_page_css(theme: str = "Dark") -> str:
     expander_archive = f"{expander_adjacent_archive}, {expander_in_archive}"
     expander_priority = f"{expander_adjacent_priority}, {expander_in_priority}"
     expander_plain = f"{expander_adjacent_plain}, {expander_in_plain}"
+    expander_adjacent_repair_notes = (
+        f"{anchor_container}:has(.popps-anchor-repair-notes) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
+    expander_in_repair_notes = (
+        f"{anchor_container}:has(.popps-anchor-repair-notes) details[data-testid='stExpander']"
+    )
     expander_summary_parent = f"{expander_adjacent_summary_parent}, {expander_in_summary_parent}"
     expander_summary_child = f"{expander_adjacent_summary_child}, {expander_in_summary_child}"
+    expander_repair_notes = f"{expander_adjacent_repair_notes}, {expander_in_repair_notes}"
+    notes_border = "#059669" if is_light else "rgba(52, 211, 153, 0.9)"
+    notes_header_bg = (
+        "linear-gradient(135deg, rgba(16, 185, 129, 0.32), rgba(5, 150, 105, 0.12))"
+        if is_light
+        else "linear-gradient(135deg, rgba(16, 185, 129, 0.5), rgba(6, 95, 70, 0.22))"
+    )
+    notes_summary_bg = (
+        "linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(5, 150, 105, 0.08))"
+        if is_light
+        else "linear-gradient(135deg, rgba(16, 185, 129, 0.38), rgba(6, 95, 70, 0.16))"
+    )
+    notes_glow = (
+        "0 4px 24px rgba(5, 150, 105, 0.2)"
+        if is_light
+        else "0 4px 28px rgba(52, 211, 153, 0.28)"
+    )
     summary_parent_bg = (
         "linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.08))"
         if is_light
@@ -2729,8 +2751,19 @@ def popps_page_css(theme: str = "Dark") -> str:
     }}
     .popps-expander-header--archive {{
         background: {archive_header_bg} !important;
-        border-color: {archive_border} !important;
+        border: 2px solid {archive_border} !important;
+        border-left: 5px solid #38bdf8 !important;
         box-shadow: {archive_glow} !important;
+    }}
+    .popps-expander-header--notes {{
+        background: {notes_header_bg} !important;
+        border: 2px solid {notes_border} !important;
+        border-left: 6px solid #34d399 !important;
+        box-shadow: {notes_glow} !important;
+    }}
+    .popps-expander-header--notes .popps-expander-header-text {{
+        color: {text} !important;
+        font-size: 1.1rem !important;
     }}
     .popps-archive-zone {{
         display: none !important;
@@ -2739,11 +2772,12 @@ def popps_page_css(theme: str = "Dark") -> str:
         pointer-events: none !important;
     }}
     {popps_scope}:has(.popps-archive-zone) {expander_archive} {{
-        margin: 0.9rem 0 1.1rem 0 !important;
-        border-radius: 14px !important;
+        margin: 0 0 1.15rem 0 !important;
+        border-radius: 0 0 14px 14px !important;
         border: 2px solid {archive_border} !important;
+        border-top: none !important;
         background: {card_bg} !important;
-        box-shadow: {archive_medium_glow} !important;
+        box-shadow: {archive_glow} !important;
         overflow: hidden !important;
     }}
     {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary,
@@ -2753,11 +2787,39 @@ def popps_page_css(theme: str = "Dark") -> str:
         background-image: {archive_medium_bg} !important;
         color: {text} !important;
         -webkit-text-fill-color: {text} !important;
-        font-size: 1.02rem !important;
+        font-size: 1rem !important;
         font-weight: 700 !important;
-        padding: 0.95rem 1.15rem !important;
-        border-left: 4px solid #38bdf8 !important;
+        padding: 0.8rem 1.1rem !important;
         border-bottom: 1px solid {archive_border} !important;
+    }}
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} {{
+        margin: 0 0 1.15rem 0 !important;
+        border-radius: 0 0 14px 14px !important;
+        border: 2px solid {notes_border} !important;
+        border-top: none !important;
+        background: {card_bg} !important;
+        box-shadow: {notes_glow} !important;
+        overflow: hidden !important;
+    }}
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary,
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes}[open] > summary,
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {notes_summary_bg} !important;
+        background-image: {notes_summary_bg} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        padding: 0.8rem 1.1rem !important;
+        border-bottom: 1px solid {notes_border} !important;
+    }}
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary *,
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary p,
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary span,
+    {popps_scope}:has(.popps-repair-notes-zone) {expander_repair_notes} > summary div {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-weight: 700 !important;
     }}
     {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary *,
     {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary p,
@@ -2800,7 +2862,8 @@ def popps_page_css(theme: str = "Dark") -> str:
         padding: 0.7rem 0.95rem !important;
     }}
     .popps-summary-parent-zone,
-    .popps-summary-children-zone {{
+    .popps-summary-children-zone,
+    .popps-repair-notes-zone {{
         display: none !important;
         height: 0 !important;
         width: 0 !important;
@@ -3377,10 +3440,14 @@ def render_popps_report(
     if report.priority_sections:
         sections_needing_notes = _priority_sections_needing_notes(report)
         group_count = len(sections_needing_notes)
-        st.markdown('<div class="popps-summary-parent-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
-        _popps_expander_anchor("popps-anchor-summary-parent")
+        repair_title = (
+            f"Repair groups and related claims (add notes){_popps_item_count_label(group_count)}"
+        )
+        st.markdown('<div class="popps-repair-notes-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+        _render_popps_expander_header(repair_title, "notes")
+        _popps_expander_anchor("popps-anchor-repair-notes")
         with st.expander(
-            f"Repair groups and related claims (add notes){_popps_item_count_label(group_count)}",
+            "Open repair groups — add notes here",
             expanded=False,
             key="popps_sec_repair_groups",
         ):
