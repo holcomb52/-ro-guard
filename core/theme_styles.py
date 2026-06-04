@@ -785,7 +785,7 @@ def review_collapsible_css(theme: str = "Dark") -> str:
 
 
 def narrative_copy_button_css(theme: str = "Dark") -> str:
-    """Transparent iframe copy buttons beside narrative and Dealer Connect fields."""
+    """Copy buttons beside Review / Dealer Connect fields."""
     is_light = str(theme).lower() == "light"
     btn_bg = "var(--rg-surface-input, #e8f0f8)" if is_light else "rgba(7, 19, 34, .75)"
     btn_border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .35)"
@@ -793,35 +793,49 @@ def narrative_copy_button_css(theme: str = "Dark") -> str:
     scope = (
         'section.main div[data-testid="stVerticalBlock"]:has(.review-workspace-marker), '
         'section.main div[data-testid="stVerticalBlock"]:has(.review-job-narratives-marker), '
-        'section.main div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker), '
-        'section.main div[data-testid="stColumn"]:has(.field-copy-slot)'
+        'section.main div[data-testid="stVerticalBlock"]:has(.dealer-connect-workspace-marker)'
     )
+    copy_col = f'{scope} div[data-testid="stColumn"]:has(.field-copy-slot)'
     return f"""
-    {scope} iframe {{
+    {copy_col} {{
+        display: flex !important;
+        align-items: flex-end !important;
+        justify-content: flex-end !important;
+        flex: 0 0 76px !important;
+        max-width: 76px !important;
+        min-width: 76px !important;
+        width: 76px !important;
+        padding: 0 0 6px 0 !important;
+        overflow: hidden !important;
+    }}
+    {copy_col} .field-copy-slot {{
+        display: none !important;
+    }}
+    {copy_col} iframe {{
+        display: block !important;
+        width: 72px !important;
+        min-width: 0 !important;
+        max-width: 72px !important;
+        height: 34px !important;
+        margin: 0 !important;
         background: transparent !important;
         background-color: transparent !important;
-        width: 100% !important;
-        min-width: 72px !important;
-    }}
-    {scope} div[data-testid="stColumn"]:has(.field-copy-slot),
-    {scope} div[data-testid="stColumn"]:has(iframe) {{
-        display: flex !important;
-        align-items: flex-start !important;
-        justify-content: flex-end !important;
-        padding-top: 2px !important;
-        min-width: 72px !important;
-        flex: 0 0 auto !important;
-    }}
-    {scope} div[data-testid="stColumn"]:has(iframe) iframe {{
-        display: block !important;
-        min-height: 34px !important;
         opacity: 1 !important;
         visibility: visible !important;
     }}
-    {scope} div[data-testid="stColumn"]:has(iframe) button {{
+    {copy_col} button {{
         background: {btn_bg} !important;
         border: 1px solid {btn_border} !important;
         color: {btn_text} !important;
+    }}
+    {scope} div[data-testid="stHorizontalBlock"]:has(.field-copy-slot) {{
+        align-items: flex-end !important;
+        gap: 0.35rem !important;
+        overflow: visible !important;
+    }}
+    {scope} div[data-testid="stHorizontalBlock"]:has(.field-copy-slot) > div[data-testid="stColumn"]:not(:has(.field-copy-slot)) {{
+        min-width: 0 !important;
+        overflow: hidden !important;
     }}
     """
 

@@ -4219,16 +4219,77 @@ def _render_input_copy_slot(*, label: str, element_id: str, text: str) -> None:
             payload,
             label=label,
             element_id=element_id,
-            iframe_width=88,
+            iframe_width=72,
         )
     else:
         _render_field_copy_button(
             "",
             label=label,
             element_id=element_id,
-            iframe_width=88,
+            iframe_width=72,
             disabled=True,
         )
+
+
+def _render_field_with_copy_column(
+    label: str,
+    *,
+    copy_id: str,
+    render_field,
+    format_copy=lambda value: str(value or ""),
+    show_label: bool = True,
+):
+    """Label on its own row; input and Copy share one row for consistent alignment."""
+    if show_label and label:
+        st.markdown(f"**{label}**")
+    field_col, copy_col = st.columns([13, 1], gap="small", vertical_alignment="bottom")
+    with field_col:
+        value = render_field()
+    with copy_col:
+        _render_input_copy_slot(
+            label=label,
+            element_id=copy_id,
+            text=format_copy(value),
+        )
+    return value
+
+
+def _render_paired_fields_with_copy(
+    left_label: str,
+    left_copy_id: str,
+    left_render_field,
+    right_label: str,
+    right_copy_id: str,
+    right_render_field,
+    *,
+    left_format_copy=lambda value: str(value or ""),
+    right_format_copy=lambda value: str(value or ""),
+):
+    """Two labeled fields on one row — each with its own Copy (full-width layout)."""
+    label_left, label_right = st.columns(2, gap="medium")
+    with label_left:
+        st.markdown(f"**{left_label}**")
+    with label_right:
+        st.markdown(f"**{right_label}**")
+
+    row = st.columns([12, 1, 12, 1], gap="small", vertical_alignment="bottom")
+    with row[0]:
+        left_value = left_render_field()
+    with row[1]:
+        _render_input_copy_slot(
+            label=left_label,
+            element_id=left_copy_id,
+            text=left_format_copy(left_value),
+        )
+    with row[2]:
+        right_value = right_render_field()
+    with row[3]:
+        _render_input_copy_slot(
+            label=right_label,
+            element_id=right_copy_id,
+            text=right_format_copy(right_value),
+        )
+    return left_value, right_value
 
 
 def _render_text_input_with_copy(
@@ -4239,11 +4300,17 @@ def _render_text_input_with_copy(
     help: str | None = None,
 ) -> str:
     copy_id = copy_id or f"copy_{key}"
-    field_col, copy_col = st.columns([11, 1], gap="small", vertical_alignment="top")
-    with field_col:
-        value = st.text_input(label, key=key, help=help)
-    with copy_col:
-        _render_input_copy_slot(label=label, element_id=copy_id, text=str(value or ""))
+    value = _render_field_with_copy_column(
+        label,
+        copy_id=copy_id,
+        render_field=lambda: st.text_input(
+            label,
+            key=key,
+            label_visibility="collapsed",
+            help=help,
+        ),
+        format_copy=lambda value: str(value or ""),
+    )
     return str(value or "")
 
 
@@ -4257,18 +4324,24 @@ def _render_number_input_with_copy(
     step: float = 0.1,
 ) -> float:
     copy_id = copy_id or f"copy_{key}"
-    field_col, copy_col = st.columns([11, 1], gap="small", vertical_alignment="top")
-    with field_col:
-        kwargs: dict = {"min_value": min_value, "step": step, "key": key}
+
+    def render_field():
+        kwargs: dict = {
+            "min_value": min_value,
+            "step": step,
+            "key": key,
+            "label_visibility": "collapsed",
+        }
         if max_value is not None:
             kwargs["max_value"] = max_value
-        value = st.number_input(label, **kwargs)
-    with copy_col:
-        _render_input_copy_slot(
-            label=label,
-            element_id=copy_id,
-            text=_format_dc_copy_number(value),
-        )
+        return st.number_input(label, **kwargs)
+
+    value = _render_field_with_copy_column(
+        label,
+        copy_id=copy_id,
+        render_field=render_field,
+        format_copy=_format_dc_copy_number,
+    )
     return float(value)
 
 
@@ -4279,15 +4352,12 @@ def _render_date_input_with_copy(
     copy_id: str | None = None,
 ):
     copy_id = copy_id or f"copy_{key}"
-    field_col, copy_col = st.columns([11, 1], gap="small", vertical_alignment="top")
-    with field_col:
-        value = st.date_input(label, key=key)
-    with copy_col:
-        _render_input_copy_slot(
-            label=label,
-            element_id=copy_id,
-            text=_format_dc_copy_date(value),
-        )
+    value = _render_field_with_copy_column(
+        label,
+        copy_id=copy_id,
+        render_field=lambda: st.date_input(label, key=key, label_visibility="collapsed"),
+        format_copy=_format_dc_copy_date,
+    )
     return value
 
 
@@ -4435,12 +4505,18 @@ def _render_narrative_field(
     height: int = 72,
 ) -> str:
     """Narrative text area with Copy beside the box for Dealer Connect paste."""
-    st.markdown(f"**{label}**")
-    field_col, copy_col = st.columns([11, 1], gap="small", vertical_alignment="top")
-    with field_col:
-        value = st.text_area(label, key=session_key, height=height, label_visibility="collapsed")
-    with copy_col:
-        _render_input_copy_slot(label=label, element_id=copy_id, text=str(value or ""))
+    value = _render_field_with_copy_column(
+        label,
+        copy_id=copy_id,
+        show_label=True,
+        render_field=lambda: st.text_area(
+            label,
+            key=session_key,
+            height=height,
+            label_visibility="collapsed",
+        ),
+        format_copy=lambda value: str(value or ""),
+    )
     return str(value or "")
 
 
@@ -5247,50 +5323,29 @@ def _render_review_job_panel(
     st.markdown("**Times & claim value**")
     c1, c2, c3 = st.columns(3)
     with c1:
-        t_col, t_copy = st.columns([4, 1], gap="small", vertical_alignment="top")
-        with t_col:
-            tech_flagged_time = st.number_input(
-                "Tech flagged time",
-                min_value=0.0,
-                step=0.1,
-                key=f"tech_time_{job_no}",
-            )
-        with t_copy:
-            _render_input_copy_slot(
-                label="Tech flagged time",
-                element_id=f"copy_tech_time_{job_no}",
-                text=_format_dc_copy_number(tech_flagged_time),
-            )
+        tech_flagged_time = _render_number_input_with_copy(
+            "Tech flagged time",
+            f"tech_time_{job_no}",
+            copy_id=f"copy_tech_time_{job_no}",
+            min_value=0.0,
+            step=0.1,
+        )
     with c2:
-        a_col, a_copy = st.columns([4, 1], gap="small", vertical_alignment="top")
-        with a_col:
-            time_allotted = st.number_input(
-                "Time allotted",
-                min_value=0.0,
-                step=0.1,
-                key=f"allotted_{job_no}",
-            )
-        with a_copy:
-            _render_input_copy_slot(
-                label="Time allotted",
-                element_id=f"copy_allotted_{job_no}",
-                text=_format_dc_copy_number(time_allotted),
-            )
+        time_allotted = _render_number_input_with_copy(
+            "Time allotted",
+            f"allotted_{job_no}",
+            copy_id=f"copy_allotted_{job_no}",
+            min_value=0.0,
+            step=0.1,
+        )
     with c3:
-        v_col, v_copy = st.columns([4, 1], gap="small", vertical_alignment="top")
-        with v_col:
-            claim_value = st.number_input(
-                "Claim value",
-                min_value=0.0,
-                step=1.0,
-                key=f"claim_value_{job_no}",
-            )
-        with v_copy:
-            _render_input_copy_slot(
-                label="Claim value",
-                element_id=f"copy_claim_value_{job_no}",
-                text=_format_dc_copy_number(claim_value),
-            )
+        claim_value = _render_number_input_with_copy(
+            "Claim value",
+            f"claim_value_{job_no}",
+            copy_id=f"copy_claim_value_{job_no}",
+            min_value=0.0,
+            step=1.0,
+        )
     operation_code = _render_text_input_with_copy(
         "Labor operation code",
         f"operation_code_{job_no}",
@@ -5316,20 +5371,13 @@ def _render_review_job_panel(
         sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
     with c2:
         rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-        r_col, r_copy = st.columns([4, 1], gap="small", vertical_alignment="top")
-        with r_col:
-            rental_days = st.number_input(
-                "Rental days billed",
-                min_value=0,
-                step=1,
-                key=f"rental_days_{job_no}",
-            )
-        with r_copy:
-            _render_input_copy_slot(
-                label="Rental days billed",
-                element_id=f"copy_rental_days_{job_no}",
-                text=_format_dc_copy_number(rental_days),
-            )
+        rental_days = _render_number_input_with_copy(
+            "Rental days billed",
+            f"rental_days_{job_no}",
+            copy_id=f"copy_rental_days_{job_no}",
+            min_value=0.0,
+            step=1.0,
+        )
         if rental_dollars_per_day > 0:
             rental_total = float(rental_days or 0) * rental_dollars_per_day
             st.caption(
@@ -5582,29 +5630,40 @@ def render_review():
     multi_job = int(job_count) > 1
     fv = st.session_state.form_version
 
-    ro_col1, ro_col2 = st.columns(2)
-    with ro_col1:
-        ro_number = _render_text_input_with_copy(
+    ro_number, vin = _render_paired_fields_with_copy(
+        "RO Number",
+        f"copy_ro_number_{fv}",
+        lambda: st.text_input(
             "RO Number",
-            f"ro_number_{fv}",
-            copy_id=f"copy_ro_number_{fv}",
-        )
-        ro_invoiced = _render_date_input_with_copy(
-            "RO Invoiced / Closed Date",
-            f"ro_invoiced_{fv}",
-            copy_id=f"copy_ro_invoiced_{fv}",
-        )
-    with ro_col2:
-        vin = _render_text_input_with_copy(
+            key=f"ro_number_{fv}",
+            label_visibility="collapsed",
+        ),
+        "VIN",
+        f"copy_vin_{fv}",
+        lambda: st.text_input(
             "VIN",
-            f"vin_{fv}",
-            copy_id=f"copy_vin_{fv}",
-        )
-        day_submitted = _render_date_input_with_copy(
+            key=f"vin_{fv}",
+            label_visibility="collapsed",
+        ),
+    )
+    ro_invoiced, day_submitted = _render_paired_fields_with_copy(
+        "RO Invoiced / Closed Date",
+        f"copy_ro_invoiced_{fv}",
+        lambda: st.date_input(
+            "RO Invoiced / Closed Date",
+            key=f"ro_invoiced_{fv}",
+            label_visibility="collapsed",
+        ),
+        "Day Submitted",
+        f"copy_day_submitted_{fv}",
+        lambda: st.date_input(
             "Day Submitted",
-            f"day_submitted_{fv}",
-            copy_id=f"copy_day_submitted_{fv}",
-        )
+            key=f"day_submitted_{fv}",
+            label_visibility="collapsed",
+        ),
+        left_format_copy=_format_dc_copy_date,
+        right_format_copy=_format_dc_copy_date,
+    )
 
     render_vin_recall_panel(vin, st.session_state.form_version, job_count)
 
