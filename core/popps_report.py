@@ -6,6 +6,7 @@ import hashlib
 import html
 import io
 import re
+import secrets
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import datetime, timezone
 from typing import Any, get_args, get_origin, get_type_hints
@@ -21,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-review-keys"
+POPPS_UI_VERSION = "2026-06-02-popps-note-thread"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1435,13 +1436,57 @@ def _popps_report_context(report: PoppsReport, file_name: str, report_fingerprin
     }
 
 
+def _is_message_code_priority_section(section: PoppsPrioritySection) -> bool:
+    """Factory MSG CODE blocks (e.g. Too Old to Process) — summary only, no RO review."""
+    label = str(section.priority_label or "").lower()
+    if "message code" in label:
+        return True
+    rank = str(section.priority_rank or "").upper().replace(" ", "")
+    if rank.startswith("MSG"):
+        return True
+    return str(section.labor_operation_code or "").strip().lower() == "message code"
+
+
+def _note_thread_from_entry(entry: dict | None) -> list[dict]:
+    entry = entry or {}
+    thread = entry.get("note_thread")
+    if isinstance(thread, list):
+        return [dict(note) for note in thread if isinstance(note, dict)]
+    legacy = str(entry.get("notes") or "").strip()
+    if not legacy:
+        return []
+    return [
+        {
+            "id": "legacy",
+            "text": legacy,
+            "author": str(entry.get("reviewed_by") or "").strip(),
+            "created_at": str(entry.get("updated_at") or ""),
+            "deleted": False,
+        }
+    ]
+
+
+def _active_notes(entry: dict | None) -> list[dict]:
+    return [note for note in _note_thread_from_entry(entry) if not note.get("deleted")]
+
+
+def _notes_export_text(entry: dict | None) -> str:
+    parts = []
+    for note in _active_notes(entry):
+        author = str(note.get("author") or "").strip() or "Unknown"
+        text = str(note.get("text") or "").strip()
+        if text:
+            parts.append(f"{author}: {text}")
+    return "\n---\n".join(parts)
+
+
 def _review_status_label(entry: dict | None) -> str:
     entry = entry or {}
     if entry.get("reviewed_charged_back"):
         return "Charged claim back"
     if entry.get("reviewed_no_issues"):
         return "No issues found"
-    if str(entry.get("notes") or "").strip():
+    if _active_notes(entry):
         return "Notes only"
     return "Not reviewed"
 
@@ -1528,7 +1573,7 @@ def build_popps_audit_snapshot_df(reviews_store: dict[str, dict]) -> pd.DataFram
                 "RO or Claim Number": entry.get("ro_or_claim_number") or "",
                 "Vehicle": entry.get("vehicle_identification") or "",
                 "Review Status": _review_status_label(entry),
-                "Notes": entry.get("notes") or "",
+                "Notes": _notes_export_text(entry),
                 "Reviewed By": entry.get("reviewed_by") or "",
                 "Last Updated (UTC)": str(entry.get("updated_at") or "")[:19].replace("T", " "),
             }
@@ -1557,66 +1602,88 @@ def build_popps_audit_history_df(history: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def save_popps_review_entry(
-    supabase,
-    report_fingerprint: str,
-    entry_key: str,
+def _merge_review_entry(
+    existing: dict | None,
     *,
-    reviewed_no_issues: bool,
-    reviewed_charged_back: bool,
-    notes: str,
-    reviewer: str,
+    entry_key: str,
     category_label: str,
-    report_context: dict[str, str] | None = None,
-    priority_label: str = "",
-    labor_operation_code: str = "",
-    ro_or_claim_number: str = "",
-    vehicle_identification: str = "",
-) -> None:
-    if reviewed_no_issues and reviewed_charged_back:
-        reviewed_charged_back = False
-
+    reviewer: str,
+    report_context: dict[str, str] | None,
+    priority_label: str,
+    labor_operation_code: str,
+    ro_or_claim_number: str,
+    vehicle_identification: str,
+    reviewed_no_issues: bool | None = None,
+    reviewed_charged_back: bool | None = None,
+    note_thread: list[dict] | None = None,
+) -> dict:
     ctx = report_context or {}
+    prior = dict(existing or {})
     updated_at = datetime.now(timezone.utc).isoformat()
     entry = {
         "entry_key": entry_key,
         "category_label": category_label,
-        "reviewed_no_issues": bool(reviewed_no_issues),
-        "reviewed_charged_back": bool(reviewed_charged_back),
-        "notes": str(notes or "").strip(),
-        "reviewed_by": reviewer,
+        "reviewed_no_issues": (
+            bool(reviewed_no_issues)
+            if reviewed_no_issues is not None
+            else bool(prior.get("reviewed_no_issues"))
+        ),
+        "reviewed_charged_back": (
+            bool(reviewed_charged_back)
+            if reviewed_charged_back is not None
+            else bool(prior.get("reviewed_charged_back"))
+        ),
+        "note_thread": note_thread if note_thread is not None else _note_thread_from_entry(prior),
+        "reviewed_by": reviewer or prior.get("reviewed_by") or "",
         "updated_at": updated_at,
-        "dealer_code": ctx.get("dealer_code", ""),
-        "report_period": ctx.get("report_period", ""),
-        "source_file": ctx.get("source_file", ""),
-        "priority_label": priority_label,
-        "labor_operation_code": labor_operation_code,
-        "ro_or_claim_number": ro_or_claim_number,
-        "vehicle_identification": vehicle_identification,
+        "dealer_code": ctx.get("dealer_code") or prior.get("dealer_code") or "",
+        "report_period": ctx.get("report_period") or prior.get("report_period") or "",
+        "source_file": ctx.get("source_file") or prior.get("source_file") or "",
+        "priority_label": priority_label or prior.get("priority_label") or "",
+        "labor_operation_code": labor_operation_code or prior.get("labor_operation_code") or "",
+        "ro_or_claim_number": ro_or_claim_number or prior.get("ro_or_claim_number") or "",
+        "vehicle_identification": vehicle_identification or prior.get("vehicle_identification") or "",
     }
+    if entry["reviewed_no_issues"] and entry["reviewed_charged_back"]:
+        entry["reviewed_charged_back"] = False
+    entry["notes"] = _notes_export_text(entry)
+    return entry
 
+
+def _persist_popps_review_entry(
+    supabase,
+    report_fingerprint: str,
+    entry_key: str,
+    entry: dict,
+    *,
+    reviewer: str,
+    audit_notes: str,
+    audit_action: str = "save_review",
+) -> None:
     cache_key = f"popps_reviews_{report_fingerprint}"
     store = dict(st.session_state.get(cache_key) or load_popps_reviews_store(supabase, report_fingerprint))
     store[entry_key] = entry
     st.session_state[cache_key] = store
 
+    updated_at = str(entry.get("updated_at") or "")
     audit_row = {
         "report_fingerprint": report_fingerprint,
         "entry_key": entry_key,
         "dealer_code": entry.get("dealer_code"),
         "report_period": entry.get("report_period"),
         "source_file": entry.get("source_file"),
-        "priority_label": priority_label,
-        "labor_operation_code": labor_operation_code,
-        "ro_or_claim_number": ro_or_claim_number,
-        "vehicle_identification": vehicle_identification,
-        "category_label": category_label,
-        "reviewed_no_issues": entry["reviewed_no_issues"],
-        "reviewed_charged_back": entry["reviewed_charged_back"],
-        "notes": entry["notes"],
+        "priority_label": entry.get("priority_label"),
+        "labor_operation_code": entry.get("labor_operation_code"),
+        "ro_or_claim_number": entry.get("ro_or_claim_number"),
+        "vehicle_identification": entry.get("vehicle_identification"),
+        "category_label": entry.get("category_label"),
+        "reviewed_no_issues": entry.get("reviewed_no_issues"),
+        "reviewed_charged_back": entry.get("reviewed_charged_back"),
+        "notes": audit_notes,
         "reviewed_by": reviewer,
         "review_updated_at": updated_at,
         "created_at": updated_at,
+        "audit_action": audit_action,
     }
     append_popps_audit_log(supabase, audit_row)
 
@@ -1651,6 +1718,142 @@ def save_popps_review_entry(
             "Review saved for this session and audit log, but cloud JSON storage failed. "
             f"Confirm dealer_settings.popps_reviews exists. ({exc})"
         )
+
+
+def save_popps_review_entry(
+    supabase,
+    report_fingerprint: str,
+    entry_key: str,
+    *,
+    reviewed_no_issues: bool,
+    reviewed_charged_back: bool,
+    reviewer: str,
+    category_label: str,
+    report_context: dict[str, str] | None = None,
+    priority_label: str = "",
+    labor_operation_code: str = "",
+    ro_or_claim_number: str = "",
+    vehicle_identification: str = "",
+) -> None:
+    cache_key = f"popps_reviews_{report_fingerprint}"
+    store = dict(st.session_state.get(cache_key) or load_popps_reviews_store(supabase, report_fingerprint))
+    entry = _merge_review_entry(
+        store.get(entry_key),
+        entry_key=entry_key,
+        category_label=category_label,
+        reviewer=reviewer,
+        report_context=report_context,
+        priority_label=priority_label,
+        labor_operation_code=labor_operation_code,
+        ro_or_claim_number=ro_or_claim_number,
+        vehicle_identification=vehicle_identification,
+        reviewed_no_issues=reviewed_no_issues,
+        reviewed_charged_back=reviewed_charged_back,
+    )
+    _persist_popps_review_entry(
+        supabase,
+        report_fingerprint,
+        entry_key,
+        entry,
+        reviewer=reviewer,
+        audit_notes=_notes_export_text(entry),
+        audit_action="save_review",
+    )
+
+
+def add_popps_review_note(
+    supabase,
+    report_fingerprint: str,
+    entry_key: str,
+    *,
+    note_text: str,
+    reviewer: str,
+    category_label: str,
+    report_context: dict[str, str] | None = None,
+    priority_label: str = "",
+    labor_operation_code: str = "",
+    ro_or_claim_number: str = "",
+    vehicle_identification: str = "",
+) -> None:
+    text = str(note_text or "").strip()
+    if not text:
+        return
+
+    cache_key = f"popps_reviews_{report_fingerprint}"
+    store = dict(st.session_state.get(cache_key) or load_popps_reviews_store(supabase, report_fingerprint))
+    thread = _note_thread_from_entry(store.get(entry_key))
+    thread.append(
+        {
+            "id": secrets.token_hex(8),
+            "text": text,
+            "author": reviewer,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "deleted": False,
+        }
+    )
+    entry = _merge_review_entry(
+        store.get(entry_key),
+        entry_key=entry_key,
+        category_label=category_label,
+        reviewer=reviewer,
+        report_context=report_context,
+        priority_label=priority_label,
+        labor_operation_code=labor_operation_code,
+        ro_or_claim_number=ro_or_claim_number,
+        vehicle_identification=vehicle_identification,
+        note_thread=thread,
+    )
+    _persist_popps_review_entry(
+        supabase,
+        report_fingerprint,
+        entry_key,
+        entry,
+        reviewer=reviewer,
+        audit_notes=text,
+        audit_action="add_note",
+    )
+
+
+def delete_popps_review_note(
+    supabase,
+    report_fingerprint: str,
+    entry_key: str,
+    *,
+    note_id: str,
+    reviewer: str,
+) -> bool:
+    cache_key = f"popps_reviews_{report_fingerprint}"
+    store = dict(st.session_state.get(cache_key) or load_popps_reviews_store(supabase, report_fingerprint))
+    existing = store.get(entry_key)
+    if not existing:
+        return False
+
+    thread = _note_thread_from_entry(existing)
+    changed = False
+    for note in thread:
+        if str(note.get("id") or "") == note_id and not note.get("deleted"):
+            note["deleted"] = True
+            note["deleted_by"] = reviewer
+            note["deleted_at"] = datetime.now(timezone.utc).isoformat()
+            changed = True
+            break
+    if not changed:
+        return False
+
+    entry = dict(existing)
+    entry["note_thread"] = thread
+    entry["notes"] = _notes_export_text(entry)
+    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _persist_popps_review_entry(
+        supabase,
+        report_fingerprint,
+        entry_key,
+        entry,
+        reviewer=reviewer,
+        audit_notes=f"Deleted note {note_id}",
+        audit_action="delete_note",
+    )
+    return True
 
 
 def _claim_heading(claim: PoppsClaimRow) -> str:
@@ -1715,20 +1918,19 @@ def _render_popps_review_controls(
     vehicle_identification: str = "",
     heading: str | None = None,
     widget_scope: str = "",
+    notes_admin: bool = False,
 ) -> None:
-    """Notes and review checkboxes for one POPPS category or claim."""
+    """Review checkboxes and append-only note thread for one POPPS claim."""
     stored = reviews_store.get(entry_key) or {}
     suffix = _safe_widget_suffix(entry_key, report_fingerprint, scope=widget_scope)
     no_key = f"popps_no_issues_{suffix}"
     charge_key = f"popps_charged_{suffix}"
-    notes_key = f"popps_notes_{suffix}"
+    new_note_key = f"popps_new_note_{suffix}"
 
     if no_key not in st.session_state:
         st.session_state[no_key] = bool(stored.get("reviewed_no_issues"))
     if charge_key not in st.session_state:
         st.session_state[charge_key] = bool(stored.get("reviewed_charged_back"))
-    if notes_key not in st.session_state:
-        st.session_state[notes_key] = str(stored.get("notes") or "")
 
     def _clear_other(other_field: str) -> None:
         st.session_state[other_field] = False
@@ -1738,7 +1940,7 @@ def _render_popps_review_controls(
         st.caption(category_label)
     if stored.get("reviewed_by"):
         updated = str(stored.get("updated_at") or "")[:19].replace("T", " ")
-        st.caption(f"Last saved by {stored.get('reviewed_by')} · {updated or '—'}")
+        st.caption(f"Last review status saved by {stored.get('reviewed_by')} · {updated or '—'}")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -1756,21 +1958,13 @@ def _render_popps_review_controls(
             args=(no_key,),
         )
 
-    st.text_area(
-        "Notes",
-        key=notes_key,
-        height=88,
-        placeholder="Document what you verified, who you spoke with, or charge-back details.",
-    )
-
-    if st.button("Save review", key=f"popps_save_{suffix}", use_container_width=True):
+    if st.button("Save review status", key=f"popps_save_{suffix}", use_container_width=True):
         save_popps_review_entry(
             supabase,
             report_fingerprint,
             entry_key,
             reviewed_no_issues=bool(st.session_state.get(no_key)),
             reviewed_charged_back=bool(st.session_state.get(charge_key)),
-            notes=str(st.session_state.get(notes_key) or ""),
             reviewer=reviewer,
             category_label=category_label,
             report_context=report_context,
@@ -1779,8 +1973,68 @@ def _render_popps_review_controls(
             ro_or_claim_number=ro_or_claim_number,
             vehicle_identification=vehicle_identification,
         )
-        st.success("Review saved to audit trail.")
+        st.success("Review status saved to audit trail.")
         st.rerun()
+
+    st.markdown("**Notes**")
+    st.caption("Notes cannot be edited after they are added. Add another note anytime. Only Admin can delete a note.")
+    active_notes = _active_notes(stored)
+    if active_notes:
+        for note in active_notes:
+            author = str(note.get("author") or "").strip() or "Unknown"
+            created = str(note.get("created_at") or "")[:19].replace("T", " ")
+            note_id = str(note.get("id") or "")
+            when = f" · {created} UTC" if created else ""
+            with st.container(border=True):
+                st.markdown(f"**{author}**{when}")
+                st.markdown(str(note.get("text") or ""))
+            if notes_admin and note_id:
+                if st.button(
+                    "Delete note (Admin)",
+                    key=f"popps_del_{suffix}_{note_id}",
+                    type="secondary",
+                ):
+                    if delete_popps_review_note(
+                        supabase,
+                        report_fingerprint,
+                        entry_key,
+                        note_id=note_id,
+                        reviewer=reviewer,
+                    ):
+                        st.success("Note removed.")
+                        st.rerun()
+                    else:
+                        st.warning("Could not delete that note.")
+    else:
+        st.caption("No notes yet for this claim.")
+
+    st.text_area(
+        "Add a note",
+        key=new_note_key,
+        height=88,
+        placeholder="Document what you verified, who you spoke with, or charge-back details.",
+    )
+
+    if st.button("Add note", key=f"popps_add_note_{suffix}", use_container_width=True):
+        note_text = str(st.session_state.get(new_note_key) or "").strip()
+        if not note_text:
+            st.warning("Enter a note before saving.")
+        else:
+            add_popps_review_note(
+                supabase,
+                report_fingerprint,
+                entry_key,
+                note_text=note_text,
+                reviewer=reviewer,
+                category_label=category_label,
+                report_context=report_context,
+                priority_label=priority_label,
+                labor_operation_code=labor_operation_code,
+                ro_or_claim_number=ro_or_claim_number,
+                vehicle_identification=vehicle_identification,
+            )
+            st.success("Note added.")
+            st.rerun()
 
 
 def _render_popps_priority_section(
@@ -1793,6 +2047,7 @@ def _render_popps_priority_section(
     report_fp: str,
     reviewer_name: str,
     report_ctx: dict[str, str],
+    notes_admin: bool = False,
 ) -> None:
     """Priority / message-code expander with per-claim notes and review."""
     title = (
@@ -1800,10 +2055,18 @@ def _render_popps_priority_section(
         f"Labor Operation {section.labor_operation_code} — "
         f"{section.repair_description}"
     )
+    message_code_section = _is_message_code_priority_section(section)
 
-    _render_popps_expander_header(title, "priority")
-    _popps_expander_anchor("popps-anchor-priority")
-    with st.expander("View claims and notes", expanded=False):
+    if message_code_section:
+        _render_popps_expander_header(title, "plain")
+        _popps_expander_anchor("popps-anchor-plain")
+        expander_label = "View details"
+    else:
+        _render_popps_expander_header(title, "priority")
+        _popps_expander_anchor("popps-anchor-priority")
+        expander_label = "View claims and notes"
+
+    with st.expander(expander_label, expanded=False):
         c1, c2, c3 = st.columns(3)
         c1.metric("Quarters on POPPS", section.quarters_on_popps or "—")
         c2.metric("Total Conditions", section.total_conditions or "—")
@@ -1826,6 +2089,9 @@ def _render_popps_priority_section(
             use_container_width=True,
             hide_index=True,
         )
+
+        if message_code_section:
+            return
 
         st.markdown(
             '<div class="popps-notes-panel">'
@@ -1868,6 +2134,7 @@ def _render_popps_priority_section(
                     vehicle_identification=claim.vehicle_identification,
                     heading="Notes and review status",
                     widget_scope=widget_scope,
+                    notes_admin=notes_admin,
                 )
 
 
@@ -1885,7 +2152,7 @@ def _render_popps_audit_panel(
 
     with st.expander("POPPS review audit trail", expanded=bool(len(snapshot))):
         st.caption(
-            "Every **Save review** writes an append-only audit record (cloud table when configured). "
+            "Every **Save review status** or **Add note** writes an append-only audit record (cloud table when configured). "
             "Download the snapshot for audits and factory inquiries."
         )
         st.markdown(
@@ -2028,8 +2295,16 @@ def popps_page_css(theme: str = "Dark") -> str:
     expander_in_priority = (
         f"{anchor_container}:has(.popps-anchor-priority) details[data-testid='stExpander']"
     )
+    expander_adjacent_plain = (
+        f"{anchor_container}:has(.popps-anchor-plain) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
+    expander_in_plain = (
+        f"{anchor_container}:has(.popps-anchor-plain) details[data-testid='stExpander']"
+    )
     expander_archive = f"{expander_adjacent_archive}, {expander_in_archive}"
     expander_priority = f"{expander_adjacent_priority}, {expander_in_priority}"
+    expander_plain = f"{expander_adjacent_plain}, {expander_in_plain}"
     archive_header_bg = (
         "linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.12))"
         if is_light
@@ -2067,6 +2342,17 @@ def popps_page_css(theme: str = "Dark") -> str:
         border-left: 6px solid #fbbf24 !important;
         box-shadow: {priority_glow} !important;
     }}
+    .popps-expander-header--plain {{
+        background: {card_bg} !important;
+        border: 1px solid {border} !important;
+        box-shadow: none !important;
+        font-weight: 600 !important;
+    }}
+    .popps-expander-header--plain .popps-expander-header-text {{
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        color: {muted} !important;
+    }}
     .popps-expander-anchor {{
         display: none !important;
         height: 0 !important;
@@ -2077,10 +2363,25 @@ def popps_page_css(theme: str = "Dark") -> str:
         pointer-events: none !important;
     }}
     {expander_archive},
-    {expander_priority} {{
+    {expander_priority},
+    {expander_plain} {{
         margin: 0 0 0.85rem 0 !important;
         border-radius: 0 0 14px 14px !important;
         overflow: hidden !important;
+    }}
+    {expander_plain} {{
+        border: 1px solid {border} !important;
+        border-top: none !important;
+        background: {card_bg} !important;
+        box-shadow: none !important;
+    }}
+    {expander_plain} > summary,
+    {expander_plain}[open] > summary {{
+        background: {card_bg} !important;
+        color: {muted} !important;
+        font-weight: 600 !important;
+        padding: 0.65rem 1rem !important;
+        border-bottom: 1px solid {border} !important;
     }}
     {expander_archive} {{
         border: 2px solid {archive_border} !important;
@@ -2254,6 +2555,7 @@ def render_popps_report(
     supabase=None,
     reviewer: str = "",
     auth_user: str = "",
+    notes_admin: bool = False,
 ) -> None:
     """POPPS upload tab — plain-language breakdown of the factory report."""
     st.markdown(
@@ -2563,9 +2865,10 @@ def render_popps_report(
         )
         st.markdown(
             '<p class="popps-review-hint">'
-            "Under each priority area, scroll past the claims table to the blue "
+            "Under each <strong>Claims Analysis</strong> priority area, scroll past the claims table to the blue "
             "<strong>Notes &amp; review</strong> box, then use the "
-            "<strong>repair order tabs</strong> (one tab per RO) for notes, checkboxes, and Save review."
+            "<strong>repair order tabs</strong> to add notes (with your name), set review status, "
+            "and save. Notes cannot be edited — only Admin can delete a note."
             "</p>",
             unsafe_allow_html=True,
         )
@@ -2579,6 +2882,7 @@ def render_popps_report(
                 report_fp=report_fp,
                 reviewer_name=reviewer_name,
                 report_ctx=report_ctx,
+                notes_admin=notes_admin,
             )
 
     _render_popps_audit_panel(

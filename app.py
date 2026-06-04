@@ -7083,6 +7083,7 @@ def render_popps():
         supabase=supabase,
         reviewer=reviewer,
         auth_user=auth_user_email(),
+        notes_admin=user_has_role("Admin"),
     )
 
 
