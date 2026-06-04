@@ -1200,14 +1200,12 @@ def _render_popps_priority_section(
     reviewer_name: str,
     report_ctx: dict[str, str],
 ) -> None:
-    """Priority / message-code expander with section notes and clickable RO review."""
+    """Priority / message-code expander with per-claim notes and review."""
     title = (
         f"{section.priority_label} — "
         f"Labor Operation {section.labor_operation_code} — "
         f"{section.repair_description}"
     )
-    section_label = f"{section.priority_label} — Labor Operation {section.labor_operation_code}"
-    section_key = section_review_entry_key(section)
 
     open_by_default = bool(section.claims) or section.priority_rank == "1"
     with st.expander(title, expanded=open_by_default):
@@ -1223,22 +1221,8 @@ def _render_popps_priority_section(
         if not section.claims:
             if section.no_claims_message:
                 st.info(section.no_claims_message)
-            st.markdown(
-                '<div class="popps-notes-panel"><h4>Notes &amp; review — whole category</h4></div>',
-                unsafe_allow_html=True,
-            )
-            _render_popps_review_controls(
-                entry_key=section_key,
-                category_label=section_label,
-                reviews_store=reviews_store,
-                supabase=supabase,
-                report_fingerprint=report_fp,
-                reviewer=reviewer_name,
-                report_context=report_ctx,
-                priority_label=section.priority_label,
-                labor_operation_code=section.labor_operation_code,
-                heading="Category review",
-            )
+            else:
+                st.caption("No sample claims were listed for this group in the PDF.")
             return
 
         st.markdown("**Claims in this category**")
@@ -1251,27 +1235,13 @@ def _render_popps_priority_section(
         st.markdown(
             '<div class="popps-notes-panel">'
             "<h4>Notes &amp; review (below the table)</h4>"
-            "<p>Add notes and checkboxes for the whole category, then click each "
+            "<p>Each sample claim needs its own notes. Open a "
             "<strong>repair order tab</strong> to document that RO for your audit trail.</p>"
             "</div>",
             unsafe_allow_html=True,
         )
 
-        st.markdown("**1. Whole category**")
-        _render_popps_review_controls(
-            entry_key=section_key,
-            category_label=section_label,
-            reviews_store=reviews_store,
-            supabase=supabase,
-            report_fingerprint=report_fp,
-            reviewer=reviewer_name,
-            report_context=report_ctx,
-            priority_label=section.priority_label,
-            labor_operation_code=section.labor_operation_code,
-            heading="Category notes",
-        )
-
-        st.markdown("**2. Each repair order / claim**")
+        st.markdown("**Review each repair order / claim**")
         tab_labels: list[str] = []
         for claim in section.claims:
             claim_key = claim_review_entry_key(section, claim)
@@ -1717,8 +1687,8 @@ def render_popps_report(
         st.markdown(
             '<p class="popps-review-hint">'
             "Under each priority area, scroll past the claims table to the blue "
-            "<strong>Notes &amp; review</strong> box — category notes first, then "
-            "<strong>repair order tabs</strong> (one tab per RO) with notes, checkboxes, and Save review."
+            "<strong>Notes &amp; review</strong> box, then use the "
+            "<strong>repair order tabs</strong> (one tab per RO) for notes, checkboxes, and Save review."
             "</p>",
             unsafe_allow_html=True,
         )
