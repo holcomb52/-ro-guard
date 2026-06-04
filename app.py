@@ -4219,14 +4219,14 @@ def _render_input_copy_slot(*, label: str, element_id: str, text: str) -> None:
             payload,
             label=label,
             element_id=element_id,
-            iframe_width=72,
+            iframe_width=108,
         )
     else:
         _render_field_copy_button(
             "",
             label=label,
             element_id=element_id,
-            iframe_width=72,
+            iframe_width=108,
             disabled=True,
         )
 
@@ -4239,18 +4239,15 @@ def _render_field_with_copy_column(
     format_copy=lambda value: str(value or ""),
     show_label: bool = True,
 ):
-    """Label on its own row; input and Copy share one row for consistent alignment."""
+    """Label, full-width input, then Copy tucked underneath."""
     if show_label and label:
         st.markdown(f"**{label}**")
-    field_col, copy_col = st.columns([13, 1], gap="small", vertical_alignment="bottom")
-    with field_col:
-        value = render_field()
-    with copy_col:
-        _render_input_copy_slot(
-            label=label,
-            element_id=copy_id,
-            text=format_copy(value),
-        )
+    value = render_field()
+    _render_input_copy_slot(
+        label=label,
+        element_id=copy_id,
+        text=format_copy(value),
+    )
     return value
 
 
@@ -4265,25 +4262,19 @@ def _render_paired_fields_with_copy(
     left_format_copy=lambda value: str(value or ""),
     right_format_copy=lambda value: str(value or ""),
 ):
-    """Two labeled fields on one row — each with its own Copy (full-width layout)."""
-    label_left, label_right = st.columns(2, gap="medium")
-    with label_left:
+    """Two fields side by side — each with Copy directly under its input."""
+    left_col, right_col = st.columns(2, gap="medium")
+    with left_col:
         st.markdown(f"**{left_label}**")
-    with label_right:
-        st.markdown(f"**{right_label}**")
-
-    row = st.columns([12, 1, 12, 1], gap="small", vertical_alignment="bottom")
-    with row[0]:
         left_value = left_render_field()
-    with row[1]:
         _render_input_copy_slot(
             label=left_label,
             element_id=left_copy_id,
             text=left_format_copy(left_value),
         )
-    with row[2]:
+    with right_col:
+        st.markdown(f"**{right_label}**")
         right_value = right_render_field()
-    with row[3]:
         _render_input_copy_slot(
             label=right_label,
             element_id=right_copy_id,
@@ -4422,13 +4413,15 @@ def _render_field_copy_button(
           }}
           button {{
             width: 100%;
-            padding: 5px 10px;
+            min-width: 6.5rem;
+            padding: 5px 12px;
             border-radius: 8px;
             border: 1px solid rgba(62, 150, 255, .35);
             background: rgba(7, 19, 34, .75);
             color: #f8fbff;
             font-size: 0.78rem;
             font-weight: 600;
+            white-space: nowrap;
             cursor: pointer;
           }}
           button:hover {{
@@ -4504,7 +4497,7 @@ def _render_narrative_field(
     copy_id: str,
     height: int = 72,
 ) -> str:
-    """Narrative text area with Copy beside the box for Dealer Connect paste."""
+    """Narrative text area with Copy under the box for Dealer Connect paste."""
     value = _render_field_with_copy_column(
         label,
         copy_id=copy_id,
@@ -5285,7 +5278,7 @@ def _render_review_job_panel(
         '<div class="review-job-narratives-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
-    st.caption("Use **Copy** beside each field to paste into Dealer Connect.")
+    st.caption("Use **Copy** under each field to paste into Dealer Connect.")
     concern = _render_narrative_field(
         "Concern",
         f"concern_{job_no}_{fv}",
