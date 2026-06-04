@@ -22,7 +22,10 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-nested-summary"
+POPPS_UI_VERSION = "2026-06-02-popps-notes-compliance"
+
+POPPS_NOTES_WARNING_DAYS = 15
+POPPS_NOTES_MANAGER_ALERT_DAYS = 17
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -899,6 +902,11 @@ def _persist_popps_library(
     st.session_state.pop("popps_viewing_fingerprint", None)
     if apply_session and active_entry:
         apply_popps_entry_to_session(active_entry)
+    if supabase is not None:
+        newest = newest_popps_upload_entry(library)
+        if newest:
+            _sync_popps_notes_compliance_upload(supabase, str(newest.get("fingerprint") or ""))
+    st.session_state.pop("_popps_compliance_status", None)
     return active_fp
 
 
@@ -1452,6 +1460,325 @@ def _is_message_code_priority_section(section: PoppsPrioritySection) -> bool:
     if rank.startswith("MSG"):
         return True
     return str(section.labor_operation_code or "").strip().lower() == "message code"
+
+
+def newest_popps_upload_entry(library: dict) -> dict | None:
+    """Most recently uploaded POPPS month in the dealership library."""
+    reports = list((library.get("reports") or {}).values())
+    if not reports:
+        return None
+    ordered = sorted(
+        reports,
+        key=lambda entry: (
+            str(entry.get("uploaded_at") or ""),
+            str(entry.get("fingerprint") or ""),
+        ),
+        reverse=True,
+    )
+    return dict(ordered[0]) if ordered else None
+
+
+def _parse_utc_timestamp(value: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _days_since_timestamp(value: str) -> int | None:
+    parsed = _parse_utc_timestamp(value)
+    if parsed is None:
+        return None
+    today = datetime.now(timezone.utc).date()
+    return (today - parsed.date()).days
+
+
+def _priority_sections_needing_notes(report: PoppsReport) -> list[PoppsPrioritySection]:
+    sections: list[PoppsPrioritySection] = []
+    for section in report.priority_sections:
+        if _is_popps_review_exempt_section(section):
+            continue
+        if not section.claims:
+            continue
+        sections.append(section)
+    return sections
+
+
+def _priority_section_note_label(section: PoppsPrioritySection) -> str:
+    rank = str(section.priority_rank or "").strip()
+    lop = str(section.labor_operation_code or "").strip()
+    desc = str(section.repair_description or "").strip()
+    if rank.isdigit():
+        return f"Priority {rank} — {lop} — {desc}"
+    return f"{section.priority_label} — {lop}"
+
+
+def popps_report_has_claim_notes(reviews_store: dict[str, dict]) -> bool:
+    for entry in (reviews_store or {}).values():
+        if _active_notes(entry):
+            return True
+    return False
+
+
+def _load_popps_notes_compliance(supabase) -> dict:
+    if supabase is None:
+        return {}
+    try:
+        response = (
+            supabase.table("dealer_settings")
+            .select("popps_notes_compliance")
+            .eq("id", 1)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        if rows and isinstance(rows[0].get("popps_notes_compliance"), dict):
+            return dict(rows[0]["popps_notes_compliance"])
+    except Exception:
+        pass
+    return {}
+
+
+def _save_popps_notes_compliance(supabase, state: dict) -> None:
+    if supabase is None:
+        return
+    try:
+        supabase.table("dealer_settings").update(
+            {"popps_notes_compliance": dict(state)}
+        ).eq("id", 1).execute()
+    except Exception:
+        pass
+
+
+def _sync_popps_notes_compliance_upload(supabase, upload_fingerprint: str) -> None:
+    """Reset manager alert tracking when a newer POPPS file is uploaded."""
+    fingerprint = str(upload_fingerprint or "").strip()
+    if not fingerprint:
+        return
+    state = _load_popps_notes_compliance(supabase)
+    if str(state.get("tracked_upload_fingerprint") or "") == fingerprint:
+        return
+    state["tracked_upload_fingerprint"] = fingerprint
+    state.pop("manager_alert_sent_at", None)
+    state.pop("manager_alert_sent_for_fingerprint", None)
+    state.pop("manager_alert_last_error", None)
+    _save_popps_notes_compliance(supabase, state)
+
+
+def _maybe_send_popps_manager_notes_alert(
+    supabase,
+    *,
+    upload_fingerprint: str,
+    upload_label: str,
+    uploaded_at: str,
+    days_since_upload: int,
+) -> tuple[bool, str]:
+    """Email managers once per upload when notes are still missing after day 17."""
+    from core.scheduled_reports import load_manager_emails, send_plain_email
+
+    state = _load_popps_notes_compliance(supabase)
+    if str(state.get("manager_alert_sent_for_fingerprint") or "") == upload_fingerprint:
+        return False, ""
+
+    managers = load_manager_emails(supabase)
+    if not managers:
+        return False, "No manager emails found in Personnel."
+
+    uploaded_display = str(uploaded_at or "")[:19].replace("T", " ")
+    period = upload_label or "POPPS report"
+    body = (
+        f"RO Guard — POPPS review notes are overdue\n\n"
+        f"The dealership's most recent POPPS upload ({period}) was saved on "
+        f"{uploaded_display or '—'} UTC.\n\n"
+        f"It has been {days_since_upload} days and no claim review notes have been added "
+        f"in the POPPS Report tab under **Repair groups and related claims (add notes)**.\n\n"
+        f"Warranty administrators were warned starting on day {POPPS_NOTES_WARNING_DAYS}. "
+        f"Please follow up so each Claims Analysis repair group with sample claims is documented.\n\n"
+        f"— RO Shield (automated alert)\n"
+    )
+    try:
+        send_plain_email(
+            recipients=managers,
+            subject="RO Guard alert — POPPS notes overdue (17+ days)",
+            body_text=body,
+        )
+    except Exception as exc:
+        state["manager_alert_last_error"] = str(exc)
+        _save_popps_notes_compliance(supabase, state)
+        return False, str(exc)
+
+    state["manager_alert_sent_for_fingerprint"] = upload_fingerprint
+    state["manager_alert_sent_at"] = datetime.now(timezone.utc).isoformat()
+    state.pop("manager_alert_last_error", None)
+    _save_popps_notes_compliance(supabase, state)
+    return True, ""
+
+
+def evaluate_popps_notes_compliance(
+    supabase,
+    *,
+    library: dict | None = None,
+    report_fingerprint: str = "",
+    reviews_store: dict[str, dict] | None = None,
+    report: PoppsReport | None = None,
+    run_manager_alert: bool = False,
+) -> dict | None:
+    """Compliance state for POPPS claim notes vs most recent upload date."""
+    library = library or {}
+    upload_entry = newest_popps_upload_entry(library)
+    if not upload_entry:
+        return None
+
+    uploaded_at = str(upload_entry.get("uploaded_at") or "")
+    days = _days_since_timestamp(uploaded_at)
+    if days is None:
+        return None
+
+    upload_fp = str(upload_entry.get("fingerprint") or "")
+    report_fp = str(report_fingerprint or library.get("active_fingerprint") or upload_fp)
+    reviews = reviews_store if reviews_store is not None else load_popps_reviews_store(supabase, report_fp)
+    has_notes = popps_report_has_claim_notes(reviews)
+
+    categories: list[str] = []
+    if report is not None:
+        categories = [_priority_section_note_label(section) for section in _priority_sections_needing_notes(report)]
+
+    compliance_state = _load_popps_notes_compliance(supabase)
+    already_sent = str(compliance_state.get("manager_alert_sent_for_fingerprint") or "") == upload_fp
+
+    status = {
+        "upload_fingerprint": upload_fp,
+        "uploaded_at": uploaded_at,
+        "upload_label": str(upload_entry.get("period_label") or upload_entry.get("file_name") or "POPPS"),
+        "days_since_upload": days,
+        "has_notes": has_notes,
+        "needs_warning": (not has_notes) and days >= POPPS_NOTES_WARNING_DAYS,
+        "needs_manager_alert": (not has_notes) and days >= POPPS_NOTES_MANAGER_ALERT_DAYS,
+        "categories": categories,
+        "manager_alert_sent": False,
+        "manager_alert_already_sent": already_sent,
+        "manager_alert_error": str(compliance_state.get("manager_alert_last_error") or ""),
+    }
+
+    if run_manager_alert and status["needs_manager_alert"] and not already_sent:
+        sent, err = _maybe_send_popps_manager_notes_alert(
+            supabase,
+            upload_fingerprint=upload_fp,
+            upload_label=status["upload_label"],
+            uploaded_at=uploaded_at,
+            days_since_upload=days,
+        )
+        status["manager_alert_sent"] = sent
+        status["manager_alert_error"] = err
+        compliance = _load_popps_notes_compliance(supabase)
+        if str(compliance.get("manager_alert_sent_for_fingerprint") or "") == upload_fp:
+            status["manager_alert_already_sent"] = True
+
+    return status
+
+
+def process_popps_notes_compliance(supabase) -> dict | None:
+    """Run once per session: evaluate notes deadlines and send manager alert if due."""
+    if st.session_state.get("_popps_compliance_status") is not None:
+        return st.session_state.get("_popps_compliance_status")
+
+    library = load_popps_library(supabase) if supabase is not None else _normalize_popps_library({})
+    report: PoppsReport | None = st.session_state.get("popps_parsed_report")
+    file_name = str(st.session_state.get("popps_upload_name") or "POPPS report")
+    report_fp = str(library.get("active_fingerprint") or "")
+    if report is not None:
+        report_fp = popps_report_fingerprint(report, file_name) or report_fp
+    elif report_fp:
+        entry = (library.get("reports") or {}).get(report_fp) or {}
+        if entry.get("report"):
+            try:
+                report = popps_report_from_storage_dict(entry["report"])
+                file_name = str(entry.get("file_name") or file_name)
+            except Exception:
+                report = None
+
+    reviews_store = load_popps_reviews_store(supabase, report_fp) if report_fp else {}
+    status = evaluate_popps_notes_compliance(
+        supabase,
+        library=library,
+        report_fingerprint=report_fp,
+        reviews_store=reviews_store,
+        report=report,
+        run_manager_alert=True,
+    )
+    st.session_state["_popps_compliance_status"] = status
+    return status
+
+
+def render_popps_notes_compliance_messages(
+    status: dict | None,
+    *,
+    is_warranty_admin: bool,
+    on_popps_tab: bool = False,
+) -> None:
+    if not status or not is_warranty_admin:
+        return
+    if status.get("has_notes"):
+        return
+
+    days = int(status.get("days_since_upload") or 0)
+    upload_label = str(status.get("upload_label") or "POPPS report")
+    uploaded_display = str(status.get("uploaded_at") or "")[:19].replace("T", " ")
+    categories = status.get("categories") or []
+    cat_text = "; ".join(categories[:6])
+    if len(categories) > 6:
+        cat_text += f"; +{len(categories) - 6} more"
+
+    if status.get("needs_warning"):
+        message = (
+            f"**POPPS notes due:** {days} days since the latest POPPS upload "
+            f"({upload_label}, {uploaded_display} UTC) and **no claim notes** have been added yet. "
+            f"Open **Repair groups and related claims (add notes)**"
+        )
+        if on_popps_tab:
+            message += " below"
+        message += (
+            f" and add notes under each repair group with sample claims"
+            f"{f' ({cat_text})' if cat_text else ''}."
+        )
+        if days >= POPPS_NOTES_MANAGER_ALERT_DAYS:
+            message += " Managers have been emailed about this overdue review."
+        else:
+            message += (
+                f" Managers are emailed automatically if notes are still missing after "
+                f"day {POPPS_NOTES_MANAGER_ALERT_DAYS}."
+            )
+        st.warning(message)
+
+    if status.get("manager_alert_error") and is_warranty_admin:
+        st.caption(
+            f"Manager alert email could not be sent ({status['manager_alert_error']}). "
+            "Confirm report SMTP secrets are configured."
+        )
+
+
+def render_popps_compliance_global_banner(supabase, *, is_warranty_admin: bool) -> None:
+    """Warranty Admin reminder on any tab (once per session)."""
+    if not is_warranty_admin:
+        return
+    if st.session_state.get("_popps_global_compliance_banner"):
+        return
+    status = st.session_state.get("_popps_compliance_status")
+    if not status or not status.get("needs_warning"):
+        return
+    days = int(status.get("days_since_upload") or 0)
+    upload_label = str(status.get("upload_label") or "POPPS report")
+    st.warning(
+        f"POPPS claim notes are overdue ({days} days since {upload_label}). "
+        "Open the **POPPS Report** tab → **Repair groups and related claims (add notes)**."
+    )
+    st.session_state["_popps_global_compliance_banner"] = True
 
 
 def _is_popps_review_exempt_section(section: PoppsPrioritySection) -> bool:
@@ -2693,6 +3020,7 @@ def render_popps_report(
     reviewer: str = "",
     auth_user: str = "",
     notes_admin: bool = False,
+    is_warranty_admin: bool = False,
 ) -> None:
     """POPPS upload tab — plain-language breakdown of the factory report."""
     st.markdown(
@@ -2774,6 +3102,7 @@ def render_popps_report(
                 f"**{quarter}** is on screen — showing **{period}** for your dealership."
             )
             st.session_state.popps_upload_nonce = int(st.session_state.get("popps_upload_nonce", 0)) + 1
+            st.session_state.pop("_popps_compliance_status", None)
             st.rerun()
 
     action_cols = st.columns(2)
@@ -2838,6 +3167,21 @@ def render_popps_report(
     report_ctx = _popps_report_context(report, file_name, report_fp)
 
     library = load_popps_library(supabase)
+    if st.session_state.get("_popps_compliance_status") is None:
+        st.session_state["_popps_compliance_status"] = evaluate_popps_notes_compliance(
+            supabase,
+            library=library,
+            report_fingerprint=report_fp,
+            reviews_store=reviews_store,
+            report=report,
+            run_manager_alert=True,
+        )
+    compliance_status = st.session_state.get("_popps_compliance_status")
+    render_popps_notes_compliance_messages(
+        compliance_status,
+        is_warranty_admin=is_warranty_admin,
+        on_popps_tab=True,
+    )
     active_fp = str(library.get("active_fingerprint") or report_fp)
     viewing_fp = str(st.session_state.get("popps_viewing_fingerprint") or "").strip()
     _render_popps_archive_panel(
@@ -3031,31 +3375,41 @@ def render_popps_report(
                 )
 
     if report.priority_sections:
-        st.markdown(
-            '<div class="popps-section-title">Repair groups and related claims</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<p class="popps-review-hint">'
-            "Under each <strong>Claims Analysis</strong> priority area, scroll past the claims table to the blue "
-            "<strong>Notes &amp; review</strong> box, then use the "
-            "<strong>repair order tabs</strong> to add notes (with your name), set review status, "
-            "and save. Notes cannot be edited — only Admin can delete a note."
-            "</p>",
-            unsafe_allow_html=True,
-        )
-        for section in report.priority_sections:
-            _render_popps_priority_section(
-                section,
-                reviews_store=reviews_store,
-                supabase=supabase,
-                report=report,
-                file_name=file_name,
-                report_fp=report_fp,
-                reviewer_name=reviewer_name,
-                report_ctx=report_ctx,
-                notes_admin=notes_admin,
+        sections_needing_notes = _priority_sections_needing_notes(report)
+        group_count = len(sections_needing_notes)
+        st.markdown('<div class="popps-summary-parent-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+        _popps_expander_anchor("popps-anchor-summary-parent")
+        with st.expander(
+            f"Repair groups and related claims (add notes){_popps_item_count_label(group_count)}",
+            expanded=False,
+            key="popps_sec_repair_groups",
+        ):
+            st.markdown(
+                '<p class="popps-review-hint">'
+                "Expand each <strong>Claims Analysis</strong> priority below. Scroll past the claims table to the blue "
+                "<strong>Notes &amp; review</strong> box, then use the "
+                "<strong>repair order tabs</strong> to add notes (with your name), set review status, "
+                "and save. Notes cannot be edited — only Admin can delete a note."
+                "</p>",
+                unsafe_allow_html=True,
             )
+            if sections_needing_notes:
+                labels = [_priority_section_note_label(section) for section in sections_needing_notes]
+                st.caption("**Repair groups that need notes:** " + " · ".join(labels))
+            elif compliance_status and compliance_status.get("needs_warning"):
+                st.caption("No sample claims are listed for review in this POPPS file.")
+            for section in report.priority_sections:
+                _render_popps_priority_section(
+                    section,
+                    reviews_store=reviews_store,
+                    supabase=supabase,
+                    report=report,
+                    file_name=file_name,
+                    report_fp=report_fp,
+                    reviewer_name=reviewer_name,
+                    report_ctx=report_ctx,
+                    notes_admin=notes_admin,
+                )
 
     _render_popps_audit_panel(
         reviews_store=reviews_store,

@@ -7084,6 +7084,7 @@ def render_popps():
         reviewer=reviewer,
         auth_user=auth_user_email(),
         notes_admin=user_has_role("Admin"),
+        is_warranty_admin=user_has_role("Warranty Admin"),
     )
 
 
@@ -8941,6 +8942,20 @@ def main():
     apply_style(appearance, display_prefs)
 
     _render_app_workspace_header(appearance, supabase_client=supabase)
+
+    try:
+        from core.popps_report import (
+            process_popps_notes_compliance,
+            render_popps_compliance_global_banner,
+        )
+
+        process_popps_notes_compliance(supabase)
+        render_popps_compliance_global_banner(
+            supabase,
+            is_warranty_admin=user_has_role("Warranty Admin"),
+        )
+    except Exception:
+        pass
 
     tab_entries: list[tuple[str, callable]] = [
         ("Review", render_review),

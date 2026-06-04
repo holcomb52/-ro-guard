@@ -345,6 +345,40 @@ def format_smtp_send_error(exc: Exception, config: dict | None = None) -> str:
     return message
 
 
+def send_plain_email(
+    *,
+    recipients: list[str],
+    subject: str,
+    body_text: str,
+    smtp_config: dict | None = None,
+) -> None:
+    """Send a plain-text email (no attachments) using report SMTP settings."""
+    recipients = parse_recipient_list(", ".join(recipients))
+    if not recipients:
+        raise ValueError("No valid recipient email addresses.")
+    config = smtp_config or load_smtp_config()
+    if not config:
+        raise RuntimeError("Report SMTP is not configured.")
+
+    message = MIMEMultipart()
+    message["Subject"] = subject
+    message["From"] = config["sender"]
+    message["To"] = ", ".join(recipients)
+    message.attach(MIMEText(body_text, "plain"))
+
+    if config["use_tls"]:
+        with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(config["user"], config["password"])
+            server.sendmail(config["sender"], recipients, message.as_string())
+    else:
+        with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
+            server.login(config["user"], config["password"])
+            server.sendmail(config["sender"], recipients, message.as_string())
+
+
 def send_report_email(
     *,
     recipients: list[str],
