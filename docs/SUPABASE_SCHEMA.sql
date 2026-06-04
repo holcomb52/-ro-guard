@@ -134,6 +134,7 @@ ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS audit_rules JSONB DEFAULT '
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS rejection_reasons JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reviews JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_active_report JSONB;
+ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reports_library JSONB DEFAULT '{"active_fingerprint":"","reports":{}}'::jsonb;
 
 -- Append-only POPPS review audit log (one row per Save review)
 CREATE TABLE IF NOT EXISTS popps_review_log (

@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-daze-cards"
+POPPS_UI_VERSION = "2026-06-02-popps-archive"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -665,6 +665,240 @@ def popps_report_fingerprint(report: PoppsReport, file_name: str) -> str:
     return f"{dealer}|{period}|{source}"
 
 
+MONTH_NAME_TO_NUMBER: dict[str, int] = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+
+
+def popps_period_sort_key(
+    period_label: str,
+    *,
+    file_name: str = "",
+    uploaded_at: str = "",
+) -> int:
+    """Sortable YYYYMM from POPPS header (e.g. May 2026 — Interim Report)."""
+    text = str(period_label or "").lower()
+    year_match = re.search(r"\b(20\d{2})\b", text)
+    year = int(year_match.group(1)) if year_match else 0
+    month = 0
+    for name, number in MONTH_NAME_TO_NUMBER.items():
+        if re.search(rf"\b{re.escape(name)}\b", text):
+            month = number
+            break
+    if not month:
+        file_low = str(file_name or "").lower()
+        for name, number in MONTH_NAME_TO_NUMBER.items():
+            if name[:3] in file_low:
+                month = number
+                break
+    if not year:
+        file_year = re.search(r"(20\d{2})", str(file_name or ""))
+        if file_year:
+            year = int(file_year.group(1))
+    if year and month:
+        return year * 100 + month
+    if uploaded_at:
+        try:
+            dt = datetime.fromisoformat(str(uploaded_at).replace("Z", "+00:00"))
+            return dt.year * 100 + dt.month
+        except Exception:
+            pass
+    return 0
+
+
+def _normalize_popps_library(raw: dict | None) -> dict:
+    raw = raw or {}
+    reports = raw.get("reports")
+    if not isinstance(reports, dict):
+        reports = {}
+    return {
+        "active_fingerprint": str(raw.get("active_fingerprint") or "").strip(),
+        "reports": dict(reports),
+    }
+
+
+def _popps_entry_from_report(
+    report: PoppsReport,
+    file_name: str,
+    uploaded_by: str,
+    *,
+    uploaded_at: str | None = None,
+) -> dict:
+    uploaded_at = uploaded_at or datetime.now(timezone.utc).isoformat()
+    fingerprint = popps_report_fingerprint(report, file_name)
+    period_label = str(report.period_label or "").strip()
+    return {
+        "fingerprint": fingerprint,
+        "file_name": str(file_name or "").strip(),
+        "period_label": period_label,
+        "period_sort": popps_period_sort_key(
+            period_label,
+            file_name=file_name,
+            uploaded_at=uploaded_at,
+        ),
+        "dealer_code": str(report.dealer_code or "").strip(),
+        "uploaded_at": uploaded_at,
+        "uploaded_by": str(uploaded_by or "").strip(),
+        "report": popps_report_to_storage_dict(report),
+    }
+
+
+def _newest_library_fingerprint(reports: dict[str, dict]) -> str:
+    if not reports:
+        return ""
+    ordered = sorted(
+        reports.values(),
+        key=lambda entry: (
+            int(entry.get("period_sort") or 0),
+            str(entry.get("uploaded_at") or ""),
+        ),
+        reverse=True,
+    )
+    return str(ordered[0].get("fingerprint") or "")
+
+
+def _migrate_legacy_active_into_library(library: dict, active_blob: dict | None) -> dict:
+    if not active_blob or not active_blob.get("report"):
+        return library
+    report_data = active_blob.get("report")
+    try:
+        report = popps_report_from_storage_dict(report_data)
+    except Exception:
+        return library
+    file_name = str(active_blob.get("file_name") or "POPPS report").strip()
+    entry = _popps_entry_from_report(
+        report,
+        file_name,
+        str(active_blob.get("uploaded_by") or ""),
+        uploaded_at=str(active_blob.get("uploaded_at") or ""),
+    )
+    fingerprint = entry["fingerprint"]
+    if fingerprint not in library["reports"]:
+        library["reports"][fingerprint] = entry
+    if not library["active_fingerprint"]:
+        library["active_fingerprint"] = fingerprint
+    library["active_fingerprint"] = _newest_library_fingerprint(library["reports"])
+    return library
+
+
+def load_popps_library(supabase) -> dict:
+    """All saved POPPS months plus which fingerprint is the current (newest) report."""
+    library = _normalize_popps_library({})
+    if supabase is None:
+        return library
+    try:
+        response = (
+            supabase.table("dealer_settings")
+            .select("popps_reports_library, popps_active_report")
+            .eq("id", 1)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        if not rows:
+            return library
+        library = _normalize_popps_library(rows[0].get("popps_reports_library"))
+        library = _migrate_legacy_active_into_library(
+            library,
+            rows[0].get("popps_active_report"),
+        )
+        if library["reports"]:
+            library["active_fingerprint"] = _newest_library_fingerprint(library["reports"])
+        return library
+    except Exception:
+        return library
+
+
+def _active_library_entry(library: dict) -> dict | None:
+    fingerprint = str(library.get("active_fingerprint") or "").strip()
+    if not fingerprint:
+        return None
+    entry = (library.get("reports") or {}).get(fingerprint)
+    return dict(entry) if entry else None
+
+
+def _entry_to_loaded_report(entry: dict) -> tuple[PoppsReport | None, str, dict, str]:
+    if not entry or not entry.get("report"):
+        return None, "", {}, ""
+    try:
+        report = popps_report_from_storage_dict(entry["report"])
+    except Exception as exc:
+        return None, "", {}, f"Stored POPPS report could not be loaded: {exc}"
+    meta = {
+        "file_name": entry.get("file_name"),
+        "uploaded_at": entry.get("uploaded_at"),
+        "uploaded_by": entry.get("uploaded_by"),
+        "period_label": entry.get("period_label"),
+        "fingerprint": entry.get("fingerprint"),
+    }
+    return report, str(entry.get("file_name") or "POPPS report").strip(), meta, ""
+
+
+def apply_popps_entry_to_session(entry: dict, *, restored_from_cloud: bool = False) -> None:
+    report, file_name, meta, _ = _entry_to_loaded_report(entry)
+    if report is None:
+        return
+    st.session_state.popps_parsed_report = report
+    st.session_state.popps_upload_name = file_name
+    st.session_state.popps_restored_meta = meta
+    if restored_from_cloud:
+        st.session_state.popps_restored_from_cloud = True
+
+
+def save_popps_to_library(
+    supabase,
+    report: PoppsReport,
+    file_name: str,
+    uploaded_by: str,
+    *,
+    auth_user: str = "",
+) -> tuple[bool, str, str]:
+    """Save one POPPS month and set the newest period as the active report for all users."""
+    if supabase is None:
+        return False, "Supabase is not configured", ""
+    entry = _popps_entry_from_report(report, file_name, uploaded_by)
+    fingerprint = entry["fingerprint"]
+    try:
+        library = load_popps_library(supabase)
+        library["reports"][fingerprint] = entry
+        library["active_fingerprint"] = _newest_library_fingerprint(library["reports"])
+        active_entry = library["reports"].get(library["active_fingerprint"]) or entry
+        active_payload = {
+            "file_name": active_entry.get("file_name"),
+            "uploaded_at": active_entry.get("uploaded_at"),
+            "uploaded_by": active_entry.get("uploaded_by"),
+            "report": active_entry.get("report"),
+        }
+        supabase.table("dealer_settings").update(
+            {
+                "popps_reports_library": library,
+                "popps_active_report": active_payload,
+            }
+        ).eq("id", 1).execute()
+        user_marker = re.sub(
+            r"[^a-zA-Z0-9@._-]", "_", str(auth_user or uploaded_by or "").strip().lower()
+        ) or "_anonymous"
+        st.session_state[f"_popps_hydrate_ok_{user_marker}"] = True
+        st.session_state.pop(f"_popps_hydrate_empty_{user_marker}", None)
+        st.session_state.pop("popps_cloud_load_error", None)
+        st.session_state.pop("popps_viewing_fingerprint", None)
+        apply_popps_entry_to_session(active_entry)
+        return True, "", str(library["active_fingerprint"])
+    except Exception as exc:
+        return False, str(exc), fingerprint
+
+
 def _list_item_type(field_type: Any) -> Any | None:
     """Resolve list[Inner] on Python 3.9+ (get_origin may be None for PEP 585 types)."""
     args = get_args(field_type)
@@ -728,41 +962,22 @@ def clear_popps_session_state() -> None:
             st.session_state.pop(key, None)
 
 
-def load_active_popps_report(supabase) -> tuple[PoppsReport | None, str, dict, str]:
-    """Load the dealer's last saved POPPS parse from cloud storage."""
-    if supabase is None:
-        return None, "", {}, "Supabase is not configured"
-    try:
-        response = (
-            supabase.table("dealer_settings")
-            .select("popps_active_report")
-            .eq("id", 1)
-            .limit(1)
-            .execute()
-        )
-        rows = response.data or []
-        if not rows or not rows[0].get("popps_active_report"):
-            return None, "", {}, ""
-        blob = rows[0]["popps_active_report"] or {}
-        report_data = blob.get("report")
-        if not report_data:
-            return None, "", {}, ""
-        try:
-            parsed = popps_report_from_storage_dict(report_data)
-        except Exception as exc:
-            return None, "", {}, f"Stored POPPS report could not be loaded: {exc}"
-        return (
-            parsed,
-            str(blob.get("file_name") or "POPPS report").strip(),
-            {
-                "file_name": blob.get("file_name"),
-                "uploaded_at": blob.get("uploaded_at"),
-                "uploaded_by": blob.get("uploaded_by"),
-            },
-            "",
-        )
-    except Exception as exc:
-        return None, "", {}, str(exc)
+def load_active_popps_report(
+    supabase,
+    *,
+    viewing_fingerprint: str = "",
+) -> tuple[PoppsReport | None, str, dict, str]:
+    """Load the newest POPPS report, or a specific archived month if requested."""
+    library = load_popps_library(supabase)
+    if not library.get("reports"):
+        return None, "", {}, ""
+    fingerprint = str(viewing_fingerprint or "").strip()
+    if not fingerprint or fingerprint not in library["reports"]:
+        fingerprint = str(library.get("active_fingerprint") or "")
+    entry = library["reports"].get(fingerprint)
+    if not entry:
+        return None, "", {}, ""
+    return _entry_to_loaded_report(entry)
 
 
 def save_active_popps_report(
@@ -773,28 +988,15 @@ def save_active_popps_report(
     *,
     auth_user: str = "",
 ) -> tuple[bool, str]:
-    """Persist parsed POPPS so it survives logout and is visible to all dealership users."""
-    if supabase is None:
-        return False, "Supabase is not configured"
-    payload = {
-        "file_name": str(file_name or "").strip(),
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
-        "uploaded_by": str(uploaded_by or "").strip(),
-        "report": popps_report_to_storage_dict(report),
-    }
-    try:
-        supabase.table("dealer_settings").update(
-            {"popps_active_report": payload}
-        ).eq("id", 1).execute()
-        user_marker = re.sub(
-            r"[^a-zA-Z0-9@._-]", "_", str(auth_user or uploaded_by or "").strip().lower()
-        ) or "_anonymous"
-        st.session_state[f"_popps_hydrate_ok_{user_marker}"] = True
-        st.session_state.pop(f"_popps_hydrate_empty_{user_marker}", None)
-        st.session_state.pop("popps_cloud_load_error", None)
-        return True, ""
-    except Exception as exc:
-        return False, str(exc)
+    """Persist POPPS to the year archive and refresh the newest-month active report."""
+    ok, err, _active_fp = save_popps_to_library(
+        supabase,
+        report,
+        file_name,
+        uploaded_by,
+        auth_user=auth_user,
+    )
+    return ok, err
 
 
 def clear_active_popps_report(supabase) -> None:
@@ -802,7 +1004,7 @@ def clear_active_popps_report(supabase) -> None:
         return
     try:
         supabase.table("dealer_settings").update(
-            {"popps_active_report": None}
+            {"popps_active_report": None, "popps_reports_library": {"active_fingerprint": "", "reports": {}}}
         ).eq("id", 1).execute()
     except Exception:
         pass
@@ -828,7 +1030,11 @@ def hydrate_popps_report_from_cloud(
         if st.session_state.get(empty_key):
             return False
 
-    report, file_name, meta, load_error = load_active_popps_report(supabase)
+    viewing_fp = str(st.session_state.get("popps_viewing_fingerprint") or "").strip()
+    report, file_name, meta, load_error = load_active_popps_report(
+        supabase,
+        viewing_fingerprint=viewing_fp,
+    )
     st.session_state.popps_cloud_load_error = load_error or ""
 
     if load_error:
@@ -846,6 +1052,90 @@ def hydrate_popps_report_from_cloud(
     st.session_state.popps_restored_meta = meta
     st.session_state.pop("popps_cloud_load_error", None)
     return True
+
+
+def _render_popps_archive_panel(
+    library: dict,
+    *,
+    supabase,
+    active_fingerprint: str,
+    viewing_fingerprint: str,
+) -> None:
+    """Compact list of saved months; main screen stays on the newest report only."""
+    reports = list((library.get("reports") or {}).values())
+    if not reports:
+        return
+
+    ordered = sorted(
+        reports,
+        key=lambda entry: (
+            int(entry.get("period_sort") or 0),
+            str(entry.get("uploaded_at") or ""),
+        ),
+        reverse=True,
+    )
+    archive_count = len(ordered)
+    if archive_count <= 1 and not viewing_fingerprint:
+        st.caption(
+            "Upload each month's POPPS PDF as you receive it. RO Guard stores every month "
+            "and automatically shows the **newest report period** on this screen."
+        )
+        return
+
+    if viewing_fingerprint and viewing_fingerprint != active_fingerprint:
+        period = str((library["reports"].get(viewing_fingerprint) or {}).get("period_label") or "Archived month")
+        c1, c2 = st.columns([4, 1])
+        with c1:
+            st.info(f"Previewing archived report: **{period}** (read-only view). Reviews still save per month.")
+        with c2:
+            if st.button("Latest report", key="popps_back_to_latest", use_container_width=True):
+                st.session_state.pop("popps_viewing_fingerprint", None)
+                reset_popps_hydrate_attempt_flags()
+                st.session_state.pop("popps_parsed_report", None)
+                hydrate_popps_report_from_cloud(supabase, force=True)
+                st.rerun()
+
+    with st.expander(f"POPPS archive — {archive_count} month(s) on file", expanded=False):
+        st.caption(
+            "Everyone sees the **latest month** above. Open this list only when you need an older POPPS."
+        )
+        rows = []
+        for entry in ordered:
+            fingerprint = str(entry.get("fingerprint") or "")
+            is_latest = fingerprint == active_fingerprint
+            rows.append(
+                {
+                    "Report period": entry.get("period_label") or "—",
+                    "Source file": entry.get("file_name") or "—",
+                    "Uploaded": str(entry.get("uploaded_at") or "")[:10],
+                    "Status": "Current (newest)" if is_latest else "Archived",
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        older = [e for e in ordered if str(e.get("fingerprint") or "") != active_fingerprint]
+        if older:
+            options = {
+                str(e.get("fingerprint") or ""): (
+                    f"{e.get('period_label') or 'POPPS'} — {e.get('file_name') or 'file'}"
+                )
+                for e in older
+            }
+            pick = st.selectbox(
+                "Preview an older month",
+                options=[""] + list(options.keys()),
+                format_func=lambda fp: "Select a month…" if not fp else options.get(fp, fp),
+                key="popps_archive_pick",
+            )
+            if st.button("Open selected month", key="popps_archive_open", use_container_width=True):
+                if pick:
+                    st.session_state.popps_viewing_fingerprint = pick
+                    reset_popps_hydrate_attempt_flags()
+                    st.session_state.pop("popps_parsed_report", None)
+                    hydrate_popps_report_from_cloud(supabase, force=True)
+                    st.rerun()
+        else:
+            st.caption("Only one month is saved so far. Upload the next month's PDF when you receive it.")
 
 
 def _slug_token(text: str, *, max_len: int = 48) -> str:
@@ -1602,9 +1892,8 @@ def render_popps_report(
     st.header("POPPS Report")
     st.caption(f"POPPS tools version: **{POPPS_UI_VERSION}**")
     st.caption(
-        "Upload your Dealer **Performance Overview & Potential Problem Summary (POPPS)** "
-        "PDF from DealerCONNECT. RO Guard expands abbreviations into plain language for coaching and review. "
-        "The active POPPS report is saved for your entire dealership — any signed-in user can review it."
+        "Upload each month's **POPPS** PDF from DealerCONNECT. RO Guard stores **every month** for your "
+        "dealership but only displays the **newest report period** here so the screen stays focused."
     )
 
     reviewer_name = str(reviewer or "").strip() or "User"
@@ -1628,34 +1917,47 @@ def render_popps_report(
         "Upload POPPS report (PDF)",
         type=["pdf"],
         key=f"popps_upload_{st.session_state.popps_upload_nonce}",
-        help="Use the monthly Dealer POPPS Management Report PDF (DWIN).",
+        help=(
+            "Upload one PDF per month (for example May 26.pdf). "
+            "Older months stay in the archive; everyone sees the newest period by default."
+        ),
     )
 
     if uploaded is not None:
         try:
             report = parse_popps_pdf(uploaded.getvalue())
-            st.session_state.popps_parsed_report = report
-            st.session_state.popps_upload_name = uploaded.name
             st.session_state.pop("popps_restored_from_cloud", None)
             st.session_state.pop("popps_restored_meta", None)
-            saved_ok, save_error = save_active_popps_report(
+            saved_ok, save_error, active_fp = save_popps_to_library(
                 supabase,
                 report,
                 uploaded.name,
                 auth_user or reviewer_name,
                 auth_user=auth_user,
             )
+            uploaded_fp = popps_report_fingerprint(report, uploaded.name)
             if saved_ok:
-                st.success(
-                    f"Loaded and saved {uploaded.name} for your dealership. "
-                    "All signed-in users will see this report."
-                )
+                if uploaded_fp == active_fp:
+                    st.success(
+                        f"Saved {uploaded.name} and set it as the **current** POPPS report "
+                        f"({report.period_label or 'newest period'}) for your dealership."
+                    )
+                else:
+                    active_entry = load_popps_library(supabase)["reports"].get(active_fp) or {}
+                    current_label = active_entry.get("period_label") or "the newest period"
+                    st.success(
+                        f"Saved {report.period_label or uploaded.name} to your POPPS archive. "
+                        f"**{current_label}** remains the current report on this screen (newest period)."
+                    )
             else:
+                st.session_state.popps_parsed_report = report
+                st.session_state.popps_upload_name = uploaded.name
                 st.success(f"Loaded {uploaded.name} for this session only.")
                 if supabase is not None:
                     st.warning(
                         "Could not save this report for your team. "
-                        "Add dealer_settings.popps_active_report (JSONB) in Supabase, then upload again. "
+                        "Add dealer_settings.popps_reports_library and popps_active_report (JSONB) "
+                        "in Supabase, then upload again. "
                         f"({save_error or 'unknown error'})"
                     )
         except Exception as exc:
@@ -1663,7 +1965,11 @@ def render_popps_report(
 
     action_cols = st.columns(2)
     with action_cols[0]:
-        clear_clicked = st.button("Clear POPPS report", key="popps_clear_report", use_container_width=True)
+        clear_clicked = st.button(
+            "Clear all saved POPPS reports",
+            key="popps_clear_report",
+            use_container_width=True,
+        )
     with action_cols[1]:
         reload_clicked = (
             supabase is not None
@@ -1679,6 +1985,7 @@ def render_popps_report(
         st.session_state.pop("popps_parsed_report", None)
         st.session_state.pop("popps_upload_name", None)
         st.session_state.pop("popps_selected_claim_key", None)
+        st.session_state.pop("popps_viewing_fingerprint", None)
         reset_popps_hydrate_attempt_flags()
         st.session_state.pop("popps_restored_from_cloud", None)
         st.session_state.pop("popps_restored_meta", None)
@@ -1716,6 +2023,16 @@ def render_popps_report(
     report_fp = popps_report_fingerprint(report, file_name)
     reviews_store = load_popps_reviews_store(supabase, report_fp)
     report_ctx = _popps_report_context(report, file_name, report_fp)
+
+    library = load_popps_library(supabase)
+    active_fp = str(library.get("active_fingerprint") or report_fp)
+    viewing_fp = str(st.session_state.get("popps_viewing_fingerprint") or "").strip()
+    _render_popps_archive_panel(
+        library,
+        supabase=supabase,
+        active_fingerprint=active_fp,
+        viewing_fingerprint=viewing_fp,
+    )
 
     if st.session_state.get("popps_restored_from_cloud"):
         meta = st.session_state.get("popps_restored_meta") or {}
