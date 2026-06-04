@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
@@ -756,16 +757,23 @@ def hydrate_popps_report_from_cloud(
     return True
 
 
+def _slug_token(text: str, *, max_len: int = 48) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "_", str(text or "").strip()).strip("_")
+    return slug[:max_len] or "item"
+
+
 def _safe_widget_suffix(entry_key: str, report_fingerprint: str) -> str:
-    fp_part = re.sub(r"[^a-zA-Z0-9]", "_", report_fingerprint)[:48]
-    key_part = re.sub(r"[^a-zA-Z0-9_-]", "_", entry_key)[:80]
-    return f"{fp_part}_{key_part}"
+    """Stable unique Streamlit widget key (avoids truncation collisions)."""
+    raw = f"{report_fingerprint}|{entry_key}"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+    return f"popps_{digest}"
 
 
 def section_review_entry_key(section: PoppsPrioritySection) -> str:
-    rank = re.sub(r"\s+", "_", section.priority_rank)
-    lop = re.sub(r"\s+", "_", section.labor_operation_code)
-    return f"section:{rank}:{lop}"
+    rank = _slug_token(section.priority_rank, max_len=24)
+    lop = _slug_token(section.labor_operation_code, max_len=24)
+    desc = _slug_token(section.repair_description, max_len=40)
+    return f"section:{rank}:{lop}:{desc}"
 
 
 def claim_review_entry_key(section: PoppsPrioritySection, claim: PoppsClaimRow) -> str:
@@ -774,9 +782,10 @@ def claim_review_entry_key(section: PoppsPrioritySection, claim: PoppsClaimRow) 
 
 
 def summary_review_entry_key(row: PoppsSummaryRow, *, group: str) -> str:
-    lop = re.sub(r"\s+", "_", row.labor_operation_code)
-    rank = re.sub(r"\s+", "_", row.rank_label)
-    return f"summary:{group}:{rank}:{lop}"
+    lop = _slug_token(row.labor_operation_code, max_len=24)
+    rank = _slug_token(row.rank_label, max_len=24)
+    desc = _slug_token(row.repair_description, max_len=40)
+    return f"summary:{group}:{rank}:{lop}:{desc}"
 
 
 def customer_care_review_entry_key(row: PoppsCustomerCareRow) -> str:
