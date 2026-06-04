@@ -2741,6 +2741,9 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += streamlit_primary_override_css(theme)
     css += main_scroll_fix_css()
     css += script_embed_collapse_css()
+    from core.ui_polish import workspace_polish_css
+
+    css += workspace_polish_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -5136,6 +5139,9 @@ def _render_app_workspace_header(theme: str = "Dark", *, supabase_client=None) -
             """,
             unsafe_allow_html=True,
         )
+        from core.ui_polish import render_workspace_feature_chips
+
+        render_workspace_feature_chips()
     with refresh_col:
         st.markdown('<div class="app-top-refresh-slot"></div>', unsafe_allow_html=True)
         if st.button(
@@ -7093,8 +7099,14 @@ def render_pricing_roi():
 
 
 def render_roi_dashboard():
-    st.header("ROI Dashboard")
-    st.caption("Show the business value of RO Shield — dollars protected, quality trends, and team performance.")
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "ROI Dashboard",
+        "Show the business value of RO Guard — dollars protected, quality trends, and team performance.",
+        icon="📈",
+        tips=["Dollars protected", "Quality trends", "Team scorecards"],
+    )
 
     col_refresh, col_migrate = st.columns([1, 2])
     with col_refresh:
@@ -8972,6 +8984,10 @@ def main():
     ]
 
     section_labels = [label for label, _ in tab_entries]
+    st.markdown(
+        '<div class="rg-section-nav-marker" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     active_section = st.radio(
         "Section",
         section_labels,
@@ -8979,6 +8995,9 @@ def main():
         label_visibility="collapsed",
         key="main_section_nav",
     )
+    from core.ui_polish import notify_section_change
+
+    notify_section_change(active_section)
     for label, render_fn in tab_entries:
         if label == active_section:
             render_fn()

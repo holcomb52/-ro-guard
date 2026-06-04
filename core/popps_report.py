@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-widget-keys"
+POPPS_UI_VERSION = "2026-06-02-popps-ui-polish"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -807,6 +807,25 @@ def _popps_entry_from_report(
     return entry
 
 
+def _sort_popps_library_entries(
+    entries: list[dict],
+    *,
+    newest_first: bool = False,
+) -> list[dict]:
+    """Order saved POPPS months by calendar quarter and report period."""
+    enriched = [_enrich_entry_quarter_fields(entry) for entry in entries]
+    return sorted(
+        enriched,
+        key=lambda entry: (
+            int(entry.get("quarter_sort") or 0),
+            int(entry.get("period_sort") or 0),
+            str(entry.get("uploaded_at") or ""),
+            str(entry.get("fingerprint") or ""),
+        ),
+        reverse=newest_first,
+    )
+
+
 def _active_library_fingerprint(reports: dict[str, dict]) -> str:
     """Newest month within the most recent calendar quarter."""
     if not reports:
@@ -814,27 +833,13 @@ def _active_library_fingerprint(reports: dict[str, dict]) -> str:
     enriched = [_enrich_entry_quarter_fields(entry) for entry in reports.values()]
     max_quarter = max(int(entry.get("quarter_sort") or 0) for entry in enriched)
     if not max_quarter:
-        ordered = sorted(
-            enriched,
-            key=lambda entry: (
-                int(entry.get("period_sort") or 0),
-                str(entry.get("uploaded_at") or ""),
-            ),
-            reverse=True,
-        )
+        ordered = _sort_popps_library_entries(enriched, newest_first=True)
         return str(ordered[0].get("fingerprint") or "")
 
     in_current_quarter = [
         entry for entry in enriched if int(entry.get("quarter_sort") or 0) == max_quarter
     ]
-    ordered = sorted(
-        in_current_quarter,
-        key=lambda entry: (
-            int(entry.get("period_sort") or 0),
-            str(entry.get("uploaded_at") or ""),
-        ),
-        reverse=True,
-    )
+    ordered = _sort_popps_library_entries(in_current_quarter, newest_first=True)
     return str(ordered[0].get("fingerprint") or "")
 
 
@@ -1128,7 +1133,9 @@ def load_active_popps_report(
         return None, "", {}, ""
     fingerprint = str(viewing_fingerprint or "").strip()
     if not fingerprint or fingerprint not in library["reports"]:
-        fingerprint = str(library.get("active_fingerprint") or "")
+        fingerprint = _active_library_fingerprint(library["reports"])
+        if not fingerprint:
+            fingerprint = str(library.get("active_fingerprint") or "")
     entry = library["reports"].get(fingerprint)
     if not entry:
         return None, "", {}, ""
@@ -1166,12 +1173,17 @@ def clear_active_popps_report(supabase) -> None:
 
 
 def prepare_popps_tab_on_enter(supabase, *, auth_user: str = "") -> None:
-    """When the user opens the POPPS tab, load the current active report from cloud."""
+    """When the POPPS tab opens or the page reloads, default to the newest month on file."""
     current = str(st.session_state.get("main_section_nav") or "")
     previous = str(st.session_state.get("_popps_nav_previous") or "")
     st.session_state["_popps_nav_previous"] = current
 
-    if current != "POPPS Report" or previous == "POPPS Report":
+    if current != "POPPS Report":
+        return
+
+    entering_tab = previous != "POPPS Report"
+    missing_report = st.session_state.get("popps_parsed_report") is None
+    if not entering_tab and not missing_report:
         return
 
     st.session_state.pop("popps_viewing_fingerprint", None)
@@ -1188,17 +1200,7 @@ def prepare_popps_tab_on_enter(supabase, *, auth_user: str = "") -> None:
     if supabase is None:
         return
 
-    library = load_popps_library(supabase)
-    entry = _active_library_entry(library)
-    if not entry:
-        user_marker = re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
-        st.session_state[f"_popps_hydrate_empty_{user_marker}"] = True
-        return
-
-    user_marker = re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
-    st.session_state[f"_popps_hydrate_ok_{user_marker}"] = True
-    st.session_state.pop(f"_popps_hydrate_empty_{user_marker}", None)
-    apply_popps_entry_to_session(entry, restored_from_cloud=True)
+    hydrate_popps_report_from_cloud(supabase, auth_user=auth_user, force=True)
 
 
 def hydrate_popps_report_from_cloud(
@@ -1232,8 +1234,20 @@ def hydrate_popps_report_from_cloud(
         return False
 
     if report is None:
-        st.session_state[empty_key] = True
-        return False
+        library = load_popps_library(supabase) if supabase is not None else {}
+        reports = library.get("reports") or {}
+        if reports:
+            for entry in _sort_popps_library_entries(list(reports.values()), newest_first=True):
+                fp = str(entry.get("fingerprint") or "")
+                if not fp:
+                    continue
+                report, file_name, meta, load_error = _entry_to_loaded_report(reports.get(fp) or {})
+                if report is not None:
+                    st.session_state.popps_viewing_fingerprint = fp
+                    break
+        if report is None:
+            st.session_state[empty_key] = True
+            return False
 
     st.session_state[ok_key] = True
     st.session_state.pop(empty_key, None)
@@ -1257,15 +1271,7 @@ def _render_popps_archive_panel(
     if not reports:
         return
 
-    enriched = [_enrich_entry_quarter_fields(entry) for entry in reports]
-    ordered = sorted(
-        enriched,
-        key=lambda entry: (
-            int(entry.get("period_sort") or 0),
-            str(entry.get("uploaded_at") or ""),
-        ),
-        reverse=True,
-    )
+    ordered = _sort_popps_library_entries(reports, newest_first=False)
     archive_count = len(ordered)
     active_entry = _enrich_entry_quarter_fields(
         (library.get("reports") or {}).get(active_fingerprint) or {}
@@ -1327,18 +1333,19 @@ def _render_popps_archive_panel(
             "Use this list to preview older quarters or other months in the archive."
         )
         rows = []
-        for entry in ordered:
+        for row_num, entry in enumerate(ordered, start=1):
             fingerprint = str(entry.get("fingerprint") or "")
             in_current_quarter = int(entry.get("quarter_sort") or 0) == active_quarter_sort
             is_active = fingerprint == active_fingerprint
             if is_active:
-                status = "On screen (current quarter)"
+                status = "On screen (latest month in quarter)"
             elif in_current_quarter:
-                status = "Same quarter (archived)"
+                status = "Same quarter"
             else:
                 status = "Older quarter"
             rows.append(
                 {
+                    "#": row_num,
                     "Quarter": entry.get("quarter_label") or "—",
                     "Report period": entry.get("period_label") or "—",
                     "Source file": entry.get("file_name") or "—",
@@ -1348,23 +1355,25 @@ def _render_popps_archive_panel(
             )
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-        older = [
-            e
-            for e in ordered
-            if str(e.get("fingerprint") or "") != active_fingerprint
-        ]
-        if older:
+        if len(ordered) > 1:
             options = {
                 str(e.get("fingerprint") or ""): (
                     f"{e.get('quarter_label') or ''} — {e.get('period_label') or 'POPPS'} "
                     f"({e.get('file_name') or 'file'})"
                 ).strip(" — ")
-                for e in older
+                for e in ordered
             }
+            fingerprints = list(options.keys())
+            selected_fp = viewing_fingerprint or active_fingerprint
+            try:
+                default_idx = fingerprints.index(selected_fp)
+            except ValueError:
+                default_idx = len(fingerprints) - 1
             pick = st.selectbox(
-                "Preview an older quarter or month",
-                options=[""] + list(options.keys()),
-                format_func=lambda fp: "Select a report…" if not fp else options.get(fp, fp),
+                "Switch to another saved month",
+                options=fingerprints,
+                index=default_idx,
+                format_func=lambda fp: options.get(fp, fp),
                 key=f"popps_archive_pick_{archive_scope}",
             )
             if st.button(
@@ -1372,16 +1381,21 @@ def _render_popps_archive_panel(
                 key=f"popps_archive_open_btn_{archive_scope}",
                 use_container_width=True,
             ):
-                if pick:
+                if pick and pick != active_fingerprint:
                     st.session_state.popps_viewing_fingerprint = pick
+                    reset_popps_hydrate_attempt_flags()
+                    st.session_state.pop("popps_parsed_report", None)
+                    hydrate_popps_report_from_cloud(supabase, force=True)
+                    st.rerun()
+                elif pick == active_fingerprint:
+                    st.session_state.pop("popps_viewing_fingerprint", None)
                     reset_popps_hydrate_attempt_flags()
                     st.session_state.pop("popps_parsed_report", None)
                     hydrate_popps_report_from_cloud(supabase, force=True)
                     st.rerun()
         else:
             st.caption(
-                "Only reports from the current quarter are saved so far. "
-                "Upload additional months as you receive them."
+                "Only one month is saved so far. Upload additional months as you receive them."
             )
 
 
@@ -3164,12 +3178,16 @@ def render_popps_report(
     )
     st.markdown(f"<style>{popps_page_css(theme)}</style>", unsafe_allow_html=True)
 
-    st.header("POPPS Report")
-    st.caption(f"POPPS tools version: **{POPPS_UI_VERSION}**")
-    st.caption(
-        "Upload one or more **POPPS** PDFs from DealerCONNECT. RO Guard stores **every month** for your "
-        "dealership but only displays the **most recent calendar quarter** here (newest month in that quarter)."
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "POPPS Report",
+        "Upload DealerCONNECT POPPS PDFs. RO Guard stores every month and opens the newest month "
+        "in the current calendar quarter automatically.",
+        icon="📊",
+        tips=["Multi-month archive", "WAM definitions", "Per-claim notes"],
     )
+    st.caption(f"POPPS tools version: **{POPPS_UI_VERSION}**")
 
     reviewer_name = str(reviewer or "").strip() or "User"
     if supabase is None:
