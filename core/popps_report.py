@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-exempt-sections"
+POPPS_UI_VERSION = "2026-06-02-popps-nested-summary"
 
 # Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
 DAZE_ACRONYM = "DAZE"
@@ -1275,10 +1275,17 @@ def _render_popps_archive_panel(
                 hydrate_popps_report_from_cloud(supabase, force=True)
                 st.rerun()
 
-    archive_title = f"POPPS archive — {archive_count} month(s) on file"
-    _render_popps_expander_header(archive_title, "archive")
+    st.caption(
+        f"**{archive_count} monthly POPPS report(s) saved** — expand the archive below "
+        "to preview older quarters or switch months."
+    )
+    st.markdown('<div class="popps-archive-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+    archive_title = (
+        f"POPPS archive — {archive_count} month(s) on file · "
+        "open to preview older quarters"
+    )
     _popps_expander_anchor("popps-anchor-archive")
-    with st.expander("View archive", expanded=False):
+    with st.expander(archive_title, expanded=False):
         st.caption(
             "The main screen shows only the **current calendar quarter** (newest month in that quarter). "
             "Use this list to preview older quarters or other months in the archive."
@@ -2273,6 +2280,17 @@ def _render_popps_expander_header(title: str, variant: str) -> None:
     )
 
 
+def _summary_row_label(row: PoppsSummaryRow) -> str:
+    return (
+        f"{row.rank_label} — Labor Operation {row.labor_operation_code} — "
+        f"{row.repair_description}"
+    )
+
+
+def _popps_item_count_label(count: int) -> str:
+    return f" ({count} item{'s' if count != 1 else ''})"
+
+
 def popps_page_css(theme: str = "Dark") -> str:
     is_light = str(theme).lower() == "light"
     card_bg = "rgba(244, 248, 252, 0.96)" if is_light else "rgba(7, 19, 34, 0.88)"
@@ -2287,6 +2305,16 @@ def popps_page_css(theme: str = "Dark") -> str:
     )
     archive_border = "#0284c7" if is_light else "rgba(56, 189, 248, 0.85)"
     archive_glow = "0 4px 22px rgba(2, 132, 199, 0.18)" if is_light else "0 4px 28px rgba(56, 189, 248, 0.22)"
+    archive_medium_bg = (
+        "linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(59, 130, 246, 0.1))"
+        if is_light
+        else "linear-gradient(135deg, rgba(14, 165, 233, 0.38), rgba(37, 99, 235, 0.16))"
+    )
+    archive_medium_glow = (
+        "0 2px 16px rgba(2, 132, 199, 0.14)"
+        if is_light
+        else "0 4px 20px rgba(56, 189, 248, 0.2)"
+    )
     priority_summary_bg = (
         "linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.06))"
         if is_light
@@ -2316,9 +2344,36 @@ def popps_page_css(theme: str = "Dark") -> str:
     expander_in_plain = (
         f"{anchor_container}:has(.popps-anchor-plain) details[data-testid='stExpander']"
     )
+    expander_adjacent_summary_parent = (
+        f"{anchor_container}:has(.popps-anchor-summary-parent) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
+    expander_in_summary_parent = (
+        f"{anchor_container}:has(.popps-anchor-summary-parent) details[data-testid='stExpander']"
+    )
+    expander_adjacent_summary_child = (
+        f"{anchor_container}:has(.popps-anchor-summary-child) + div[data-testid='stElementContainer'] "
+        "details[data-testid='stExpander']"
+    )
+    expander_in_summary_child = (
+        f"{anchor_container}:has(.popps-anchor-summary-child) details[data-testid='stExpander']"
+    )
     expander_archive = f"{expander_adjacent_archive}, {expander_in_archive}"
     expander_priority = f"{expander_adjacent_priority}, {expander_in_priority}"
     expander_plain = f"{expander_adjacent_plain}, {expander_in_plain}"
+    expander_summary_parent = f"{expander_adjacent_summary_parent}, {expander_in_summary_parent}"
+    expander_summary_child = f"{expander_adjacent_summary_child}, {expander_in_summary_child}"
+    summary_parent_bg = (
+        "linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.08))"
+        if is_light
+        else "linear-gradient(135deg, rgba(148, 163, 184, 0.28), rgba(51, 65, 85, 0.14))"
+    )
+    summary_child_bg = (
+        "linear-gradient(135deg, rgba(71, 85, 105, 0.12), rgba(30, 41, 59, 0.05))"
+        if is_light
+        else "linear-gradient(135deg, rgba(51, 65, 85, 0.32), rgba(15, 23, 42, 0.12))"
+    )
+    summary_border = "#64748b" if is_light else "rgba(148, 163, 184, 0.55)"
     archive_header_bg = (
         "linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.12))"
         if is_light
@@ -2349,6 +2404,80 @@ def popps_page_css(theme: str = "Dark") -> str:
         background: {archive_header_bg} !important;
         border-color: {archive_border} !important;
         box-shadow: {archive_glow} !important;
+    }}
+    .popps-archive-zone {{
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }}
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} {{
+        margin: 0.9rem 0 1.1rem 0 !important;
+        border-radius: 14px !important;
+        border: 2px solid {archive_border} !important;
+        background: {card_bg} !important;
+        box-shadow: {archive_medium_glow} !important;
+        overflow: hidden !important;
+    }}
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary,
+    {popps_scope}:has(.popps-archive-zone) {expander_archive}[open] > summary,
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary:not(:hover):not(:focus):not(:focus-visible) {{
+        background: {archive_medium_bg} !important;
+        background-image: {archive_medium_bg} !important;
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-size: 1.02rem !important;
+        font-weight: 700 !important;
+        padding: 0.95rem 1.15rem !important;
+        border-left: 4px solid #38bdf8 !important;
+        border-bottom: 1px solid {archive_border} !important;
+    }}
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary *,
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary p,
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary span,
+    {popps_scope}:has(.popps-archive-zone) {expander_archive} > summary div {{
+        color: {text} !important;
+        -webkit-text-fill-color: {text} !important;
+        font-weight: 700 !important;
+    }}
+    {popps_scope}:has(.popps-summary-parent-zone) {expander_summary_parent} {{
+        margin: 0.75rem 0 0.5rem 0 !important;
+        border-radius: 12px !important;
+        border: 2px solid {summary_border} !important;
+        background: {card_bg} !important;
+        overflow: hidden !important;
+    }}
+    {popps_scope}:has(.popps-summary-parent-zone) {expander_summary_parent} > summary,
+    {popps_scope}:has(.popps-summary-parent-zone) {expander_summary_parent}[open] > summary {{
+        background: {summary_parent_bg} !important;
+        background-image: {summary_parent_bg} !important;
+        color: {text} !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding: 0.85rem 1.1rem !important;
+        border-bottom: 1px solid {summary_border} !important;
+    }}
+    {popps_scope}:has(.popps-summary-children-zone) {expander_summary_child} {{
+        margin: 0.35rem 0 0.45rem 0.65rem !important;
+        border-radius: 10px !important;
+        border: 1px solid {summary_border} !important;
+        background: {card_bg} !important;
+    }}
+    {popps_scope}:has(.popps-summary-children-zone) {expander_summary_child} > summary,
+    {popps_scope}:has(.popps-summary-children-zone) {expander_summary_child}[open] > summary {{
+        background: {summary_child_bg} !important;
+        background-image: {summary_child_bg} !important;
+        color: {text} !important;
+        font-size: 0.98rem !important;
+        font-weight: 600 !important;
+        padding: 0.7rem 0.95rem !important;
+    }}
+    .popps-summary-parent-zone,
+    .popps-summary-children-zone {{
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
     }}
     .popps-expander-header--priority {{
         background: {priority_header_bg} !important;
@@ -2396,12 +2525,6 @@ def popps_page_css(theme: str = "Dark") -> str:
         font-weight: 600 !important;
         padding: 0.65rem 1rem !important;
         border-bottom: 1px solid {border} !important;
-    }}
-    {expander_archive} {{
-        border: 2px solid {archive_border} !important;
-        border-top: none !important;
-        background: {card_bg} !important;
-        box-shadow: {archive_glow} !important;
     }}
     {expander_priority} {{
         border: 2px solid {priority_border} !important;
@@ -2805,72 +2928,107 @@ def render_popps_report(
             )
 
     if report.top_problems:
-        st.markdown('<div class="popps-section-title">Quarterly top problem summary</div>', unsafe_allow_html=True)
-        st.caption("Summary only — add notes under each repair group with sample claims below.")
-        for row in report.top_problems:
-            label = (
-                f"{row.rank_label} — Labor Operation {row.labor_operation_code} — "
-                f"{row.repair_description}"
-            )
-            with st.expander(label, expanded=False):
-                st.dataframe(
-                    _summary_dataframe([row]),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-    if report.early_warning:
-        st.markdown('<div class="popps-section-title">Early warning indicators</div>', unsafe_allow_html=True)
-        st.caption(
-            "Early warning flags a labor operation that escalated quickly during the quarter. "
-            "Add review notes on matching claims in the repair groups section below."
-        )
-        for row in report.early_warning:
-            label = (
-                f"{row.rank_label} — Labor Operation {row.labor_operation_code} — "
-                f"{row.repair_description}"
-            )
-            with st.expander(label, expanded=False):
-                st.dataframe(
-                    _summary_dataframe([row]),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-    if report.customer_care:
-        st.markdown('<div class="popps-section-title">Customer care metrics (summary)</div>', unsafe_allow_html=True)
-        for row in report.customer_care:
-            label = row.metric_name
-            with st.expander(label, expanded=False):
-                if row.march_value or row.april_value or row.may_value:
+        top_count = len(report.top_problems)
+        st.markdown('<div class="popps-summary-parent-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+        _popps_expander_anchor("popps-anchor-summary-parent")
+        with st.expander(
+            f"Quarterly top problem summary{_popps_item_count_label(top_count)}",
+            expanded=False,
+            key="popps_sec_top_problems",
+        ):
+            st.caption("Summary only — add notes under each repair group with sample claims below.")
+            st.markdown('<div class="popps-summary-children-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+            for idx, row in enumerate(report.top_problems):
+                _popps_expander_anchor("popps-anchor-summary-child")
+                with st.expander(
+                    _summary_row_label(row),
+                    expanded=False,
+                    key=f"popps_top_child_{idx}",
+                ):
                     st.dataframe(
-                        pd.DataFrame(
-                            [
-                                {
-                                    "Metric": row.metric_name,
-                                    MONTH_LABELS[0]: row.march_value,
-                                    MONTH_LABELS[1]: row.april_value,
-                                    MONTH_LABELS[2]: row.may_value,
-                                }
-                            ]
-                        ),
+                        _summary_dataframe([row]),
                         use_container_width=True,
                         hide_index=True,
                     )
-                elif row.notes:
-                    st.markdown(row.notes)
 
-    with st.expander("Concern code reference (plain language)", expanded=False):
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {"Code": code, "Description": description}
-                    for code, description in sorted(CONCERN_CODE_DESCRIPTIONS.items())
-                ]
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+    if report.early_warning:
+        ew_count = len(report.early_warning)
+        st.markdown('<div class="popps-summary-parent-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+        _popps_expander_anchor("popps-anchor-summary-parent")
+        with st.expander(
+            f"Early warning indicators{_popps_item_count_label(ew_count)}",
+            expanded=False,
+            key="popps_sec_early_warning",
+        ):
+            st.caption(
+                "Early warning flags a labor operation that escalated quickly during the quarter. "
+                "Add review notes on matching claims in the repair groups section below."
+            )
+            st.markdown('<div class="popps-summary-children-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+            for idx, row in enumerate(report.early_warning):
+                _popps_expander_anchor("popps-anchor-summary-child")
+                with st.expander(
+                    _summary_row_label(row),
+                    expanded=False,
+                    key=f"popps_ew_child_{idx}",
+                ):
+                    st.dataframe(
+                        _summary_dataframe([row]),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+    care_child_count = len(report.customer_care) + 1
+    if report.customer_care or CONCERN_CODE_DESCRIPTIONS:
+        st.markdown('<div class="popps-summary-parent-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+        _popps_expander_anchor("popps-anchor-summary-parent")
+        with st.expander(
+            f"Customer care metrics (summary){_popps_item_count_label(care_child_count)}",
+            expanded=False,
+            key="popps_sec_customer_care",
+        ):
+            st.markdown('<div class="popps-summary-children-zone" aria-hidden="true"></div>', unsafe_allow_html=True)
+            for idx, row in enumerate(report.customer_care):
+                _popps_expander_anchor("popps-anchor-summary-child")
+                with st.expander(
+                    row.metric_name,
+                    expanded=False,
+                    key=f"popps_care_child_{idx}",
+                ):
+                    if row.march_value or row.april_value or row.may_value:
+                        st.dataframe(
+                            pd.DataFrame(
+                                [
+                                    {
+                                        "Metric": row.metric_name,
+                                        MONTH_LABELS[0]: row.march_value,
+                                        MONTH_LABELS[1]: row.april_value,
+                                        MONTH_LABELS[2]: row.may_value,
+                                    }
+                                ]
+                            ),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    elif row.notes:
+                        st.markdown(row.notes)
+
+            _popps_expander_anchor("popps-anchor-summary-child")
+            with st.expander(
+                "Concern code reference (plain language)",
+                expanded=False,
+                key="popps_concern_codes_child",
+            ):
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {"Code": code, "Description": description}
+                            for code, description in sorted(CONCERN_CODE_DESCRIPTIONS.items())
+                        ]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
     if report.priority_sections:
         st.markdown(
