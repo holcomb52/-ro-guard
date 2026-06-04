@@ -20,7 +20,20 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-notes-review"
+POPPS_UI_VERSION = "2026-06-02-daze-labels"
+
+# Stellantis WAM / DWIN — same wording used on Dealer POPPS Management Reports.
+DAZE_ACRONYM = "DAZE"
+DAZE_FULL_NAME = "Dealer Average Zone Expense"
+DAZE_LABEL = f"{DAZE_ACRONYM} ({DAZE_FULL_NAME})"
+DAZE_WAM_DEFINITION = (
+    f"{DAZE_LABEL} is a DWIN warranty performance measure defined in the Stellantis "
+    "Warranty Administration Manual (WAM). It compares your dealership's warranty spending "
+    "to the average for your Business Center zone. The dealership index is your store; "
+    "the business center index is the zone benchmark. DAZE Expense is the warranty dollars "
+    "included in that calculation for the month."
+)
+DAZE_METRIC_HELP = DAZE_WAM_DEFINITION
 
 CONCERN_CODE_DESCRIPTIONS: dict[str, str] = {
     "1": "High frequency of repair conditions per vehicle serviced",
@@ -1586,11 +1599,11 @@ def render_popps_report(
     for warning in report.parse_warnings:
         st.warning(warning)
 
-    st.markdown('<div class="popps-section-title">Three-month dealership overview</div>', unsafe_allow_html=True)
-    st.caption(
-        "**DAZE** is the Dealer Average Zone Expense index from DWIN — your dealership compared to "
-        "the Business Center group."
+    st.markdown(
+        f'<div class="popps-section-title">Three-month dealership overview ({DAZE_LABEL})</div>',
+        unsafe_allow_html=True,
     )
+    st.caption(DAZE_WAM_DEFINITION)
     overview = st.columns(3)
     months = MONTH_LABELS
     dealership = [
@@ -1607,9 +1620,27 @@ def render_popps_report(
     for idx, col in enumerate(overview):
         with col:
             st.markdown(f"**{months[idx]}**")
-            st.metric("Dealership DAZE Index", dealership[idx] or "—")
-            st.metric("Business Center DAZE Index", business_center[idx] or "—")
-            st.metric("DAZE Expense", expense[idx] or "—")
+            st.metric(
+                f"Dealership {DAZE_LABEL}",
+                dealership[idx] or "—",
+                help=DAZE_METRIC_HELP,
+            )
+            st.metric(
+                f"Business Center {DAZE_LABEL}",
+                business_center[idx] or "—",
+                help=(
+                    f"{DAZE_METRIC_HELP} This value is the zone (Business Center) benchmark "
+                    "for comparison."
+                ),
+            )
+            st.metric(
+                f"{DAZE_LABEL} — warranty dollars",
+                expense[idx] or "—",
+                help=(
+                    f"{DAZE_FULL_NAME} (DAZE) expense dollars for this month — warranty costs "
+                    "counted in the DAZE measure per WAM / DWIN POPPS reporting."
+                ),
+            )
 
     if report.top_problems:
         st.markdown('<div class="popps-section-title">Quarterly top problem summary</div>', unsafe_allow_html=True)
