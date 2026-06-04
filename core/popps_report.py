@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-ui-polish"
+POPPS_UI_VERSION = "2026-06-02-popps-team-sync"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -406,10 +406,68 @@ def _parse_header(text: str, report: PoppsReport) -> None:
         report.dealer_name = dealer.group(2).strip()
 
 
+def _parse_daze_line_money_tokens(line: str) -> list[str]:
+    after_label = re.split(r"DAZE\s+Expense", line, maxsplit=1, flags=re.IGNORECASE)[-1]
+    tokens = re.findall(r"\d[\d,]*", after_label)
+    picked: list[str] = []
+    for token in tokens:
+        digits = re.sub(r"\D", "", token)
+        if "," in token or len(digits) >= 3:
+            picked.append(token)
+    return picked
+
+
 def _parse_daze(text: str, report: PoppsReport) -> None:
     daze = report.daze
+    line_hits = 0
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.search(r"Dealership\s+DAZE", stripped, re.IGNORECASE):
+            pairs = re.findall(r"(\d+)\s*\.\s*(\d+)\s*%", stripped)
+            if len(pairs) >= 3:
+                daze.dealership_march = f"{pairs[0][0]}.{pairs[0][1]}%"
+                daze.dealership_april = f"{pairs[1][0]}.{pairs[1][1]}%"
+                daze.dealership_may = f"{pairs[2][0]}.{pairs[2][1]}%"
+                line_hits += 1
+            else:
+                pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
+                if len(pcts) >= 3:
+                    daze.dealership_march = f"{pcts[0]}%"
+                    daze.dealership_april = f"{pcts[1]}%"
+                    daze.dealership_may = f"{pcts[2]}%"
+                    line_hits += 1
+            continue
+        if re.search(r"Business\s+Center\s+DAZE", stripped, re.IGNORECASE):
+            pairs = re.findall(r"(\d+)\s*\.\s*(\d+)\s*%", stripped)
+            if len(pairs) >= 3:
+                daze.business_center_march = f"{pairs[0][0]}.{pairs[0][1]}%"
+                daze.business_center_april = f"{pairs[1][0]}.{pairs[1][1]}%"
+                daze.business_center_may = f"{pairs[2][0]}.{pairs[2][1]}%"
+                line_hits += 1
+            else:
+                pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
+                if len(pcts) >= 3:
+                    daze.business_center_march = f"{pcts[0]}%"
+                    daze.business_center_april = f"{pcts[1]}%"
+                    daze.business_center_may = f"{pcts[2]}%"
+                    line_hits += 1
+            continue
+        if re.search(r"DAZE\s+Expense", stripped, re.IGNORECASE):
+            money = _parse_daze_line_money_tokens(stripped)
+            if len(money) >= 3:
+                daze.expense_march = _parse_money(money[0])
+                daze.expense_april = _parse_money(money[1])
+                daze.expense_may = _parse_money(money[2])
+                line_hits += 1
+
+    if line_hits >= 3:
+        return
+
     dealer = re.search(
-        r"Dealership DAZE:\s*([\d.]+)%\s*([\d.]+)%\s*([\d.]+)%",
+        r"Dealership\s+DAZE\s*:?\s*([\d.]+)\s*%?\s*([\d.]+)\s*%?\s*([\d.]+)\s*%?",
         text,
         re.IGNORECASE,
     )
@@ -419,7 +477,7 @@ def _parse_daze(text: str, report: PoppsReport) -> None:
         daze.dealership_may = f"{dealer.group(3)}%"
 
     center = re.search(
-        r"Business Center DAZE:\s*([\d.]+)%\s*([\d.]+)%\s*([\d.]+)%",
+        r"Business\s+Center\s+DAZE\s*:?\s*([\d.]+)\s*%?\s*([\d.]+)\s*%?\s*([\d.]+)\s*%?",
         text,
         re.IGNORECASE,
     )
@@ -429,7 +487,7 @@ def _parse_daze(text: str, report: PoppsReport) -> None:
         daze.business_center_may = f"{center.group(3)}%"
 
     expense = re.search(
-        r"DAZE Expense\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)",
+        r"DAZE\s+Expense\s*:?\s*\$?\s*([\d,]+)\s+\$?\s*([\d,]+)\s+\$?\s*([\d,]+)",
         text,
         re.IGNORECASE,
     )
@@ -729,9 +787,15 @@ def popps_period_sort_key(
                 month = number
                 break
     if not year:
-        file_year = re.search(r"(20\d{2})", str(file_name or ""))
+        file_year = re.search(r"\b(20\d{2})\b", str(file_name or ""))
         if file_year:
             year = int(file_year.group(1))
+    if not year:
+        # DealerCONNECT exports often named "May 26.pdf" (May 2026).
+        short_year = re.search(r"(\d{2})\s*\.pdf\s*$", str(file_name or ""), re.IGNORECASE)
+        if short_year:
+            yy = int(short_year.group(1))
+            year = 2000 + yy if yy < 100 else yy
     if year and month:
         return year * 100 + month
     if uploaded_at:
@@ -890,9 +954,157 @@ def load_popps_library(supabase) -> dict:
         )
         if library["reports"]:
             library["active_fingerprint"] = _active_library_fingerprint(library["reports"])
+        st.session_state.pop("popps_library_load_error", None)
         return library
-    except Exception:
+    except Exception as exc:
+        st.session_state["popps_library_load_error"] = str(exc)
         return library
+
+
+DAZE_MONTH_SLOTS = ("march", "april", "may")
+
+
+def _popps_user_marker(auth_user: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
+
+
+def _daze_slot_has_value(daze: PoppsDazeSummary, slot: str) -> bool:
+    return bool(
+        str(getattr(daze, f"dealership_{slot}", "") or "").strip()
+        or str(getattr(daze, f"business_center_{slot}", "") or "").strip()
+        or str(getattr(daze, f"expense_{slot}", "") or "").strip()
+    )
+
+
+def _merged_quarter_daze(library: dict, *, quarter_sort: int) -> PoppsDazeSummary:
+    """Fill Mar/Apr/May from each saved month in the quarter (newest upload wins per slot)."""
+    merged = PoppsDazeSummary()
+    if not quarter_sort:
+        return merged
+    reports = library.get("reports") or {}
+    entries = _sort_popps_library_entries(
+        [
+            _enrich_entry_quarter_fields(entry)
+            for entry in reports.values()
+            if int(_enrich_entry_quarter_fields(entry).get("quarter_sort") or 0) == quarter_sort
+        ],
+        newest_first=True,
+    )
+    for slot in DAZE_MONTH_SLOTS:
+        for entry in entries:
+            try:
+                parsed = popps_report_from_storage_dict(entry.get("report"))
+            except Exception:
+                continue
+            source = parsed.daze
+            for prefix in ("dealership", "business_center", "expense"):
+                attr = f"{prefix}_{slot}"
+                incoming = str(getattr(source, attr, "") or "").strip()
+                if incoming and not str(getattr(merged, attr, "") or "").strip():
+                    setattr(merged, attr, getattr(source, attr))
+    return merged
+
+
+def _display_daze_for_report(report: PoppsReport, library: dict, active_fingerprint: str) -> PoppsDazeSummary:
+    """Prefer merged quarter DAZE when multiple monthly PDFs are in the cloud library."""
+    active_entry = _enrich_entry_quarter_fields(
+        (library.get("reports") or {}).get(active_fingerprint) or {}
+    )
+    quarter_sort = int(active_entry.get("quarter_sort") or 0)
+    if not quarter_sort or len((library.get("reports") or {})) < 2:
+        return report.daze
+    merged = _merged_quarter_daze(library, quarter_sort=quarter_sort)
+    if any(_daze_slot_has_value(merged, slot) for slot in DAZE_MONTH_SLOTS):
+        return merged
+    return report.daze
+
+
+def sync_team_popps_from_cloud(supabase, *, auth_user: str = "") -> dict:
+    """Keep every signed-in user on the same dealership POPPS data from Supabase."""
+    library = load_popps_library(supabase)
+    if supabase is None:
+        return library
+
+    reports = library.get("reports") or {}
+    user_marker = _popps_user_marker(auth_user)
+    if reports:
+        st.session_state.pop(f"_popps_hydrate_empty_{user_marker}", None)
+
+    active_fp = str(library.get("active_fingerprint") or "")
+    viewing_fp = str(st.session_state.get("popps_viewing_fingerprint") or "").strip()
+    target_fp = viewing_fp if viewing_fp in reports else active_fp
+
+    meta = st.session_state.get("popps_restored_meta") or {}
+    loaded_fp = str(meta.get("fingerprint") or "")
+    report = st.session_state.get("popps_parsed_report")
+    needs_load = report is None and bool(reports)
+    needs_refresh = bool(report and target_fp and loaded_fp and loaded_fp != target_fp)
+
+    if needs_load or needs_refresh:
+        for key in (
+            "popps_parsed_report",
+            "popps_upload_name",
+            "popps_restored_from_cloud",
+            "popps_restored_meta",
+        ):
+            st.session_state.pop(key, None)
+        reset_popps_hydrate_attempt_flags()
+        hydrate_popps_report_from_cloud(supabase, auth_user=auth_user, force=True)
+    elif report is None and reports:
+        hydrate_popps_report_from_cloud(supabase, auth_user=auth_user, force=True)
+
+    return library
+
+
+def _render_popps_team_cloud_banner(
+    library: dict,
+    *,
+    auth_user: str,
+    report: PoppsReport | None,
+) -> None:
+    """Show whether cloud POPPS data is available for the whole dealership."""
+    reports = library.get("reports") or {}
+    load_err = str(st.session_state.get("popps_library_load_error") or "").strip()
+    if load_err:
+        st.error(
+            f"Could not read dealership POPPS storage: {load_err}. "
+            "Ask an Admin to confirm Supabase **dealer_settings** policies allow read access."
+        )
+        return
+
+    if not reports:
+        return
+
+    active_fp = str(library.get("active_fingerprint") or "")
+    active_entry = _enrich_entry_quarter_fields(reports.get(active_fp) or {})
+    period = str(active_entry.get("period_label") or "POPPS report")
+    uploaded_by = str(active_entry.get("uploaded_by") or "").strip()
+    uploaded_at = str(active_entry.get("uploaded_at") or "")[:19].replace("T", " ")
+    count = len(reports)
+    who = f" · last upload by **{uploaded_by}**" if uploaded_by else ""
+    when = f" · {uploaded_at} UTC" if uploaded_at else ""
+
+    if report is None:
+        st.warning(
+            f"**{count} POPPS month(s)** are saved for your dealership ({period} is the active month){who}{when}, "
+            "but this session has not loaded them yet. Click **Reload saved POPPS report** above — "
+            "everyone on your team (including you) uses the same cloud copy."
+        )
+        return
+
+    meta = st.session_state.get("popps_restored_meta") or {}
+    viewing_fp = str(st.session_state.get("popps_viewing_fingerprint") or "").strip()
+    if viewing_fp and viewing_fp != active_fp:
+        view_entry = _enrich_entry_quarter_fields(reports.get(viewing_fp) or {})
+        view_period = str(view_entry.get("period_label") or "archived month")
+        st.info(f"Viewing archived month **{view_period}**. **{count}** month(s) saved for the dealership.")
+    else:
+        st.success(
+            f"Team cloud POPPS: **{count}** month(s) on file · on screen **{period}**{who}{when}. "
+            "All signed-in users see the same saved reports."
+        )
+    if auth_user:
+        st.caption(f"Signed in as {auth_user}")
 
 
 def _persist_popps_library(
@@ -1213,7 +1425,7 @@ def hydrate_popps_report_from_cloud(
     if st.session_state.get("popps_parsed_report") is not None:
         return False
 
-    user_marker = re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
+    user_marker = _popps_user_marker(auth_user)
     ok_key = f"_popps_hydrate_ok_{user_marker}"
     empty_key = f"_popps_hydrate_empty_{user_marker}"
 
@@ -1246,7 +1458,8 @@ def hydrate_popps_report_from_cloud(
                     st.session_state.popps_viewing_fingerprint = fp
                     break
         if report is None:
-            st.session_state[empty_key] = True
+            if not reports:
+                st.session_state[empty_key] = True
             return False
 
     st.session_state[ok_key] = True
@@ -3195,6 +3408,7 @@ def render_popps_report(
             "Cloud save is unavailable — POPPS uploads will only persist until this browser session ends."
         )
     prepare_popps_tab_on_enter(supabase, auth_user=auth_user)
+    library = sync_team_popps_from_cloud(supabase, auth_user=auth_user)
     hydrate_popps_report_from_cloud(supabase, auth_user=auth_user)
 
     load_error = str(st.session_state.get("popps_cloud_load_error") or "").strip()
@@ -3292,10 +3506,14 @@ def render_popps_report(
 
     if reload_clicked:
         reset_popps_hydrate_attempt_flags()
+        sync_team_popps_from_cloud(supabase, auth_user=auth_user)
         hydrate_popps_report_from_cloud(supabase, auth_user=auth_user, force=True)
         st.rerun()
 
     report: PoppsReport | None = st.session_state.get("popps_parsed_report")
+    if not library.get("reports"):
+        library = load_popps_library(supabase)
+    _render_popps_team_cloud_banner(library, auth_user=auth_user, report=report)
     if report is None:
         st.info(
             "No POPPS report is loaded. Click **Reload saved POPPS report** above or upload the PDF again. "
@@ -3318,8 +3536,6 @@ def render_popps_report(
     report_fp = popps_report_fingerprint(report, file_name)
     reviews_store = load_popps_reviews_store(supabase, report_fp)
     report_ctx = _popps_report_context(report, file_name, report_fp)
-
-    library = load_popps_library(supabase)
     if st.session_state.get("_popps_compliance_status") is None:
         st.session_state["_popps_compliance_status"] = evaluate_popps_notes_compliance(
             supabase,
@@ -3383,19 +3599,35 @@ def render_popps_report(
         "</div>",
         unsafe_allow_html=True,
     )
+    display_daze = _display_daze_for_report(report, library, active_fp)
+    quarter_entries = [
+        _enrich_entry_quarter_fields(e)
+        for e in (library.get("reports") or {}).values()
+        if int(_enrich_entry_quarter_fields(e).get("quarter_sort") or 0)
+        == int(_enrich_entry_quarter_fields((library.get("reports") or {}).get(active_fp) or {}).get("quarter_sort") or 0)
+    ]
+    if len(quarter_entries) > 1:
+        st.caption(
+            "Three-month overview combines each saved POPPS PDF in this quarter "
+            "(for example separate April and May uploads fill their columns)."
+        )
     overview = st.columns(3)
     months = MONTH_LABELS
     dealership = [
-        report.daze.dealership_march,
-        report.daze.dealership_april,
-        report.daze.dealership_may,
+        display_daze.dealership_march,
+        display_daze.dealership_april,
+        display_daze.dealership_may,
     ]
     business_center = [
-        report.daze.business_center_march,
-        report.daze.business_center_april,
-        report.daze.business_center_may,
+        display_daze.business_center_march,
+        display_daze.business_center_april,
+        display_daze.business_center_may,
     ]
-    expense = [report.daze.expense_march, report.daze.expense_april, report.daze.expense_may]
+    expense = [
+        display_daze.expense_march,
+        display_daze.expense_april,
+        display_daze.expense_may,
+    ]
     for idx, col in enumerate(overview):
         with col:
             st.markdown(
