@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
-POPPS_UI_VERSION = "2026-06-02-popps-key-tabs"
+POPPS_UI_VERSION = "2026-06-02-popps-daze-help"
 
 POPPS_NOTES_WARNING_DAYS = 15
 POPPS_NOTES_MANAGER_ALERT_DAYS = 17
@@ -39,6 +39,14 @@ DAZE_WAM_DEFINITION = (
     "included in that calculation for the month."
 )
 DAZE_METRIC_HELP = DAZE_WAM_DEFINITION
+DAZE_HELP_DEALERSHIP = DAZE_METRIC_HELP
+DAZE_HELP_BUSINESS_CENTER = (
+    f"{DAZE_METRIC_HELP} This value is the zone (Business Center) benchmark for comparison."
+)
+DAZE_HELP_EXPENSE = (
+    f"{DAZE_FULL_NAME} ({DAZE_ACRONYM}) expense dollars for this month — warranty costs "
+    "counted in the DAZE measure per WAM / DWIN POPPS reporting."
+)
 
 # Compare dealership index to Business Center (zone) each month — lower vs zone is favorable.
 DAZE_COMPARE_MARGIN_PCT = 0.35
@@ -95,6 +103,19 @@ def _daze_expense_trend(current_raw: str, prior_raw: str | None) -> tuple[str, s
     return "watch", "Flat vs prior month"
 
 
+def _daze_metric_label_html(label: str, help_text: str = "") -> str:
+    safe_label = html.escape(str(label or ""))
+    if not str(help_text or "").strip():
+        return f'<div class="popps-daze-metric-label">{safe_label}</div>'
+    safe_help = html.escape(str(help_text), quote=True)
+    return (
+        f'<div class="popps-daze-metric-label-row">'
+        f'<span class="popps-daze-metric-label">{safe_label}</span>'
+        f'<span class="popps-daze-help" title="{safe_help}" aria-label="Metric help">?</span>'
+        f"</div>"
+    )
+
+
 def _render_daze_colored_metric(
     label: str,
     value: str,
@@ -103,19 +124,19 @@ def _render_daze_colored_metric(
     hint: str = "",
     help_text: str = "",
 ) -> None:
-    display = str(value or "").strip() or "—"
-    hint_html = f'<div class="popps-daze-metric-hint">{hint}</div>' if hint else ""
+    display = html.escape(str(value or "").strip() or "—")
+    hint_html = (
+        f'<div class="popps-daze-metric-hint">{html.escape(hint)}</div>' if hint else ""
+    )
     with st.container(border=True):
         st.markdown(
             f'<div class="popps-daze-metric-card">'
-            f'<div class="popps-daze-metric-label">{label}</div>'
+            f"{_daze_metric_label_html(label, help_text)}"
             f'<div class="popps-daze-metric-value popps-daze-{tone}">{display}</div>'
             f"{hint_html}"
             f"</div>",
             unsafe_allow_html=True,
         )
-    if help_text:
-        st.caption(help_text)
 
 
 CONCERN_CODE_DESCRIPTIONS: dict[str, str] = {
@@ -3035,11 +3056,43 @@ def popps_page_css(theme: str = "Dark") -> str:
     .popps-daze-metric-card {{
         padding: 2px 0 0 0;
     }}
+    .popps-daze-metric-label-row {{
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px !important;
+    }}
     .popps-daze-metric-label {{
         color: {muted} !important;
         font-size: 0.84rem !important;
         line-height: 1.35 !important;
         margin-bottom: 6px !important;
+        flex: 1;
+        min-width: 0;
+    }}
+    .popps-daze-metric-label-row .popps-daze-metric-label {{
+        margin-bottom: 0 !important;
+    }}
+    .popps-daze-help {{
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.05rem;
+        height: 1.05rem;
+        border-radius: 50%;
+        border: 1px solid rgba(148, 163, 184, 0.65);
+        color: {muted} !important;
+        font-size: 0.68rem !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        cursor: help;
+        margin-top: 1px;
+    }}
+    .popps-daze-help:hover {{
+        color: {text} !important;
+        border-color: rgba(96, 165, 250, 0.85);
     }}
     .popps-daze-metric-value {{
         font-size: 1.75rem !important;
@@ -3318,12 +3371,14 @@ def render_popps_report(
                 dealership[idx] or "—",
                 tone=dealer_tone,
                 hint=dealer_hint,
+                help_text=DAZE_HELP_DEALERSHIP,
             )
             _render_daze_colored_metric(
                 f"Business Center {DAZE_LABEL} (zone benchmark)",
                 business_center[idx] or "—",
                 tone="neutral",
                 hint="Compare to your dealership index above",
+                help_text=DAZE_HELP_BUSINESS_CENTER,
             )
             prior_expense = expense[idx - 1] if idx > 0 else None
             expense_tone, expense_hint = _daze_expense_trend(expense[idx], prior_expense)
@@ -3332,6 +3387,7 @@ def render_popps_report(
                 expense[idx] or "—",
                 tone=expense_tone,
                 hint=expense_hint,
+                help_text=DAZE_HELP_EXPENSE,
             )
 
     if report.top_problems:
