@@ -439,6 +439,36 @@ def build_roi_pdf_for_schedule(
     )
 
 
+def _smtp_envelope_sender(config: dict) -> str:
+    """Gmail/Outlook deliver more reliably when the envelope matches the login user."""
+    return str(config.get("user") or config.get("sender") or "").strip()
+
+
+def send_smtp_test_email(
+    recipients: list[str],
+    *,
+    smtp_config: dict | None = None,
+) -> list[str]:
+    """Send a short test message (no PDF) to verify SMTP and inbox delivery."""
+    recipients = parse_recipient_list(", ".join(recipients))
+    if not recipients:
+        raise ValueError("Add at least one recipient email.")
+    config = smtp_config or load_smtp_config()
+    if not config:
+        raise RuntimeError("Report SMTP is not configured.")
+    send_plain_email(
+        recipients=recipients,
+        subject="RO Guard — SMTP test",
+        body_text=(
+            "This is a test message from RO Guard Scheduled Reports.\n\n"
+            f"Sent from {config.get('sender')} via {config.get('host')}.\n"
+            "If you received this, SMTP is working — check spam if PDF reports are missing.\n"
+        ),
+        smtp_config=config,
+    )
+    return recipients
+
+
 def format_smtp_send_error(exc: Exception, config: dict | None = None) -> str:
     message = str(exc)
     host = (config or {}).get("host") or "unknown"
@@ -476,17 +506,18 @@ def send_plain_email(
     message["To"] = ", ".join(recipients)
     message.attach(MIMEText(body_text, "plain"))
 
+    envelope_from = _smtp_envelope_sender(config)
     if config["use_tls"]:
         with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(config["user"], config["password"])
-            server.sendmail(config["sender"], recipients, message.as_string())
+            server.sendmail(envelope_from, recipients, message.as_string())
     else:
         with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
             server.login(config["user"], config["password"])
-            server.sendmail(config["sender"], recipients, message.as_string())
+            server.sendmail(envelope_from, recipients, message.as_string())
 
 
 def send_report_email(
@@ -517,17 +548,18 @@ def send_report_email(
         attachment.add_header("Content-Disposition", "attachment", filename=filename)
         message.attach(attachment)
 
+    envelope_from = _smtp_envelope_sender(config)
     if config["use_tls"]:
         with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(config["user"], config["password"])
-            server.sendmail(config["sender"], recipients, message.as_string())
+            server.sendmail(envelope_from, recipients, message.as_string())
     else:
         with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
             server.login(config["user"], config["password"])
-            server.sendmail(config["sender"], recipients, message.as_string())
+            server.sendmail(envelope_from, recipients, message.as_string())
 
 
 def _safe_filename(label: str) -> str:
@@ -677,7 +709,51 @@ def run_due_scheduled_reports(supabase, *, reference: date | None = None) -> lis
         results.append(
             {
                 "status": "skipped",
-                "error": "No schedules are due right now (daily may have already sent today).",
+                "error": (
+                    "Nothing is **due** right now (daily may have already sent today). "
+                    "Use **Send all enabled reports now** or **Send daily reports now** "
+                    "in the Daily section to force a test send."
+                ),
             }
         )
+    return results
+
+
+def send_all_enabled_schedules_now(
+    supabase,
+    *,
+    reference: date | None = None,
+    record_send: bool = False,
+) -> list[dict]:
+    """Send every enabled schedule immediately (ignores due-date rules)."""
+    results: list[dict] = []
+    schedules = [row for row in load_email_schedules(supabase) if row.get("enabled")]
+    if not schedules:
+        return [
+            {
+                "status": "skipped",
+                "error": "No enabled schedules. Enable Daily/Monthly/Yearly and click Save.",
+            }
+        ]
+    for schedule in schedules:
+        frequency = schedule.get("frequency")
+        try:
+            result = send_schedule_report(
+                supabase,
+                schedule,
+                reference=reference,
+                record_send=record_send,
+            )
+            result["status"] = "sent"
+            results.append(result)
+        except Exception as exc:
+            friendly = format_smtp_send_error(exc, load_smtp_config())
+            record_schedule_error(supabase, str(frequency), friendly)
+            results.append(
+                {
+                    "frequency": frequency,
+                    "status": "error",
+                    "error": friendly,
+                }
+            )
     return results

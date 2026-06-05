@@ -22,7 +22,9 @@ from .scheduled_reports import (
     report_period_for_frequency,
     run_due_scheduled_reports,
     schedule_report_flags,
+    send_all_enabled_schedules_now,
     send_schedule_report,
+    send_smtp_test_email,
     smtp_config_status,
     upsert_email_schedule,
     cancel_email_schedule,
@@ -109,7 +111,63 @@ def render_scheduled_reports_admin(supabase) -> None:
             "`SUPABASE_URL`, `SUPABASE_KEY`, and all `REPORT_SMTP_*` values. "
             "Then **Actions** → **Scheduled RO Guard reports** → **Run workflow** to test."
         )
-        if smtp_ok and st.button("Run due scheduled emails now", key="schedule_run_due_all"):
+        schedules_preview = load_email_schedules(supabase)
+        for row in schedules_preview:
+            if not row.get("enabled"):
+                continue
+            freq = FREQUENCY_LABELS.get(str(row.get("frequency") or ""), row.get("frequency"))
+            recips = parse_recipient_list(str(row.get("recipients") or ""))
+            st.caption(
+                f"Saved **{freq}** → {', '.join(recips) if recips else '(no valid recipients — add emails and Save)'}"
+            )
+
+        test_cols = st.columns(2)
+        with test_cols[0]:
+            if smtp_ok and st.button("Send SMTP test email", key="schedule_smtp_test"):
+                daily = next(
+                    (r for r in schedules_preview if r.get("frequency") == "daily"),
+                    {},
+                )
+                test_to = parse_recipient_list(str(daily.get("recipients") or ""))
+                if not test_to:
+                    test_to = load_manager_emails(supabase)[:1]
+                if not test_to:
+                    st.error("Add a recipient on the Daily schedule (or a Manager email) and Save first.")
+                else:
+                    try:
+                        sent_to = send_smtp_test_email(test_to)
+                        st.success(
+                            f"Test email sent to {', '.join(sent_to)}. Check inbox and spam."
+                        )
+                    except Exception as exc:
+                        st.error(format_smtp_send_error(exc, load_smtp_config()))
+        with test_cols[1]:
+            if smtp_ok and st.button(
+                "Send all enabled reports now",
+                key="schedule_force_send_all",
+            ):
+                results = send_all_enabled_schedules_now(supabase, record_send=False)
+                for item in results:
+                    status = item.get("status")
+                    if status == "sent":
+                        st.success(
+                            f"Sent **{item.get('frequency')}** PDF to "
+                            f"{', '.join(item.get('recipients') or [])} "
+                            f"({item.get('review_count', 0)} review(s) in period). "
+                            "Check spam if not in inbox."
+                        )
+                    elif status == "skipped":
+                        st.warning(str(item.get("error") or "Nothing to send."))
+                    else:
+                        st.error(
+                            f"Failed {item.get('frequency') or 'schedule'}: {item.get('error')}"
+                        )
+
+        if smtp_ok and st.button(
+            "Run due scheduled emails only",
+            key="schedule_run_due_all",
+            help="Skips if daily already sent today — use Send all enabled reports now to force a test.",
+        ):
             results = run_due_scheduled_reports(supabase)
             for item in results:
                 status = item.get("status")
@@ -119,7 +177,7 @@ def render_scheduled_reports_admin(supabase) -> None:
                         f"({item.get('review_count', 0)} review(s))."
                     )
                 elif status == "skipped":
-                    st.info(str(item.get("error") or "Nothing due right now."))
+                    st.warning(str(item.get("error") or "Nothing due right now."))
                 else:
                     st.error(
                         f"Failed {item.get('frequency') or 'schedule'}: {item.get('error')}"
@@ -252,7 +310,7 @@ def render_scheduled_reports_admin(supabase) -> None:
                                 st.success(
                                     f"Email sent to {', '.join(result['recipients'])} "
                                     f"with {reports} ({result['review_count']} review(s) in "
-                                    f"{result['period_label']})."
+                                    f"{result['period_label']}). Check spam if not in inbox."
                                 )
                             except Exception as exc:
                                 err = format_smtp_send_error(exc, load_smtp_config())
