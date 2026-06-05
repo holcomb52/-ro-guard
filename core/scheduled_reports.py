@@ -105,6 +105,8 @@ def load_smtp_config() -> dict | None:
     except ValueError:
         port = 587
     use_tls = _get("REPORT_SMTP_USE_TLS", "true").lower() not in ("0", "false", "no")
+    if port == 465:
+        use_tls = False
     sender = _get("REPORT_SMTP_FROM") or user
     return {
         "host": host,
@@ -136,9 +138,117 @@ def load_email_schedules(supabase) -> list[dict]:
             .order("frequency")
             .execute()
         )
+        load_email_schedules._last_error = None
         return list(response.data or [])
-    except Exception:
+    except Exception as exc:
+        load_email_schedules._last_error = str(exc)
         return []
+
+
+def email_schedules_load_error() -> str:
+    return str(getattr(load_email_schedules, "_last_error", "") or "").strip()
+
+
+def probe_email_schedules_table(supabase) -> tuple[bool, str]:
+    """Verify Supabase can read/write the email_schedules table."""
+    if supabase is None:
+        return False, "Supabase is not configured in this app."
+    try:
+        response = (
+            supabase.table("email_schedules")
+            .select("frequency, enabled")
+            .limit(5)
+            .execute()
+        )
+        rows = list(response.data or [])
+        enabled = sum(1 for row in rows if row.get("enabled"))
+        return True, f"email_schedules table OK ({len(rows)} row(s), {enabled} enabled)."
+    except Exception as exc:
+        message = str(exc)
+        if "email_schedules" in message and (
+            "does not exist" in message.lower() or "42P01" in message
+        ):
+            return False, (
+                "Table **email_schedules** is missing. Run `docs/EMAIL_SCHEDULES.sql` "
+                "and `docs/EMAIL_SCHEDULES_REPORT_FLAGS.sql` in Supabase SQL Editor."
+            )
+        return False, f"Cannot access email_schedules: {message}"
+
+
+def describe_schedule_due_state(schedule: dict, now: datetime | None = None) -> str:
+    if not schedule or not schedule.get("enabled"):
+        return "Off — check **Enable** and click **Save**."
+    frequency = str(schedule.get("frequency") or "").strip().lower()
+    now = now or datetime.now(timezone.utc)
+    if is_schedule_due(schedule, now):
+        return "Due now — GitHub Actions runs daily at **11:00 UTC**, or use **Run due emails now** below."
+    last = str(schedule.get("last_sent_at") or "").strip()
+    if frequency == "daily":
+        return (
+            f"Already sent today ({last[:19].replace('T', ' ')} UTC). "
+            "Next automatic send tomorrow after 11:00 UTC."
+            if last
+            else "Waiting for first automatic send at 11:00 UTC."
+        )
+    if frequency == "monthly":
+        return "Monthly sends only on the **1st** of each month at 11:00 UTC."
+    if frequency == "yearly":
+        return "Yearly sends only on **January 1** at 11:00 UTC."
+    return "Scheduled."
+
+
+def diagnose_scheduled_email_system(supabase) -> list[dict]:
+    """Human-readable checks for the Scheduled Reports tab."""
+    checks: list[dict] = []
+    smtp_ok, smtp_message = smtp_config_status()
+    checks.append(
+        {
+            "label": "Report SMTP (Streamlit secrets)",
+            "ok": smtp_ok,
+            "detail": smtp_message,
+        }
+    )
+    table_ok, table_message = probe_email_schedules_table(supabase)
+    checks.append({"label": "Supabase schedules table", "ok": table_ok, "detail": table_message})
+    schedules = load_email_schedules(supabase)
+    load_err = email_schedules_load_error()
+    if load_err:
+        checks.append(
+            {
+                "label": "Load schedules",
+                "ok": False,
+                "detail": load_err,
+            }
+        )
+    enabled = [row for row in schedules if row.get("enabled")]
+    if table_ok and not enabled:
+        checks.append(
+            {
+                "label": "Enabled schedules",
+                "ok": False,
+                "detail": "No schedules are enabled. Open Daily/Monthly/Yearly, enable, and Save.",
+            }
+        )
+    elif table_ok:
+        checks.append(
+            {
+                "label": "Enabled schedules",
+                "ok": True,
+                "detail": f"{len(enabled)} enabled: {', '.join(row.get('frequency', '') for row in enabled)}",
+            }
+        )
+    checks.append(
+        {
+            "label": "Automatic delivery",
+            "ok": True,
+            "detail": (
+                "Uses GitHub Actions workflow **Scheduled RO Guard reports** "
+                "(repo → Actions). Add REPORT_SMTP_* and SUPABASE_* secrets there too — "
+                "Streamlit secrets alone are not enough for overnight sends."
+            ),
+        }
+    )
+    return checks
 
 
 def load_manager_emails(supabase) -> list[str]:
@@ -529,21 +639,45 @@ def record_schedule_error(supabase, frequency: str, error: str) -> None:
 def run_due_scheduled_reports(supabase, *, reference: date | None = None) -> list[dict]:
     results: list[dict] = []
     now = datetime.now(timezone.utc)
-    for schedule in load_email_schedules(supabase):
+    schedules = load_email_schedules(supabase)
+    if not schedules:
+        load_err = email_schedules_load_error()
+        if load_err:
+            results.append({"status": "error", "error": load_err})
+        else:
+            results.append(
+                {
+                    "status": "skipped",
+                    "error": "No schedules saved. Enable at least one frequency and click Save.",
+                }
+            )
+        return results
+
+    due_any = False
+    for schedule in schedules:
         frequency = schedule.get("frequency")
         if not is_schedule_due(schedule, now):
             continue
+        due_any = True
         try:
             result = send_schedule_report(supabase, schedule, reference=reference, record_send=True)
             result["status"] = "sent"
             results.append(result)
         except Exception as exc:
-            record_schedule_error(supabase, str(frequency), str(exc))
+            friendly = format_smtp_send_error(exc, load_smtp_config())
+            record_schedule_error(supabase, str(frequency), friendly)
             results.append(
                 {
                     "frequency": frequency,
                     "status": "error",
-                    "error": str(exc),
+                    "error": friendly,
                 }
             )
+    if not due_any:
+        results.append(
+            {
+                "status": "skipped",
+                "error": "No schedules are due right now (daily may have already sent today).",
+            }
+        )
     return results

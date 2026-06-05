@@ -10,13 +10,17 @@ from .scheduled_reports import (
     FREQUENCY_LABELS,
     REPORT_TYPE_LABELS,
     SCHEDULE_FREQUENCIES,
+    describe_schedule_due_state,
+    diagnose_scheduled_email_system,
     format_recipient_list,
     format_smtp_send_error,
     load_email_schedules,
     load_manager_emails,
     load_smtp_config,
     parse_recipient_list,
+    record_schedule_error,
     report_period_for_frequency,
+    run_due_scheduled_reports,
     schedule_report_flags,
     send_schedule_report,
     smtp_config_status,
@@ -94,6 +98,33 @@ def render_scheduled_reports_admin(supabase) -> None:
         return
 
     smtp_ok, smtp_message = smtp_config_status()
+    with st.expander("Email system status & troubleshooting", expanded=not smtp_ok):
+        for check in diagnose_scheduled_email_system(supabase):
+            if check.get("ok"):
+                st.success(f"**{check['label']}** — {check['detail']}")
+            else:
+                st.error(f"**{check['label']}** — {check['detail']}")
+        st.caption(
+            "Overnight automation needs **GitHub** → repo **Settings** → **Secrets and variables** → **Actions**: "
+            "`SUPABASE_URL`, `SUPABASE_KEY`, and all `REPORT_SMTP_*` values. "
+            "Then **Actions** → **Scheduled RO Guard reports** → **Run workflow** to test."
+        )
+        if smtp_ok and st.button("Run due scheduled emails now", key="schedule_run_due_all"):
+            results = run_due_scheduled_reports(supabase)
+            for item in results:
+                status = item.get("status")
+                if status == "sent":
+                    st.success(
+                        f"Sent **{item.get('frequency')}** to {', '.join(item.get('recipients') or [])} "
+                        f"({item.get('review_count', 0)} review(s))."
+                    )
+                elif status == "skipped":
+                    st.info(str(item.get("error") or "Nothing due right now."))
+                else:
+                    st.error(
+                        f"Failed {item.get('frequency') or 'schedule'}: {item.get('error')}"
+                    )
+
     if smtp_ok:
         st.success(smtp_message)
     else:
@@ -144,6 +175,7 @@ def render_scheduled_reports_admin(supabase) -> None:
                 parsed = parse_recipient_list(recipients)
                 st.caption(f"{len(parsed)} valid recipient(s)")
 
+            st.caption(f"Automation: {describe_schedule_due_state(existing)}")
             last_sent = str(existing.get("last_sent_at") or "").strip()
             last_error = str(existing.get("last_error") or "").strip()
             if last_sent:
@@ -223,7 +255,9 @@ def render_scheduled_reports_admin(supabase) -> None:
                                     f"{result['period_label']})."
                                 )
                             except Exception as exc:
-                                st.error(format_smtp_send_error(exc, load_smtp_config()))
+                                err = format_smtp_send_error(exc, load_smtp_config())
+                                record_schedule_error(supabase, frequency, err)
+                                st.error(err)
 
             st.divider()
             with st.container(border=True):

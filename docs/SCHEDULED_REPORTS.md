@@ -31,6 +31,7 @@ REPORT_SMTP_USE_TLS=true
 |--------|--------|
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_KEY` | Anon/publishable key (same as the app) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional — use if RLS blocks the anon key |
 | `REPORT_SMTP_HOST` | e.g. `smtp.office365.com` |
 | `REPORT_SMTP_PORT` | `587` |
 | `REPORT_SMTP_USER` | SMTP login |
