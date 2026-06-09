@@ -19,6 +19,9 @@ try:
 except ImportError:  # pragma: no cover
     PdfReader = None
 
+from .pdf_reports import build_popps_audit_pdf
+from .report_export_ui import render_branded_report_table
+
 MONTH_LABELS = ("March", "April", "May")
 
 # Shown in the POPPS tab so you can confirm Streamlit Cloud deployed the latest build.
@@ -2750,10 +2753,23 @@ def _render_popps_priority_section(
             return
 
         st.markdown("**Claims in this category**")
-        st.dataframe(
-            _claims_dataframe(section.claims),
-            use_container_width=True,
-            hide_index=True,
+        claims_df = _claims_dataframe(section.claims)
+        render_branded_report_table(
+            claims_df,
+            pdf_title="RO GUARD POPPS Claims Analysis",
+            period_label=(
+                f"Dealer {report.dealer_code} · {report.period_label or 'POPPS'} · "
+                f"Priority {section.priority_rank}"
+            ),
+            pdf_subtitle="POPPS Claims",
+            pdf_landscape=True,
+            pdf_filename=(
+                f"RO_Guard_POPPS_Claims_{report.dealer_code}_P{section.priority_rank}.pdf".replace(" ", "_")
+            ),
+            csv_filename=(
+                f"RO_Guard_POPPS_Claims_{report.dealer_code}_P{section.priority_rank}.csv".replace(" ", "_")
+            ),
+            export_key=f"popps_claims_{report_fp}_{section.priority_rank}",
         )
 
         if review_exempt:
@@ -2833,80 +2849,38 @@ def _render_popps_audit_panel(
         if snapshot.empty:
             st.info("No POPPS reviews saved for this file yet.")
         else:
-            st.dataframe(snapshot, use_container_width=True, hide_index=True)
             snap_base = f"RO_Guard_POPPS_Reviews_{report.dealer_code}_{report.period_label or 'report'}".replace(
                 " ", "_"
             )
-            snap_pdf, snap_csv = st.columns(2)
-            with snap_pdf:
-                try:
-                    from .pdf_reports import build_popps_audit_pdf
-
-                    snapshot_pdf = build_popps_audit_pdf(
-                        snapshot,
-                        title="RO GUARD POPPS Review Snapshot",
-                        dealer_code=str(report.dealer_code or ""),
-                        period_label=str(report.period_label or ""),
-                        file_name=file_name,
-                    )
-                    st.download_button(
-                        "Download review snapshot (PDF)",
-                        data=snapshot_pdf,
-                        file_name=f"{snap_base}.pdf",
-                        mime="application/pdf",
-                        key=f"popps_audit_snapshot_pdf_{audit_key}",
-                        use_container_width=True,
-                    )
-                except ImportError:
-                    st.error("PDF export needs fpdf2.")
-                except Exception as exc:
-                    st.warning(f"Snapshot PDF could not be generated: {exc}")
-            with snap_csv:
-                st.download_button(
-                    "Download review snapshot (CSV)",
-                    snapshot.to_csv(index=False),
-                    file_name=f"{snap_base}.csv",
-                    mime="text/csv",
-                    key=f"popps_audit_snapshot_csv_{audit_key}",
-                    use_container_width=True,
-                )
+            render_branded_report_table(
+                snapshot,
+                pdf_builder=lambda: build_popps_audit_pdf(
+                    snapshot,
+                    title="RO GUARD POPPS Review Snapshot",
+                    dealer_code=str(report.dealer_code or ""),
+                    period_label=str(report.period_label or ""),
+                    file_name=file_name,
+                ),
+                pdf_filename=f"{snap_base}.pdf",
+                csv_filename=f"{snap_base}.csv",
+                export_key=f"popps_audit_snapshot_{audit_key}",
+            )
         if not history_df.empty:
             st.markdown("**Full save history (newest first)**")
-            st.dataframe(history_df.head(200), use_container_width=True, hide_index=True)
             hist_base = f"RO_Guard_POPPS_Audit_History_{report.dealer_code}".replace(" ", "_")
-            hist_pdf, hist_csv = st.columns(2)
-            with hist_pdf:
-                try:
-                    from .pdf_reports import build_popps_audit_pdf
-
-                    history_pdf = build_popps_audit_pdf(
-                        history_df,
-                        title="RO GUARD POPPS Audit History",
-                        dealer_code=str(report.dealer_code or ""),
-                        period_label=str(report.period_label or ""),
-                        file_name=file_name,
-                    )
-                    st.download_button(
-                        "Download full audit history (PDF)",
-                        data=history_pdf,
-                        file_name=f"{hist_base}.pdf",
-                        mime="application/pdf",
-                        key=f"popps_audit_history_pdf_{audit_key}",
-                        use_container_width=True,
-                    )
-                except ImportError:
-                    st.error("PDF export needs fpdf2.")
-                except Exception as exc:
-                    st.warning(f"History PDF could not be generated: {exc}")
-            with hist_csv:
-                st.download_button(
-                    "Download full audit history (CSV)",
-                    history_df.to_csv(index=False),
-                    file_name=f"{hist_base}.csv",
-                    mime="text/csv",
-                    key=f"popps_audit_history_csv_{audit_key}",
-                    use_container_width=True,
-                )
+            render_branded_report_table(
+                history_df.head(200),
+                pdf_builder=lambda: build_popps_audit_pdf(
+                    history_df,
+                    title="RO GUARD POPPS Audit History",
+                    dealer_code=str(report.dealer_code or ""),
+                    period_label=str(report.period_label or ""),
+                    file_name=file_name,
+                ),
+                pdf_filename=f"{hist_base}.pdf",
+                csv_filename=f"{hist_base}.csv",
+                export_key=f"popps_audit_history_{audit_key}",
+            )
 
 
 def _claims_dataframe(claims: list[PoppsClaimRow]) -> pd.DataFrame:

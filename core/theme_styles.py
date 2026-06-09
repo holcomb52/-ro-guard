@@ -1665,6 +1665,9 @@ THEME_CSS = {
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] {
         background: transparent !important;
     }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button:nth-child(2) {
+        display: none !important;
+    }
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button,
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],
     div[data-testid="stDataFrame"] button[kind="header"] {
@@ -2425,6 +2428,9 @@ THEME_CSS = {
     }
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] {
         background: transparent !important;
+    }
+    div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button:nth-child(2) {
+        display: none !important;
     }
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] button,
     div[data-testid="stDataFrame"] [data-testid="stElementToolbar"] [data-testid="stBaseButton-header"],

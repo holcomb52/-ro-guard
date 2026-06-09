@@ -27,6 +27,11 @@ from core.pdf_reports import (
     build_review_report_pdf,
     build_roi_report_pdf,
 )
+from core.report_export_ui import (
+    period_label_from_df,
+    render_branded_pdf_download,
+    render_branded_report_table,
+)
 from core.auth import (
     apply_session_to_client,
     auth_user_email,
@@ -5542,7 +5547,16 @@ def render_pending_claims():
         for c in ("created_at", "ro_number", "advisor", "total_claim_value", "status", "score")
         if c in table_view.columns
     ]
-    st.dataframe(table_view[table_cols], use_container_width=True, hide_index=True)
+    pending_export = table_view[table_cols] if table_cols else table_view
+    render_branded_report_table(
+        pending_export,
+        pdf_title="RO GUARD Pending Claims Queue",
+        period_label=period_label_from_df(pending, default="Current pending queue"),
+        pdf_subtitle="Pending Claims",
+        pdf_filename="RO_Guard_Pending_Claims.pdf",
+        csv_filename="RO_Guard_Pending_Claims.csv",
+        export_key="pending_claims_queue",
+    )
 
     if "id" not in pending.columns:
         st.warning("Review IDs are missing — refresh after Supabase is up to date.")
@@ -6100,18 +6114,14 @@ def render_review():
                     st.success("Review updated in Reporting — no duplicate was created.")
 
             try:
-                audit_pdf = build_audit_report_pdf(report_payload)
                 safe_ro = re.sub(r"[^\w\-]+", "_", str(ro_number or "audit")).strip("_") or "audit"
-                st.download_button(
-                    "Download Audit PDF",
-                    data=audit_pdf,
-                    file_name=f"RO_Guard_Audit_{safe_ro}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"audit_pdf_{st.session_state.form_version}",
+                render_branded_pdf_download(
+                    pdf_builder=lambda payload=report_payload: build_audit_report_pdf(payload),
+                    pdf_filename=f"RO_Guard_Audit_{safe_ro}.pdf",
+                    export_key=f"audit_pdf_{st.session_state.form_version}",
+                    caption="Branded RO GUARD warranty audit PDF with ROGUARD watermark.",
+                    label="Download Audit PDF",
                 )
-            except ImportError:
-                st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
             except Exception as e:
                 st.warning(f"Audit PDF could not be generated: {e}")
 
@@ -6275,9 +6285,16 @@ def _render_claim_library_table(
             ]
             if c in table_df.columns
         ]
-        st.dataframe(
-            table_df[display_cols].fillna("") if display_cols else table_df.fillna(""),
-            use_container_width=True,
+        export_df = table_df[display_cols].fillna("") if display_cols else table_df.fillna("")
+        render_branded_report_table(
+            export_df,
+            pdf_title="RO GUARD Declined Claims Library",
+            period_label=period_label_from_df(useful_df, default="Declined claims library"),
+            pdf_subtitle="Claim Learning",
+            pdf_landscape=True,
+            pdf_filename="RO_Guard_Declined_Claims_Library.pdf",
+            csv_filename="RO_Guard_Declined_Claims_Library.csv",
+            export_key=f"claim_library_declined_{outcome}",
         )
         return
 
@@ -6299,7 +6316,17 @@ def _render_claim_library_table(
     display_df = useful_df[display_cols] if display_cols else useful_df
     if outcome == "declined" and "reference" in display_df.columns:
         display_df = display_df.rename(columns={"reference": "decline_reason"})
-    st.dataframe(display_df, use_container_width=True)
+    label = "Paid" if outcome == "paid" else "Declined"
+    render_branded_report_table(
+        display_df,
+        pdf_title=f"RO GUARD {label} Claims Library",
+        period_label=period_label_from_df(useful_df, default=f"{label} claims library"),
+        pdf_subtitle="Claim Learning",
+        pdf_landscape=True,
+        pdf_filename=f"RO_Guard_{label}_Claims_Library.pdf",
+        csv_filename=f"RO_Guard_{label}_Claims_Library.csv",
+        export_key=f"claim_library_{outcome}",
+    )
 
 
 def _render_paid_claims_learning(all_claims: pd.DataFrame) -> None:
@@ -6679,6 +6706,7 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
 
     c1, c2 = st.columns(2)
     st.caption("Color bands match Team Performance: red = highest priority, yellow = moderate, green = lower.")
+    hs_period = period_label_from_df(df)
     with c1:
         st.markdown("**By Audit Rule**")
         if not rule_summary.empty:
@@ -6693,12 +6721,16 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
             display_rules["Type"] = display_rules["Type"].map(
                 {"hard": "Hard Stop", "warn": "Warning"}
             )
-            st.dataframe(
-                _style_audit_rule_breakdown(
-                    display_rules[["Audit Rule", "Type", "Count", "% of Findings"]]
-                ),
-                use_container_width=True,
-                hide_index=True,
+            rules_export = display_rules[["Audit Rule", "Type", "Count", "% of Findings"]]
+            render_branded_report_table(
+                _style_audit_rule_breakdown(rules_export),
+                export_df=rules_export,
+                pdf_title="RO GUARD Hard Stop Breakdown — By Rule",
+                period_label=hs_period,
+                pdf_subtitle="Hard Stop Breakdown",
+                pdf_filename="RO_Guard_Hard_Stop_By_Rule.pdf",
+                csv_filename="RO_Guard_Hard_Stop_By_Rule.csv",
+                export_key=f"{key_prefix}_hs_by_rule",
             )
         else:
             st.caption("No findings for this filter.")
@@ -6724,7 +6756,17 @@ def render_hard_stop_breakdown(df: pd.DataFrame, *, key_prefix: str = "roi") -> 
             advisor_pivot["Total"] = advisor_pivot.sum(axis=1)
             advisor_pivot = advisor_pivot.sort_values("Total", ascending=False).head(8)
             advisor_pivot = advisor_pivot.drop(columns=["Total"])
-            st.dataframe(_style_advisor_rule_pivot(advisor_pivot), use_container_width=True)
+            render_branded_report_table(
+                _style_advisor_rule_pivot(advisor_pivot),
+                export_df=advisor_pivot.reset_index(),
+                pdf_title="RO GUARD Hard Stop Breakdown — By Advisor",
+                period_label=hs_period,
+                pdf_subtitle="Hard Stop Breakdown",
+                pdf_landscape=True,
+                pdf_filename="RO_Guard_Hard_Stop_By_Advisor.pdf",
+                csv_filename="RO_Guard_Hard_Stop_By_Advisor.csv",
+                export_key=f"{key_prefix}_hs_by_advisor",
+            )
         else:
             st.caption("Advisor data will appear once reviews include advisor names.")
 
@@ -6836,16 +6878,23 @@ def render_advisor_coaching_focus(df: pd.DataFrame, advisor_summary: pd.DataFram
                 "Advisor names are on file, but saved reviews do not yet include job-level hard stops "
                 "or warnings. Run **Run Audit + Save Review** on recent ROs to populate coaching areas."
             )
-            st.dataframe(
-                named.head(8).rename(columns={
-                    "advisor": "Advisor",
-                    "reviews": "Reviews",
-                    "avg_score": "Avg Score",
-                    "hard_stops": "Hard Stops",
-                    "protected_value": "Protected $",
-                    "rejected": "Rejected",
-                }),
-                use_container_width=True,
+            advisor_export = named.head(8).rename(columns={
+                "advisor": "Advisor",
+                "reviews": "Reviews",
+                "avg_score": "Avg Score",
+                "hard_stops": "Hard Stops",
+                "protected_value": "Protected $",
+                "rejected": "Rejected",
+            })
+            render_branded_report_table(
+                advisor_export,
+                pdf_title="RO GUARD Advisor Coaching Summary",
+                period_label=period_label_from_df(df),
+                pdf_subtitle="Coaching",
+                pdf_landscape=True,
+                pdf_filename="RO_Guard_Advisor_Coaching_Summary.pdf",
+                csv_filename="RO_Guard_Advisor_Coaching_Summary.csv",
+                export_key="coaching_advisor_summary",
             )
             return
 
@@ -6952,6 +7001,7 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
 
     rule_summary = breakdown["rule_summary"]
     advisor_rule = breakdown["advisor_rule_summary"]
+    coach_period = period_label_from_df(df)
 
     st.markdown("### Top Hard Stops & Warnings")
     st.caption(
@@ -6981,10 +7031,15 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
         if hard_detail.empty:
             st.caption("No hard stops in this period.")
         else:
-            st.dataframe(
+            render_branded_report_table(
                 _style_audit_rule_breakdown(hard_detail),
-                use_container_width=True,
-                hide_index=True,
+                export_df=hard_detail,
+                pdf_title="RO GUARD Coaching — Top Hard Stops",
+                period_label=coach_period,
+                pdf_subtitle="Coaching",
+                pdf_filename="RO_Guard_Coaching_Top_Hard_Stops.pdf",
+                csv_filename="RO_Guard_Coaching_Top_Hard_Stops.csv",
+                export_key="coaching_top_hard",
             )
 
     with c2:
@@ -6992,10 +7047,15 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
         if warn_detail.empty:
             st.caption("No warnings in this period.")
         else:
-            st.dataframe(
+            render_branded_report_table(
                 _style_audit_rule_breakdown(warn_detail),
-                use_container_width=True,
-                hide_index=True,
+                export_df=warn_detail,
+                pdf_title="RO GUARD Coaching — Top Warnings",
+                period_label=coach_period,
+                pdf_subtitle="Coaching",
+                pdf_filename="RO_Guard_Coaching_Top_Warnings.pdf",
+                csv_filename="RO_Guard_Coaching_Top_Warnings.csv",
+                export_key="coaching_top_warn",
             )
 
     st.markdown("#### Advisor Detail — Top Rules")
@@ -7006,22 +7066,34 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
         if hard_advisor_detail.empty:
             st.caption("No advisor attribution for top hard stops.")
         else:
-            st.dataframe(
-                _style_advisor_rule_pivot(
-                    hard_advisor_detail.set_index(["Audit Rule", "Advisor"])
-                ),
-                use_container_width=True,
+            hard_adv_export = hard_advisor_detail.set_index(["Audit Rule", "Advisor"])
+            render_branded_report_table(
+                _style_advisor_rule_pivot(hard_adv_export),
+                export_df=hard_advisor_detail,
+                pdf_title="RO GUARD Coaching — Hard Stops By Advisor",
+                period_label=coach_period,
+                pdf_subtitle="Coaching",
+                pdf_landscape=True,
+                pdf_filename="RO_Guard_Coaching_Hard_Stops_By_Advisor.pdf",
+                csv_filename="RO_Guard_Coaching_Hard_Stops_By_Advisor.csv",
+                export_key="coaching_hard_by_advisor",
             )
     with detail_c2:
         st.markdown("**Warnings by advisor**")
         if warn_advisor_detail.empty:
             st.caption("No advisor attribution for top warnings.")
         else:
-            st.dataframe(
-                _style_advisor_rule_pivot(
-                    warn_advisor_detail.set_index(["Audit Rule", "Advisor"])
-                ),
-                use_container_width=True,
+            warn_adv_export = warn_advisor_detail.set_index(["Audit Rule", "Advisor"])
+            render_branded_report_table(
+                _style_advisor_rule_pivot(warn_adv_export),
+                export_df=warn_advisor_detail,
+                pdf_title="RO GUARD Coaching — Warnings By Advisor",
+                period_label=coach_period,
+                pdf_subtitle="Coaching",
+                pdf_landscape=True,
+                pdf_filename="RO_Guard_Coaching_Warnings_By_Advisor.pdf",
+                csv_filename="RO_Guard_Coaching_Warnings_By_Advisor.csv",
+                export_key="coaching_warn_by_advisor",
             )
 
     advisor_counts = _advisor_finding_count_table(breakdown)
@@ -7030,9 +7102,15 @@ def _render_coaching_top_findings(df: pd.DataFrame) -> None:
     if advisor_counts.empty:
         st.caption("Advisor counts will appear once reviews include advisor names and audit findings.")
     else:
-        st.dataframe(
+        render_branded_report_table(
             _style_advisor_rule_pivot(advisor_counts),
-            use_container_width=True,
+            export_df=advisor_counts.reset_index(),
+            pdf_title="RO GUARD Coaching — Advisor Finding Counts",
+            period_label=coach_period,
+            pdf_subtitle="Coaching",
+            pdf_filename="RO_Guard_Coaching_Advisor_Findings.pdf",
+            csv_filename="RO_Guard_Coaching_Advisor_Findings.csv",
+            export_key="coaching_advisor_counts",
         )
 
 
@@ -7046,13 +7124,19 @@ def _render_coaching_focus_section(df: pd.DataFrame, metrics: dict) -> None:
         st.markdown("**Top Rejection Reasons**")
         reasons = metrics["rejection_reasons"]
         if not reasons.empty:
-            st.dataframe(
-                reasons.head(8).rename(columns={
-                    "rejection_reason": "Reason Category",
-                    "count": "Count",
-                    "total_value": "Claim Value",
-                }),
-                use_container_width=True,
+            reasons_export = reasons.head(8).rename(columns={
+                "rejection_reason": "Reason Category",
+                "count": "Count",
+                "total_value": "Claim Value",
+            })
+            render_branded_report_table(
+                reasons_export,
+                pdf_title="RO GUARD Coaching — Top Rejection Reasons",
+                period_label=period_label_from_df(df),
+                pdf_subtitle="Coaching",
+                pdf_filename="RO_Guard_Coaching_Rejection_Reasons.pdf",
+                csv_filename="RO_Guard_Coaching_Rejection_Reasons.csv",
+                export_key="coaching_rejection_reasons",
             )
             st.caption("See **Rejections** tab for full decline text and user notes per claim.")
         else:
@@ -7264,26 +7348,19 @@ def render_roi_dashboard():
     else:
         period_label = "Selected period"
 
-    try:
-        roi_pdf = build_roi_report_pdf(
+    render_branded_pdf_download(
+        pdf_builder=lambda: build_roi_report_pdf(
             metrics,
             period_label=period_label,
             rejection_rework_pct=rejection_rework_pct,
             minutes_saved=float(minutes_saved),
             hourly_rate=float(hourly_rate),
-        )
-        st.download_button(
-            "Download ROI Summary PDF",
-            data=roi_pdf,
-            file_name="RO_Guard_ROI_Summary.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            key="roi_summary_pdf",
-        )
-    except ImportError:
-        st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
-    except Exception as e:
-        st.warning(f"ROI PDF could not be generated: {e}")
+        ),
+        pdf_filename="RO_Guard_ROI_Summary.pdf",
+        export_key="roi_summary_pdf",
+        caption="Branded RO GUARD ROI summary with charts and ROGUARD watermark.",
+        label="Download ROI Summary PDF",
+    )
 
 
 def _split_rejection_reason(reason: str) -> tuple[str, str]:
@@ -7709,7 +7786,16 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
             c for c in ("created_at", "ro_number", "advisor", "total_claim_value", "status")
             if c in pending_view.columns
         ]
-        st.dataframe(pending_view[pending_cols].head(15), use_container_width=True, hide_index=True)
+        pending_export = pending_view[pending_cols].head(15) if pending_cols else pending_view.head(15)
+        render_branded_report_table(
+            pending_export,
+            pdf_title="RO GUARD Pending OEM Outcomes",
+            period_label=period_label_from_df(work, default="Claim outcomes — pending"),
+            pdf_subtitle="Claim Outcomes",
+            pdf_filename="RO_Guard_Pending_OEM_Outcomes.pdf",
+            csv_filename="RO_Guard_Pending_OEM_Outcomes.csv",
+            export_key="outcome_pending_oem",
+        )
 
     rejection_detail = _rejection_detail_frame(work)
     if not rejection_detail.empty:
@@ -7724,21 +7810,27 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 f"{missing_reason} declined claim(s) have **no reason recorded** yet. "
                 "Select the review above and add the OEM decline reason."
             )
-        st.dataframe(
-            rejection_detail.rename(
-                columns={
-                    "created_at": "Audited",
-                    "ro_number": "RO",
-                    "advisor": "Advisor",
-                    "outcome": "Outcome",
-                    "decline_category": "Reason Category",
-                    "decline_notes": "User Notes",
-                    "full_decline_reason": "Full Decline Reason (as entered)",
-                    "total_claim_value": "Claim Value",
-                }
+        rejection_export = rejection_detail.rename(
+            columns={
+                "created_at": "Audited",
+                "ro_number": "RO",
+                "advisor": "Advisor",
+                "outcome": "Outcome",
+                "decline_category": "Reason Category",
+                "decline_notes": "User Notes",
+                "full_decline_reason": "Full Decline Reason (as entered)",
+                "total_claim_value": "Claim Value",
+            }
+        )
+        render_branded_report_table(
+            rejection_export,
+            pdf_builder=lambda: build_decline_reasons_pdf(
+                rejection_export,
+                period_label=period_label_from_df(rejection_detail),
             ),
-            use_container_width=True,
-            hide_index=True,
+            pdf_filename="RO_Guard_Claim_Outcomes_Declines.pdf",
+            csv_filename="RO_Guard_Claim_Outcomes_Declines.csv",
+            export_key="outcome_rejection_detail",
         )
 
 
@@ -7833,7 +7925,17 @@ def render_reporting_vin_recalls(
         )
         if c in recall_display.columns
     ]
-    st.dataframe(recall_display[show_cols], use_container_width=True)
+    recall_export = recall_display[show_cols] if show_cols else recall_display
+    render_branded_report_table(
+        recall_export,
+        pdf_title="RO GUARD VIN Recall Report",
+        period_label=period_label_from_df(recall_df),
+        pdf_subtitle="VIN Recalls",
+        pdf_landscape=True,
+        pdf_filename="RO_Guard_VIN_Recalls.pdf",
+        csv_filename="RO_Guard_VIN_Recalls.csv",
+        export_key="reporting_vin_recalls",
+    )
 
 
 def render_reporting_rejections(df: pd.DataFrame) -> None:
@@ -7869,16 +7971,21 @@ def render_reporting_rejections(df: pd.DataFrame) -> None:
             total_value=("total_claim_value", "sum"),
         ).sort_values(["count", "total_value"], ascending=[False, False])
         st.markdown("**Decline reasons by category**")
-        st.dataframe(
-            reason_summary.rename(
-                columns={
-                    "decline_category": "Reason Category",
-                    "count": "Claims",
-                    "total_value": "Claim Value",
-                }
-            ),
-            use_container_width=True,
-            hide_index=True,
+        category_export = reason_summary.rename(
+            columns={
+                "decline_category": "Reason Category",
+                "count": "Claims",
+                "total_value": "Claim Value",
+            }
+        )
+        render_branded_report_table(
+            category_export,
+            pdf_title="RO GUARD Decline Reasons Summary",
+            period_label=period_label_from_df(detail),
+            pdf_subtitle="Decline Summary",
+            pdf_filename="RO_Guard_Decline_Reasons_Summary.pdf",
+            csv_filename="RO_Guard_Decline_Reasons_Summary.csv",
+            export_key="decline_reasons_summary",
         )
 
     st.markdown("**All decline detail (full text preserved)**")
@@ -7898,38 +8005,19 @@ def render_reporting_rejections(df: pd.DataFrame) -> None:
             "total_claim_value": "Claim Value",
         }
     )
-    st.dataframe(export_detail, use_container_width=True, hide_index=True)
 
     if "created_at" in detail.columns and detail["created_at"].notna().any():
         decline_period = f"{detail['created_at'].min()} to {detail['created_at'].max()}"
     else:
         decline_period = "Selected period"
 
-    dl_pdf, dl_csv = st.columns(2)
-    with dl_pdf:
-        try:
-            decline_pdf = build_decline_reasons_pdf(export_detail, period_label=decline_period)
-            st.download_button(
-                "Download Decline Reasons PDF",
-                data=decline_pdf,
-                file_name="RO_Guard_Decline_Reasons.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="decline_reasons_pdf",
-            )
-        except ImportError:
-            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
-        except Exception as exc:
-            st.error(f"Decline reasons PDF could not be generated: {exc}")
-    with dl_csv:
-        st.download_button(
-            "Download Decline Reasons CSV",
-            export_detail.to_csv(index=False),
-            "RO_Guard_Decline_Reasons.csv",
-            "text/csv",
-            use_container_width=True,
-            key="decline_reasons_csv",
-        )
+    render_branded_report_table(
+        export_detail,
+        pdf_builder=lambda: build_decline_reasons_pdf(export_detail, period_label=decline_period),
+        pdf_filename="RO_Guard_Decline_Reasons.pdf",
+        csv_filename="RO_Guard_Decline_Reasons.csv",
+        export_key="decline_reasons",
+    )
 
 
 _SCORE_BAND_GREEN = "background-color: #dcfce7; color: #166534; font-weight: 700"
@@ -8060,15 +8148,34 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
         ).reset_index()
         worst = ranking.sort_values(["hard_stops", "warnings"], ascending=[False, False]).head(5)
         best = ranking.sort_values(["avg_score", "hard_stops"], ascending=[False, True]).head(5)
+        perf_period = period_label_from_df(perf_df)
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("### Top Offenders")
             st.caption("Avg score: green 90+, yellow 80–89, red below 80.")
-            st.dataframe(_style_avg_score_table(worst), use_container_width=True)
+            render_branded_report_table(
+                _style_avg_score_table(worst),
+                export_df=worst,
+                pdf_title="RO GUARD Team Performance — Top Offenders",
+                period_label=perf_period,
+                pdf_subtitle="Team Performance",
+                pdf_filename="RO_Guard_Team_Top_Offenders.pdf",
+                csv_filename="RO_Guard_Team_Top_Offenders.csv",
+                export_key="team_perf_worst",
+            )
         with c2:
             st.markdown("### Best Performers")
             st.caption("Avg score: green 90+, yellow 80–89, red below 80.")
-            st.dataframe(_style_avg_score_table(best), use_container_width=True)
+            render_branded_report_table(
+                _style_avg_score_table(best),
+                export_df=best,
+                pdf_title="RO GUARD Team Performance — Best Performers",
+                period_label=perf_period,
+                pdf_subtitle="Team Performance",
+                pdf_filename="RO_Guard_Team_Best_Performers.pdf",
+                csv_filename="RO_Guard_Team_Best_Performers.csv",
+                export_key="team_perf_best",
+            )
 
     st.markdown("### Employee Scorecards")
     scorecard_role = st.selectbox(
@@ -8095,7 +8202,16 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
             warnings=("warning_count", "sum"),
             avg_days_to_submit=("days_to_submit", "mean"),
         ).reset_index().sort_values(["hard_stops", "avg_score"], ascending=[False, True])
-        st.dataframe(scorecard, use_container_width=True)
+        render_branded_report_table(
+            scorecard,
+            pdf_title=f"RO GUARD {scorecard_role} Scorecards",
+            period_label=period_label_from_df(df),
+            pdf_subtitle="Team Performance",
+            pdf_landscape=True,
+            pdf_filename=f"RO_Guard_{scorecard_role.replace(' ', '_')}_Scorecards.pdf",
+            csv_filename=f"RO_Guard_{scorecard_role.replace(' ', '_')}_Scorecards.csv",
+            export_key=f"team_scorecard_{employee_col}",
+        )
 
 
 def render_reporting_review_log(df: pd.DataFrame) -> None:
@@ -8129,38 +8245,19 @@ def render_reporting_review_log(df: pd.DataFrame) -> None:
     ]
     other_cols = [c for c in display_df.columns if c not in priority_cols]
     display_df = display_df[priority_cols + other_cols]
-    st.dataframe(display_df, use_container_width=True)
 
     if "created_at" in df.columns and df["created_at"].notna().any():
         report_period = f"{df['created_at'].min().date()} to {df['created_at'].max().date()}"
     else:
         report_period = "Selected period"
 
-    dl_pdf, dl_csv = st.columns(2)
-    with dl_pdf:
-        try:
-            review_pdf = build_review_report_pdf(display_df, period_label=report_period)
-            st.download_button(
-                "Download Review Report PDF",
-                data=review_pdf,
-                file_name="RO_Guard_Review_Report.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="review_report_pdf",
-            )
-        except ImportError:
-            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
-        except Exception as e:
-            st.error(f"Review PDF could not be generated: {e}")
-    with dl_csv:
-        st.download_button(
-            "Download Review Report CSV",
-            display_df.to_csv(index=False),
-            "RO_Guard_Review_Report.csv",
-            "text/csv",
-            use_container_width=True,
-            key="review_report_csv",
-        )
+    render_branded_report_table(
+        display_df,
+        pdf_builder=lambda: build_review_report_pdf(display_df, period_label=report_period),
+        pdf_filename="RO_Guard_Review_Report.pdf",
+        csv_filename="RO_Guard_Review_Report.csv",
+        export_key="review_report",
+    )
 
 
 def render_reporting():
