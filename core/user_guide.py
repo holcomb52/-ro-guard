@@ -1,4 +1,4 @@
-"""In-app user guide with step-by-step instructions and visual mockups."""
+"""Simple in-app help — visually separate from the real app toolbar."""
 
 from __future__ import annotations
 
@@ -6,268 +6,224 @@ import html
 
 import streamlit as st
 
+# Short labels for the sidebar dropdown (grade-school simple).
+GUIDE_TOPICS: list[tuple[str, str, str]] = [
+    (
+        "first_time",
+        "1. First time here",
+        "How to sign in and find your way around.",
+    ),
+    (
+        "check_claim",
+        "2. Check a claim",
+        "Fill in the RO, run the audit, save it.",
+    ),
+    (
+        "record_result",
+        "3. Record paid or rejected",
+        "Tell RO Guard what Stellantis did.",
+    ),
+    (
+        "reports",
+        "4. Get a report",
+        "Look up history and download a PDF.",
+    ),
+    (
+        "stuck",
+        "5. Something wrong?",
+        "Fix common problems fast.",
+    ),
+]
+
+_TOPIC_BY_ID = {topic_id: (label, summary, topic_id) for topic_id, label, summary in GUIDE_TOPICS}
+
 
 def user_guide_css(theme: str = "Dark") -> str:
     is_light = str(theme).lower() == "light"
-    surface = "var(--rg-surface-card, #f4f8fc)" if is_light else "rgba(7, 19, 34, .88)"
-    surface_alt = "var(--rg-surface-hover, #e8f0f8)" if is_light else "rgba(15, 35, 60, .75)"
-    border = "var(--rg-border, #b6c7da)" if is_light else "rgba(62, 150, 255, .28)"
-    text = "#0f172a" if is_light else "#e8f0f8"
-    muted = "#64748b" if is_light else "#94a3b8"
-    accent = "#1d4ed8" if is_light else "#60a5fa"
-    accent_soft = "rgba(29, 78, 216, .12)" if is_light else "rgba(96, 165, 250, .14)"
-    success = "#15803d" if is_light else "#4ade80"
-    warn = "#b45309" if is_light else "#fbbf24"
-    danger = "#b91c1c" if is_light else "#f87171"
+    # Warm amber "instruction booklet" — not the app's blue toolbar look.
+    paper = "#fffbeb" if is_light else "#1a1408"
+    paper_edge = "#f59e0b" if is_light else "#d97706"
+    ink = "#422006" if is_light else "#fef3c7"
+    ink_soft = "#78350f" if is_light else "#fcd34d"
+    step_bg = "#ffffff" if is_light else "#241a0a"
+    step_border = "#fde68a" if is_light else "#92400e"
+    where_bg = "#ecfdf5" if is_light else "#052e16"
+    where_border = "#10b981" if is_light else "#34d399"
+    where_text = "#065f46" if is_light else "#a7f3d0"
 
     return f"""
-    .stApp:has(.user-guide-marker) .ug-hero {{
-        border: 1px solid {border};
-        background: linear-gradient(135deg, {surface} 0%, {surface_alt} 100%);
-        border-radius: 16px;
-        padding: 1.35rem 1.5rem 1.25rem;
-        margin-bottom: 1rem;
+    /* Hide real app toolbar while reading help (it looked the same as guide tabs). */
+    .stApp:has(.user-guide-mode) .rg-section-nav-marker,
+    .stApp:has(.user-guide-mode) .rg-section-nav-marker + div[data-testid="stRadio"] {{
+        display: none !important;
     }}
-    .stApp:has(.user-guide-marker) .ug-hero h3 {{
-        margin: 0 0 .35rem;
-        color: {text};
-        font-size: 1.35rem;
+
+    .stApp:has(.user-guide-mode) .ug-shell {{
+        border: 3px solid {paper_edge};
+        background: {paper};
+        border-radius: 20px;
+        padding: 0;
+        margin: 0 0 1rem 0;
+        overflow: hidden;
+        box-shadow: 0 16px 40px rgba(245, 158, 11, 0.18);
     }}
-    .stApp:has(.user-guide-marker) .ug-hero p {{
+    .stApp:has(.user-guide-mode) .ug-banner {{
+        background: linear-gradient(90deg, {paper_edge} 0%, #fbbf24 100%);
+        color: #1c1917;
+        padding: 1rem 1.25rem;
+        text-align: center;
+    }}
+    .stApp:has(.user-guide-mode) .ug-banner-title {{
+        font-size: 1.65rem;
+        font-weight: 900;
+        letter-spacing: 0.04em;
         margin: 0;
-        color: {muted};
-        line-height: 1.55;
+        text-transform: uppercase;
     }}
-    .stApp:has(.user-guide-marker) .ug-step {{
+    .stApp:has(.user-guide-mode) .ug-banner-sub {{
+        margin: .35rem 0 0;
+        font-size: 1rem;
+        font-weight: 650;
+        color: #292524;
+    }}
+    .stApp:has(.user-guide-mode) .ug-body {{
+        padding: 1.1rem 1.25rem 1.35rem;
+    }}
+    .stApp:has(.user-guide-mode) .ug-topic-title {{
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: {ink};
+        margin: 0 0 .25rem;
+    }}
+    .stApp:has(.user-guide-mode) .ug-topic-lede {{
+        color: {ink_soft};
+        font-size: 1.02rem;
+        margin: 0 0 1rem;
+        line-height: 1.5;
+    }}
+    .stApp:has(.user-guide-mode) .ug-step {{
         display: grid;
-        grid-template-columns: 2.4rem 1fr;
-        gap: .85rem 1rem;
-        border: 1px solid {border};
-        background: {surface};
+        grid-template-columns: 3rem 1fr;
+        gap: .75rem 1rem;
+        background: {step_bg};
+        border: 2px solid {step_border};
         border-radius: 14px;
         padding: 1rem 1.1rem;
-        margin: .65rem 0;
+        margin: .75rem 0;
     }}
-    .stApp:has(.user-guide-marker) .ug-step-num {{
-        width: 2.4rem;
-        height: 2.4rem;
+    .stApp:has(.user-guide-mode) .ug-step-num {{
+        width: 3rem;
+        height: 3rem;
         border-radius: 999px;
-        background: {accent_soft};
-        color: {accent};
-        font-weight: 700;
+        background: {paper_edge};
+        color: #1c1917;
+        font-weight: 900;
+        font-size: 1.35rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1rem;
     }}
-    .stApp:has(.user-guide-marker) .ug-step-title {{
-        color: {text};
-        font-weight: 650;
-        margin: 0 0 .25rem;
-        font-size: 1.02rem;
+    .stApp:has(.user-guide-mode) .ug-step-title {{
+        margin: 0 0 .35rem;
+        font-size: 1.12rem;
+        font-weight: 800;
+        color: {ink};
+        line-height: 1.3;
     }}
-    .stApp:has(.user-guide-marker) .ug-step-body {{
-        color: {muted};
+    .stApp:has(.user-guide-mode) .ug-step-body {{
         margin: 0;
+        font-size: 1.02rem;
         line-height: 1.55;
-        font-size: .94rem;
+        color: {ink_soft};
     }}
-    .stApp:has(.user-guide-marker) .ug-visual {{
+    .stApp:has(.user-guide-mode) .ug-where {{
         grid-column: 1 / -1;
-        border: 1px dashed {border};
-        background: {surface_alt};
+        border: 2px dashed {where_border};
+        background: {where_bg};
         border-radius: 12px;
-        padding: .85rem 1rem;
+        padding: .75rem .9rem;
         margin-top: .15rem;
     }}
-    .stApp:has(.user-guide-marker) .ug-nav-mock {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: .35rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-nav-pill {{
-        border: 1px solid {border};
-        border-radius: 999px;
-        padding: .28rem .65rem;
-        font-size: .78rem;
-        color: {muted};
-        background: {surface};
-    }}
-    .stApp:has(.user-guide-marker) .ug-nav-pill.active {{
-        background: {accent_soft};
-        color: {accent};
-        border-color: {accent};
-        font-weight: 650;
-    }}
-    .stApp:has(.user-guide-marker) .ug-panel {{
-        border: 1px solid {border};
-        border-radius: 10px;
-        background: {surface};
-        padding: .65rem .75rem;
-        margin-top: .45rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-panel-label {{
+    .stApp:has(.user-guide-mode) .ug-where-label {{
         font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        letter-spacing: .04em;
-        color: {muted};
-        margin-bottom: .25rem;
+        color: {where_text};
+        margin-bottom: .35rem;
     }}
-    .stApp:has(.user-guide-marker) .ug-panel-value {{
-        color: {text};
-        font-size: .88rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-btn {{
-        display: inline-block;
-        border-radius: 8px;
-        padding: .35rem .75rem;
-        font-size: .82rem;
-        font-weight: 600;
-        margin-top: .35rem;
-        margin-right: .35rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-btn-primary {{
-        background: {accent};
-        color: #fff;
-    }}
-    .stApp:has(.user-guide-marker) .ug-btn-secondary {{
-        border: 1px solid {border};
-        color: {text};
-        background: transparent;
-    }}
-    .stApp:has(.user-guide-marker) .ug-highlight {{
-        outline: 2px solid {accent};
-        outline-offset: 2px;
-        border-radius: 8px;
-    }}
-    .stApp:has(.user-guide-marker) .ug-flow {{
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: .35rem .5rem;
-        margin-top: .35rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-flow-box {{
-        border: 1px solid {border};
-        border-radius: 8px;
-        padding: .35rem .55rem;
-        font-size: .78rem;
-        color: {text};
-        background: {surface};
-    }}
-    .stApp:has(.user-guide-marker) .ug-flow-arrow {{
-        color: {accent};
+    .stApp:has(.user-guide-mode) .ug-where-text {{
+        font-size: 1rem;
         font-weight: 700;
+        color: {where_text};
+        line-height: 1.45;
     }}
-    .stApp:has(.user-guide-marker) .ug-tip {{
-        border-left: 3px solid {accent};
-        padding: .55rem .75rem;
-        background: {accent_soft};
-        border-radius: 0 8px 8px 0;
-        color: {text};
-        font-size: .88rem;
-        margin: .5rem 0;
+    .stApp:has(.user-guide-mode) .ug-note {{
+        border-radius: 12px;
+        padding: .75rem 1rem;
+        margin-top: .75rem;
+        font-size: .98rem;
+        line-height: 1.5;
+        color: {ink};
+        background: {"rgba(254, 243, 199, 0.65)" if is_light else "rgba(146, 64, 14, 0.35)"};
+        border: 1px solid {step_border};
     }}
-    .stApp:has(.user-guide-marker) .ug-warn {{
-        border-left: 3px solid {warn};
-        padding: .55rem .75rem;
-        background: rgba(251, 191, 36, .12);
-        border-radius: 0 8px 8px 0;
-        color: {text};
-        font-size: .88rem;
-        margin: .5rem 0;
-    }}
-    .stApp:has(.user-guide-marker) .ug-status {{
-        display: inline-block;
-        border-radius: 999px;
-        padding: .15rem .55rem;
-        font-size: .74rem;
-        font-weight: 650;
-        margin-right: .35rem;
-    }}
-    .stApp:has(.user-guide-marker) .ug-status-ready {{
-        background: rgba(74, 222, 128, .15);
-        color: {success};
-    }}
-    .stApp:has(.user-guide-marker) .ug-status-warn {{
-        background: rgba(251, 191, 36, .15);
-        color: {warn};
-    }}
-    .stApp:has(.user-guide-marker) .ug-status-stop {{
-        background: rgba(248, 113, 113, .15);
-        color: {danger};
-    }}
-    .stApp:has(.user-guide-marker) .ug-grid-2 {{
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: .55rem;
-    }}
-    @media (max-width: 720px) {{
-        .stApp:has(.user-guide-marker) .ug-grid-2 {{
-            grid-template-columns: 1fr;
-        }}
+    .stApp:has(.user-guide-mode) div[data-testid="stSelectbox"] label {{
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        color: {ink} !important;
     }}
     """
 
 
 def sidebar_help_button_css(theme: str = "Dark") -> str:
     is_light = str(theme).lower() == "light"
-    border = "var(--rg-border, #b6c7da)" if is_light else "rgba(96, 165, 250, .32)"
-    text = "#0f172a" if is_light else "#e8f0f8"
-    accent = "#1d4ed8" if is_light else "#60a5fa"
-    accent_soft = "rgba(29, 78, 216, .14)" if is_light else "rgba(96, 165, 250, .16)"
-    active_bg = "rgba(29, 78, 216, .22)" if is_light else "rgba(37, 99, 235, .28)"
+    border = "rgba(245, 158, 11, 0.55)" if not is_light else "rgba(217, 119, 6, 0.45)"
+    text = "#fef3c7" if not is_light else "#78350f"
+    active_bg = "rgba(245, 158, 11, 0.28)" if not is_light else "rgba(251, 191, 36, 0.35)"
 
     return f"""
     section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button {{
-        border: 1px solid {border} !important;
+        border: 2px solid {border} !important;
         border-radius: 10px !important;
-        font-weight: 650 !important;
-        letter-spacing: 0.01em !important;
-        min-height: 2.35rem !important;
+        font-weight: 750 !important;
+        min-height: 2.5rem !important;
     }}
     section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="secondary"] {{
-        background: {accent_soft} !important;
+        background: rgba(245, 158, 11, 0.12) !important;
         color: {text} !important;
-    }}
-    section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="secondary"]:hover {{
-        border-color: {accent} !important;
-        color: {accent} !important;
     }}
     section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="primary"] {{
         background: {active_bg} !important;
-        border-color: {accent} !important;
-        color: {accent} !important;
+        border-color: #fbbf24 !important;
+        color: #fef3c7 !important;
+    }}
+    section[data-testid="stSidebar"] .ug-sidebar-topic-label {{
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #fcd34d;
+        margin: 0.35rem 0 0.15rem;
     }}
     """
 
 
-def _nav_mock(active: str) -> str:
-    tabs = [
-        "Review",
-        "Pending Claims",
-        "Reporting",
-        "Claim Learning",
-        "Admin",
-    ]
-    pills = []
-    for tab in tabs:
-        cls = "ug-nav-pill active" if tab == active else "ug-nav-pill"
-        pills.append(f'<span class="{cls}">{html.escape(tab)}</span>')
-    return f'<div class="ug-nav-mock">{"".join(pills)}</div>'
+def clear_user_guide_view() -> None:
+    st.session_state["show_user_guide"] = False
 
 
-def _flow(*items: str) -> str:
-    parts = []
-    for idx, item in enumerate(items):
-        if idx:
-            parts.append('<span class="ug-flow-arrow">→</span>')
-        parts.append(f'<span class="ug-flow-box">{html.escape(item)}</span>')
-    return f'<div class="ug-flow">{"".join(parts)}</div>'
+def _where(text: str) -> str:
+    return (
+        '<div class="ug-where">'
+        '<div class="ug-where-label">Where to click in the real app</div>'
+        f'<div class="ug-where-text">{text}</div>'
+        "</div>"
+    )
 
 
-def _step(num: int, title: str, body: str, visual: str = "") -> str:
-    visual_block = f'<div class="ug-visual">{visual}</div>' if visual else ""
+def _step(num: int, title: str, body: str, where: str = "") -> str:
+    where_block = _where(where) if where else ""
     return f"""
 <div class="ug-step">
   <div class="ug-step-num">{num}</div>
@@ -275,349 +231,141 @@ def _step(num: int, title: str, body: str, visual: str = "") -> str:
     <p class="ug-step-title">{html.escape(title)}</p>
     <p class="ug-step-body">{body}</p>
   </div>
-  {visual_block}
+  {where_block}
 </div>
 """
 
 
-def _topic_getting_started() -> str:
+def _topic_first_time() -> str:
     return (
         _step(
             1,
-            "Use your dealership email",
-            "Sign in with the email your administrator added under <strong>Admin → Personnel</strong>. "
-            "If login fails, ask a Manager to confirm your email matches Personnel exactly.",
-            visual=(
-                '<div class="ug-panel"><div class="ug-panel-label">Sign in</div>'
-                '<div class="ug-panel-value">Email · Password · <span class="ug-btn ug-btn-primary">Sign In</span></div></div>'
-            ),
+            "Sign in",
+            "Type the email and password your manager gave you. Tap <b>Sign In</b>.",
+            where="Login screen → Email box → Password box → blue Sign In button",
         )
         + _step(
             2,
-            "Reset your password if needed",
-            "On the login screen, open <strong>Forgot your password?</strong>, enter your email, "
-            "and use the link once — do not refresh until your new password is saved.",
+            "Find Help",
+            "Help lives on the <b>left side</b>, under the RO GUARD logo. "
+            "You are reading Help right now.",
+            where="Left sidebar → orange Help & User Guide button (under Patent Pending)",
         )
         + _step(
             3,
-            "Open Help from the sidebar",
-            "Under the RO GUARD logo, click <strong>Help & User Guide</strong> for step-by-step instructions "
-            "with visual cues. Select any main tab above to return to your work.",
-            visual=(
-                '<div class="ug-panel"><div class="ug-panel-label">Sidebar</div>'
-                '<div class="ug-panel-value">RO GUARD · Patent Pending</div>'
-                '<span class="ug-btn ug-btn-primary ug-highlight">❓ Help & User Guide</span>'
-                '<div class="ug-panel-value" style="margin-top:.45rem">Account · Sign out</div></div>'
-            ),
+            "Go to your work",
+            "When you are done reading, tap a button below to jump back — "
+            "or pick a topic from the drop-down list.",
         )
-        + _step(
-            4,
-            "Pick a section from the top bar",
-            "Use the horizontal tabs to move between Review, Reporting, Admin, and other tools.",
-            visual=_nav_mock("Review"),
-        )
-        + _step(
-            5,
-            "Adjust display in the sidebar",
-            "Use <strong>Appearance</strong> (Dark/Light) and font size below the divider if text is hard to read.",
-        )
-        + '<div class="ug-tip"><strong>Tip:</strong> Use sidebar <strong>Refresh data</strong> to reload Supabase data without signing out.</div>'
+        + '<div class="ug-note"><b>Remember:</b> This yellow page is only for reading. '
+        "It is not the same as the blue buttons at the top of the app.</div>"
     )
 
 
-def _topic_review() -> str:
+def _topic_check_claim() -> str:
     return (
         _step(
             1,
-            "Open the Review tab",
-            "This is where you audit a warranty RO before submission to Stellantis.",
-            visual=_nav_mock("Review"),
+            "Open Review",
+            "Review is where you check a repair order <b>before</b> you send the claim to Stellantis.",
+            where="Top bar → Review",
         )
         + _step(
             2,
-            "Enter RO details or scan a PDF",
-            "Fill in RO number, VIN, advisor, and job lines — or upload a Dealer Connect RO PDF "
-            "to auto-fill fields where supported.",
-            visual=(
-                '<div class="ug-grid-2">'
-                '<div class="ug-panel"><div class="ug-panel-label">RO header</div>'
-                '<div class="ug-panel-value">RO # · VIN · Invoice date · Advisor</div></div>'
-                '<div class="ug-panel"><div class="ug-panel-label">Jobs</div>'
-                '<div class="ug-panel-value">Concern · Cause · Correction · Op code · Times</div></div>'
-                '</div>'
-            ),
+            "Fill in the RO",
+            "Type the RO number, VIN, and job story (concern, cause, correction). "
+            "You can also upload a PDF to fill some boxes for you.",
         )
         + _step(
             3,
-            "Run the audit",
-            "Click <strong>Run Audit + Save Review</strong>. RO Guard checks narratives, time punches, "
-            "rentals, recalls, and other compliance rules.",
-            visual=(
-                '<span class="ug-btn ug-btn-primary ug-highlight">Run Audit + Save Review</span>'
-                + '<div style="margin-top:.55rem">'
-                + '<span class="ug-status ug-status-ready">READY TO SUBMIT</span>'
-                + '<span class="ug-status ug-status-warn">NEEDS REVIEW</span>'
-                + '<span class="ug-status ug-status-stop">DO NOT SUBMIT</span>'
-                + '</div>'
-            ),
-        )
-        + _step(
-            4,
-            "Fix hard stops before submitting",
-            "Red <strong>DO NOT SUBMIT</strong> items must be corrected in Dealer Connect before you submit the claim. "
-            "Yellow warnings should be reviewed but may not block submission.",
-        )
-        + _step(
-            5,
-            "Record OEM outcome (optional on Review)",
-            "After Stellantis responds, you can mark First-Pass Paid, Rejected, or Paid After Rejection "
-            "on the same Review screen — or update later under Reporting → Claim Outcomes.",
-        )
-        + _flow(
-            "Enter RO",
-            "Run Audit",
-            "Save Review",
-            "Submit in Dealer Connect",
-            "Record OEM outcome",
+            "Run the audit and save",
+            "Tap the big button <b>Run Audit + Save Review</b>. "
+            "Fix anything red that says DO NOT SUBMIT. Then submit in Dealer Connect.",
+            where="Bottom of Review page → Run Audit + Save Review",
         )
     )
 
 
-def _topic_pending() -> str:
+def _topic_record_result() -> str:
     return (
         _step(
             1,
-            "Find open claims",
-            "Open <strong>Pending Claims</strong> to see saved reviews that do not yet have an OEM paid/rejected outcome.",
-            visual=_nav_mock("Pending Claims"),
+            "Open Reporting",
+            "After Stellantis pays or rejects the claim, open Reporting.",
+            where="Top bar → Reporting",
         )
         + _step(
             2,
-            "Use the queue strip on Review",
-            "At the top of Review, the <strong>Open claims queue</strong> shows how many claims still need an outcome. "
-            "Click <strong>Open next</strong> to load the next RO in the form.",
-            visual=(
-                '<div class="ug-panel">'
-                '<div class="ug-panel-label">Open claims queue</div>'
-                '<div class="ug-panel-value"><strong>3</strong> open claims · '
-                '<span class="ug-status ug-status-stop">1 DO NOT SUBMIT</span></div>'
-                '<span class="ug-btn ug-btn-primary">Open next</span>'
-                '</div>'
-            ),
+            "Open Claim Outcomes",
+            "Pick the RO from the list. Choose one answer: Paid, Rejected, or Paid After Rejection.",
+            where="Reporting → Claim Outcomes → pick RO → Save outcome",
         )
         + _step(
             3,
-            "Edit a saved review",
-            "From Pending Claims, select a row and open it in Review to update narratives, re-run the audit, "
-            "or record the OEM outcome.",
+            "If they paid less money",
+            "Check the box that says OEM paid less. Type how much they paid. "
+            "Write a short note about why (required).",
+        )
+        + '<div class="ug-note"><b>Paid on the first try?</b> Choose First-Pass Paid. '
+        "<b>Rejected and never paid?</b> Choose Rejected.</div>"
+    )
+
+
+def _topic_reports() -> str:
+    return (
+        _step(
+            1,
+            "Pick dates",
+            "Open Reporting. Choose the dates you want to see.",
+            where="Top bar → Reporting → date picker at the top",
+        )
+        + _step(
+            2,
+            "Download a PDF",
+            "Scroll to a table. Tap <b>Download RO GUARD PDF</b>. "
+            "That makes a branded report you can email or print.",
+            where="Any report table → Download RO GUARD PDF button",
         )
     )
 
 
-def _topic_outcomes() -> str:
+def _topic_stuck() -> str:
     return (
         _step(
             1,
-            "Go to Reporting → Claim Outcomes",
-            "Warranty staff use this view to update OEM results after claims are submitted.",
-            visual=_nav_mock("Reporting"),
+            "Can't sign in?",
+            "Ask your manager to check that your email is listed under Admin → Personnel. "
+            "Use Forgot password on the login screen if you need a new password.",
         )
         + _step(
             2,
-            "Filter and select a review",
-            "Use filters like <strong>Pending only</strong>, <strong>Rejected (Final)</strong>, or "
-            "<strong>Paid After Rejection</strong>, then pick the RO from the dropdown.",
+            "Save won't work?",
+            "Read the red error message on screen. "
+            "Short-pay claims need a written reason (at least a short sentence).",
         )
         + _step(
             3,
-            "Choose one OEM outcome",
-            "Select exactly one: Pending, First-Pass Paid, Rejected / Returned, or Paid After Rejection.",
-            visual=(
-                '<div class="ug-panel"><div class="ug-panel-label">OEM outcome</div>'
-                '<div class="ug-panel-value">○ Pending · ○ First-Pass Paid · ○ Rejected · ○ Paid After Rejection</div>'
-                '<span class="ug-btn ug-btn-primary">Save outcome</span></div>'
-            ),
-        )
-        + _step(
-            4,
-            "Add a rejection reason when required",
-            "For <strong>Rejected / Returned</strong>, pick a reason from the library (managed in Admin). "
-            "For <strong>Paid After Rejection</strong>, enter why the claim was initially declined.",
-        )
-        + '<div class="ug-tip"><strong>Metrics tip:</strong> '
-        "<strong>Paid After Rejection</strong> counts under both "
-        "<strong>Paid After Rejection</strong> and <strong>OEM Rejections (Total)</strong> — "
-        "not under <strong>Rejected (Final)</strong>.</div>"
-    )
-
-
-def _topic_short_pay() -> str:
-    return (
-        _step(
-            1,
-            "When OEM pays less than audited value",
-            "On Review or Claim Outcomes, check <strong>OEM paid less than full claim</strong> "
-            "when overlapping labor or adjustments reduced payment.",
-        )
-        + _step(
-            2,
-            "Enter OEM paid amount",
-            "Type what Stellantis actually paid. RO Guard calculates the short-pay difference automatically.",
-            visual=(
-                '<div class="ug-panel">'
-                '<div class="ug-panel-label">Partial payment</div>'
-                '<div class="ug-panel-value">☑ OEM paid less than full claim</div>'
-                '<div class="ug-panel-value">OEM paid amount: <strong>$1,800.00</strong></div>'
-                '<div class="ug-panel-value">Short pay: <strong>$200.00</strong></div>'
-                '</div>'
-            ),
-        )
-        + _step(
-            3,
-            "Explain why (required)",
-            "The <strong>Why was it short paid?</strong> field requires at least 10 characters. "
-            "Saving is blocked until you provide a clear explanation.",
-        )
-        + _step(
-            4,
-            "Review in Reporting → Short Pay",
-            "All partial-pay claims appear in the Short Pay report with branded PDF export for meetings and records.",
-            visual=_nav_mock("Reporting"),
+            "Still stuck?",
+            "Tell your manager the RO number and copy the error message. "
+            "They can reach your RO Guard admin.",
         )
     )
 
 
-def _topic_reporting() -> str:
-    return (
-        _step(
-            1,
-            "Set your date range",
-            "At the top of Reporting, choose the period (defaults to month-to-date). All views respect this filter.",
-        )
-        + _step(
-            2,
-            "Pick a reporting view",
-            "Use the view selector for Overview, Claim Outcomes, Rejections, Short Pay, Team Performance, or Review Log.",
-            visual=(
-                '<div class="ug-nav-mock">'
-                '<span class="ug-nav-pill">Overview</span>'
-                '<span class="ug-nav-pill">Claim Outcomes</span>'
-                '<span class="ug-nav-pill active">Short Pay</span>'
-                '<span class="ug-nav-pill">Review Log</span>'
-                '</div>'
-            ),
-        )
-        + _step(
-            3,
-            "Download branded PDF reports",
-            "Use <strong>Download RO GUARD PDF</strong> on any report table — exports include the ROGUARD watermark "
-            "and navy header. CSV is still available if needed.",
-            visual=(
-                '<span class="ug-btn ug-btn-primary">Download RO GUARD PDF</span>'
-                '<span class="ug-btn ug-btn-secondary">Download CSV</span>'
-            ),
-        )
-        + _step(
-            4,
-            "Refresh if data looks stale",
-            "Click <strong>Refresh Reporting</strong> after someone else saves outcomes in another session.",
-        )
-    )
-
-
-def _topic_learning() -> str:
-    return (
-        _step(
-            1,
-            "Upload paid claims (Claim Learning)",
-            "Managers and Warranty Admins can upload paid warranty claim PDFs. RO Guard learns narratives "
-            "to coach advisors on Review.",
-            visual=_nav_mock("Claim Learning"),
-        )
-        + _step(
-            2,
-            "Upload WAM / policy PDFs",
-            "Under the <strong>WAM</strong> tab, upload warranty manual sections for audit reference during Review.",
-        )
-        + _step(
-            3,
-            "Use coaching on Review",
-            "After jobs are filled in, expand paid-claim helpers and narrative gap coaching to compare "
-            "your RO to similar paid claims.",
-        )
-    )
-
-
-def _topic_admin() -> str:
-    return (
-        _step(
-            1,
-            "Manage personnel (Admin)",
-            "Add advisors, technicians, warranty admins, and managers. Each person’s <strong>Email</strong> "
-            "must match their Supabase login.",
-            visual=_nav_mock("Admin"),
-        )
-        + _step(
-            2,
-            "Configure dealer settings",
-            "Managers set time-punch thresholds, rental warnings, rejection reason library, and other audit rules.",
-        )
-        + _step(
-            3,
-            "Scheduled Reports (optional)",
-            "Warranty Admins can configure email delivery of report PDFs on a daily/weekly schedule.",
-        )
-        + '<div class="ug-warn"><strong>Roles:</strong> Advisors can run reviews; Managers and Warranty Admins '
-        "can change settings, personnel, and libraries.</div>"
-    )
-
-
-def _topic_troubleshooting() -> str:
-    return (
-        _step(
-            1,
-            "Cannot sign in",
-            "Confirm your email is on the Personnel list in Admin. Use Forgot password once — "
-            "request a new link if the reset page expired.",
-        )
-        + _step(
-            2,
-            "Outcome will not save",
-            "Run the latest SQL from <code>docs/SUPABASE_SCHEMA.sql</code> in Supabase "
-            "(columns like <code>oem_paid_amount</code>, <code>short_pay_reason</code>). "
-            "Ask your platform admin if you see column errors.",
-        )
-        + _step(
-            3,
-            "Reporting is empty or outdated",
-            "Click <strong>Refresh Reporting</strong>. Confirm you are in the correct date range. "
-            "Reviews must be saved with <strong>Run Audit + Save Review</strong> first.",
-        )
-        + _step(
-            4,
-            "Short-pay reason required error",
-            "When partial pay is checked, enter at least 10 characters explaining why OEM paid less. "
-            "Uncheck partial pay if OEM paid the full audited amount.",
-        )
-        + _step(
-            5,
-            "PDF download shows CSV only in table toolbar",
-            "Use the RO GUARD PDF button below the table — the Streamlit dataframe toolbar is hidden "
-            "on purpose so all exports use branded PDFs.",
-        )
-        + '<div class="ug-tip"><strong>Still stuck?</strong> Contact your dealership RO Guard administrator '
-        "with the RO number, tab you were on, and the exact error message.</div>"
-    )
-
-
-def clear_user_guide_view() -> None:
-    st.session_state["show_user_guide"] = False
+_TOPIC_RENDERERS = {
+    "first_time": _topic_first_time,
+    "check_claim": _topic_check_claim,
+    "record_result": _topic_record_result,
+    "reports": _topic_reports,
+    "stuck": _topic_stuck,
+}
 
 
 def render_sidebar_help_nav(*, theme: str = "Dark") -> None:
-    """Help entry point in the sidebar under RO GUARD branding."""
     if "show_user_guide" not in st.session_state:
         st.session_state.show_user_guide = False
+    if "user_guide_topic" not in st.session_state:
+        st.session_state.user_guide_topic = GUIDE_TOPICS[0][0]
 
     st.markdown(
         f"<style>{sidebar_help_button_css(theme)}</style>",
@@ -629,7 +377,7 @@ def render_sidebar_help_nav(*, theme: str = "Dark") -> None:
     )
     active = bool(st.session_state.get("show_user_guide"))
     if st.sidebar.button(
-        "❓  Help & User Guide",
+        "📖  Help (simple guide)",
         use_container_width=True,
         key="sidebar_help_btn",
         type="primary" if active else "secondary",
@@ -637,62 +385,71 @@ def render_sidebar_help_nav(*, theme: str = "Dark") -> None:
         st.session_state.show_user_guide = True
         st.rerun()
 
-
-GUIDE_TOPICS: list[tuple[str, str, callable]] = [
-    ("Getting Started", "Sign in, navigation, and display settings", _topic_getting_started),
-    ("Run a Review", "Audit an RO before submission", _topic_review),
-    ("Pending Claims", "Open queue and editing saved reviews", _topic_pending),
-    ("OEM Outcomes", "Record paid, rejected, and paid-after-rejection", _topic_outcomes),
-    ("Partial Pay", "Short-pay amounts and required explanations", _topic_short_pay),
-    ("Reporting & PDFs", "Views, date filters, and branded exports", _topic_reporting),
-    ("Claim Learning & WAM", "Upload claims and manuals for coaching", _topic_learning),
-    ("Admin & Roles", "Personnel, settings, and scheduled reports", _topic_admin),
-    ("Troubleshooting", "Common errors and fixes", _topic_troubleshooting),
-]
+    if st.session_state.get("show_user_guide"):
+        st.sidebar.markdown(
+            '<p class="ug-sidebar-topic-label">Help topic</p>',
+            unsafe_allow_html=True,
+        )
+        topic_labels = {topic_id: label for topic_id, label, _ in GUIDE_TOPICS}
+        st.sidebar.selectbox(
+            "Help topic",
+            options=[t[0] for t in GUIDE_TOPICS],
+            format_func=lambda tid: topic_labels.get(tid, tid),
+            key="user_guide_topic",
+            label_visibility="collapsed",
+        )
 
 
 def render_user_guide(*, theme: str = "Dark") -> None:
-    st.markdown('<div class="user-guide-marker" aria-hidden="true"></div>', unsafe_allow_html=True)
     st.markdown(
-        f"<style>{user_guide_css(theme)}</style>",
+        '<div class="user-guide-mode" aria-hidden="true"></div>'
+        '<div class="user-guide-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
+    st.markdown(f"<style>{user_guide_css(theme)}</style>", unsafe_allow_html=True)
+
+    topic_id = str(st.session_state.get("user_guide_topic") or GUIDE_TOPICS[0][0])
+    topic_row = next((t for t in GUIDE_TOPICS if t[0] == topic_id), GUIDE_TOPICS[0])
+    _, topic_label, topic_summary = topic_row
+
+    render_fn = _TOPIC_RENDERERS.get(topic_id, _topic_first_time)
+    steps_html = render_fn()
 
     st.markdown(
-        """
-<div class="ug-hero">
-  <h3>RO Guard User Guide</h3>
-  <p>Step-by-step help for warranty reviews, OEM outcomes, reporting, and common issues.
-  Pick a topic below — each section includes visual cues for where to click in the app.</p>
+        f"""
+<div class="ug-shell">
+  <div class="ug-banner">
+    <p class="ug-banner-title">📖 Help Page</p>
+    <p class="ug-banner-sub">Read here. Work somewhere else. This page is not the app toolbar.</p>
+  </div>
+  <div class="ug-body">
+    <p class="ug-topic-title">{html.escape(topic_label)}</p>
+    <p class="ug-topic-lede">{html.escape(topic_summary)}</p>
+    {steps_html}
+  </div>
 </div>
         """,
         unsafe_allow_html=True,
     )
 
-    labels = [label for label, _, _ in GUIDE_TOPICS]
-    summaries = {label: summary for label, summary, _ in GUIDE_TOPICS}
-    topic = st.radio(
-        "Guide topic",
-        labels,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="user_guide_topic",
-    )
-    st.caption(summaries.get(topic, ""))
+    st.markdown("#### Back to work")
+    st.caption("Tap a button to close Help and open that part of the app.")
+    back_cols = st.columns(4)
+    jumps = [
+        ("Review", "check_claim"),
+        ("Reporting", "reports"),
+        ("Pending Claims", "check_claim"),
+        ("Admin", "first_time"),
+    ]
+    for col, (section, topic_hint) in zip(back_cols, jumps):
+        with col:
+            if st.button(section, use_container_width=True, key=f"ug_back_{section}"):
+                st.session_state.show_user_guide = False
+                st.session_state.main_section_nav = section
+                if topic_hint:
+                    st.session_state.user_guide_topic = topic_hint
+                st.rerun()
 
-    render_fn = next(fn for label, _, fn in GUIDE_TOPICS if label == topic)
-    st.markdown(render_fn(), unsafe_allow_html=True)
-
-    with st.expander("Quick reference — main tabs"):
-        st.markdown(
-            """
-| Tab | Who uses it | What it does |
-|-----|-------------|--------------|
-| **Review** | Advisors, warranty staff | Audit ROs before submit; save reviews |
-| **Pending Claims** | Warranty staff | Open claims missing OEM outcome |
-| **Reporting** | Managers, warranty admins | History, outcomes, Short Pay, PDF exports |
-| **Claim Learning** | Managers, warranty admins | Upload paid claims for narrative coaching |
-| **Admin** | Managers, warranty admins | Personnel, audit rules, rejection library |
-| **Coaching / ROI / POPPS** | Managers | Performance and business metrics |
-            """
-        )
+    if st.button("Close Help", type="primary", key="ug_close_help"):
+        clear_user_guide_view()
+        st.rerun()
