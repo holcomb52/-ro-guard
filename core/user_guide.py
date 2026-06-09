@@ -213,6 +213,30 @@ def clear_user_guide_view() -> None:
     st.session_state["show_user_guide"] = False
 
 
+def apply_pending_guide_topic() -> None:
+    pending_topic = st.session_state.pop("_rg_user_guide_topic_pending", None)
+    if pending_topic and pending_topic in _TOPIC_BY_ID:
+        st.session_state["user_guide_topic"] = pending_topic
+
+
+def apply_pending_help_navigation(*, section_labels: list[str]) -> None:
+    """Apply back-button section target before the main nav radio renders."""
+    pending_section = st.session_state.pop("_rg_nav_after_help", None)
+    if pending_section and pending_section in section_labels:
+        st.session_state["main_section_nav"] = pending_section
+    apply_pending_guide_topic()
+
+
+def navigate_from_help(*, section: str | None = None, topic_id: str | None = None) -> None:
+    """Leave Help and open a workspace tab on the next run."""
+    st.session_state["show_user_guide"] = False
+    if section:
+        st.session_state["_rg_nav_after_help"] = section
+    if topic_id:
+        st.session_state["_rg_user_guide_topic_pending"] = topic_id
+    st.rerun()
+
+
 def _where(text: str) -> str:
     return (
         '<div class="ug-where">'
@@ -386,6 +410,7 @@ def render_sidebar_help_nav(*, theme: str = "Dark") -> None:
         st.rerun()
 
     if st.session_state.get("show_user_guide"):
+        apply_pending_guide_topic()
         st.sidebar.markdown(
             '<p class="ug-sidebar-topic-label">Help topic</p>',
             unsafe_allow_html=True,
@@ -444,11 +469,7 @@ def render_user_guide(*, theme: str = "Dark") -> None:
     for col, (section, topic_hint) in zip(back_cols, jumps):
         with col:
             if st.button(section, use_container_width=True, key=f"ug_back_{section}"):
-                st.session_state.show_user_guide = False
-                st.session_state.main_section_nav = section
-                if topic_hint:
-                    st.session_state.user_guide_topic = topic_hint
-                st.rerun()
+                navigate_from_help(section=section, topic_id=topic_hint or None)
 
     if st.button("Close Help", type="primary", key="ug_close_help"):
         clear_user_guide_view()
