@@ -82,6 +82,9 @@ def normalize_review_record(data: dict) -> dict:
         "vin_recall_campaigns": str(payload.get("vin_recall_campaigns", "") or "").strip(),
         "vin_recall_acknowledged": _int("vin_recall_acknowledged"),
     }
+    if "oem_paid_amount" in payload:
+        raw_oem = payload.get("oem_paid_amount")
+        record["oem_paid_amount"] = None if raw_oem is None else _num("oem_paid_amount")
     return record
 
 
@@ -190,6 +193,46 @@ def save_review(supabase, data: dict) -> bool:
     return bool(result.get("ok"))
 
 
+def is_paid_outcome(first_pass_paid, rejected, paid_after_rejection=0) -> bool:
+    fp = int(first_pass_paid or 0)
+    rej = int(rejected or 0)
+    par = int(paid_after_rejection or 0)
+    return bool((fp or par) and not rej)
+
+
+def normalize_oem_paid_amount(value, *, submitted: float) -> float | None:
+    """Return stored OEM paid amount, or None when paid in full (blank or equals submitted)."""
+    if value is None:
+        return None
+    if isinstance(value, str) and not str(value).strip():
+        return None
+    try:
+        paid = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("Enter a valid OEM paid amount.") from None
+    if paid < 0:
+        raise ValueError("OEM paid amount cannot be negative.")
+    submitted_val = float(submitted or 0)
+    if submitted_val > 0 and paid > submitted_val + 0.01:
+        raise ValueError(
+            f"OEM paid amount cannot exceed the audited claim value (${submitted_val:,.2f})."
+        )
+    if submitted_val > 0 and paid >= submitted_val - 0.01:
+        return None
+    return paid
+
+
+def compute_short_pay(submitted: float, oem_paid_amount) -> float:
+    submitted_val = float(submitted or 0)
+    if submitted_val <= 0 or oem_paid_amount is None:
+        return 0.0
+    try:
+        paid = float(oem_paid_amount)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, submitted_val - paid)
+
+
 def review_outcome_label(first_pass_paid, rejected, paid_after_rejection=0) -> str:
     fp = int(first_pass_paid or 0)
     rej = int(rejected or 0)
@@ -214,6 +257,8 @@ def update_review_outcome(
     paid_after_rejection: bool = False,
     rejection_reason: str = "",
     updated_by: str = "",
+    oem_paid_amount: float | None = None,
+    submitted_claim_value: float | None = None,
 ) -> None:
     if supabase is None:
         raise RuntimeError("Supabase is not configured.")
@@ -224,6 +269,12 @@ def update_review_outcome(
         )
     if paid_after_rejection and not str(rejection_reason or "").strip():
         raise ValueError("Enter why the claim was initially declined.")
+    stored_paid: float | None = None
+    if is_paid_outcome(first_pass_paid, rejected, paid_after_rejection):
+        submitted = float(
+            submitted_claim_value if submitted_claim_value is not None else 0
+        )
+        stored_paid = normalize_oem_paid_amount(oem_paid_amount, submitted=submitted)
     payload = {
         "first_pass_paid": 1 if first_pass_paid else 0,
         "rejected": 1 if rejected else 0,
@@ -233,6 +284,7 @@ def update_review_outcome(
             if rejected or paid_after_rejection
             else ""
         ),
+        "oem_paid_amount": stored_paid,
         "outcome_updated_at": _utc_now_iso(),
         "outcome_updated_by": str(updated_by or "").strip(),
     }
@@ -1025,9 +1077,27 @@ def normalize_reviews_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0)
 
+    if "oem_paid_amount" in out.columns:
+        out["oem_paid_amount"] = pd.to_numeric(out["oem_paid_amount"], errors="coerce")
+
     for col in ("first_pass_paid", "rejected", "paid_after_rejection", "time_bypass"):
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0).astype(int)
+
+    if "total_claim_value" in out.columns:
+        submitted = pd.to_numeric(out["total_claim_value"], errors="coerce").fillna(0)
+        paid_flag = pd.Series(False, index=out.index)
+        if "first_pass_paid" in out.columns:
+            paid_flag = paid_flag | (out["first_pass_paid"] == 1)
+        if "paid_after_rejection" in out.columns:
+            paid_flag = paid_flag | (out["paid_after_rejection"] == 1)
+        if "oem_paid_amount" in out.columns:
+            effective_paid = out["oem_paid_amount"].where(out["oem_paid_amount"].notna(), submitted)
+        else:
+            effective_paid = submitted
+        short = (submitted - effective_paid).clip(lower=0)
+        out["short_pay_amount"] = short.where(paid_flag, 0.0)
+        out["is_partial_pay"] = paid_flag & (out["short_pay_amount"] > 0.01)
 
     if "status" in out.columns:
         status = out["status"].astype(str)
@@ -1066,6 +1136,8 @@ def compute_roi_metrics(
         "rejected_count": 0,
         "rejected_final_count": 0,
         "oem_rejection_total_count": 0,
+        "partial_pay_count": 0,
+        "short_pay_total": 0.0,
         "rejected_value": 0.0,
         "pending_outcome_count": 0,
         "hard_stop_count": 0,
@@ -1095,6 +1167,12 @@ def compute_roi_metrics(
     rejected_count = int(data.get("rejected", pd.Series([0])).sum())
     paid_after_rejection_count = int(data.get("paid_after_rejection", pd.Series([0])).sum())
     oem_rejection_total_count = rejected_count + paid_after_rejection_count
+    if "short_pay_amount" in data.columns:
+        partial_pay_count = int(data.get("is_partial_pay", pd.Series([False])).sum())
+        short_pay_total = float(data.get("short_pay_amount", pd.Series([0])).sum())
+    else:
+        partial_pay_count = 0
+        short_pay_total = 0.0
     pending_outcome_count = int(
         (
             (data.get("first_pass_paid", pd.Series([0])) == 0)
@@ -1176,6 +1254,8 @@ def compute_roi_metrics(
         "rejected_count": rejected_count,
         "rejected_final_count": rejected_count,
         "oem_rejection_total_count": oem_rejection_total_count,
+        "partial_pay_count": partial_pay_count,
+        "short_pay_total": short_pay_total,
         "rejected_value": rejected_value,
         "pending_outcome_count": pending_outcome_count,
         "hard_stop_count": hard_stops,

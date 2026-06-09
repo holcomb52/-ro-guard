@@ -69,6 +69,9 @@ from core.review_store import (
     normalize_audit_rules,
     normalize_rejection_reason_library,
     normalize_reviews_dataframe,
+    normalize_oem_paid_amount,
+    compute_short_pay,
+    is_paid_outcome,
     review_outcome_label,
     save_audit_rules,
     save_bulletin as persist_bulletin,
@@ -4872,6 +4875,13 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
     st.session_state[f"first_pass_paid_{fv}"] = _truthy_flag(review.get("first_pass_paid"))
     st.session_state[f"rejected_{fv}"] = _truthy_flag(review.get("rejected"))
     st.session_state[f"paid_after_rejection_{fv}"] = _truthy_flag(review.get("paid_after_rejection"))
+    oem_paid = review.get("oem_paid_amount")
+    try:
+        st.session_state[f"loaded_oem_paid_{fv}"] = (
+            float(oem_paid) if oem_paid is not None and str(oem_paid).strip() else None
+        )
+    except (TypeError, ValueError):
+        st.session_state[f"loaded_oem_paid_{fv}"] = None
 
     rejection_reason = str(review.get("rejection_reason") or "").strip()
     if _truthy_flag(review.get("paid_after_rejection")):
@@ -5710,6 +5720,8 @@ def render_review():
     )
     render_live_submit_status_bar(live_summary)
 
+    oem_paid_amount = None
+    submitted_claim = 0.0
     with st.expander("Claim outcome (optional — save here or in Reporting)", expanded=False):
         st.caption(
             "Record the Stellantis result when you know it. Leave all unchecked if the claim "
@@ -5769,6 +5781,15 @@ def render_review():
             if not str(initial_decline_reason or "").strip():
                 st.warning("Enter why the claim was initially declined.")
 
+        submitted_claim = _form_submitted_claim_value(int(st.session_state.get("job_count", 1)))
+        oem_paid_amount = None
+        if first_pass_paid or paid_after_rejection:
+            oem_paid_amount = _render_oem_paid_amount_input(
+                submitted=submitted_claim,
+                key=f"review_oem_paid_{fv}",
+                current=st.session_state.get(f"loaded_oem_paid_{fv}"),
+            )
+
         outcome_selected = sum(
             bool(x) for x in (first_pass_paid, rejected, paid_after_rejection)
         )
@@ -5804,10 +5825,18 @@ def render_review():
                     paid_after_rejection=paid_after_rejection,
                     rejection_reason=rejection_reason,
                     initial_decline_reason=str(initial_decline_reason or ""),
+                    oem_paid_amount=oem_paid_amount,
+                    submitted_claim_value=submitted_claim,
                 )
                 if not ok_outcome:
                     st.error(parsed_or_msg)
-                elif _persist_review_outcome(fv, ro_number, vin, parsed_or_msg):
+                elif _persist_review_outcome(
+                    fv,
+                    ro_number,
+                    vin,
+                    parsed_or_msg,
+                    submitted_claim_value=submitted_claim,
+                ):
                     st.rerun()
 
     days_to_submit = (day_submitted - ro_invoiced).days
@@ -5979,6 +6008,8 @@ def render_review():
             paid_after_rejection=paid_after_rejection,
             rejection_reason=rejection_reason,
             initial_decline_reason=str(initial_decline_reason or ""),
+            oem_paid_amount=oem_paid_amount,
+            submitted_claim_value=total_value,
         )
         if not ok_outcome:
             st.error(f"Fix claim outcome before saving: {parsed_or_msg}")
@@ -6082,6 +6113,7 @@ def render_review():
                 "rejected": outcome["rejected"],
                 "paid_after_rejection": outcome["paid_after_rejection"],
                 "rejection_reason": outcome["rejection_reason"],
+                "oem_paid_amount": outcome.get("oem_paid_amount"),
                 "advisor": advisor,
                 "technician": technician,
                 "warranty_admin": warranty_admin,
@@ -7420,6 +7452,61 @@ def _rejection_detail_frame(df: pd.DataFrame) -> pd.DataFrame:
     return detail.sort_values("created_at", ascending=False)
 
 
+def _form_submitted_claim_value(job_count: int) -> float:
+    total = 0.0
+    for job_no in range(1, max(int(job_count or 0), 0) + 1):
+        total += float(st.session_state.get(f"claim_value_{job_no}", 0) or 0)
+    return total
+
+
+def _render_oem_paid_amount_input(
+    *,
+    submitted: float,
+    key: str,
+    current=None,
+) -> float | None:
+    """Optional OEM paid amount when outcome is first-pass or paid-after-rejection."""
+    submitted_val = float(submitted or 0)
+    if submitted_val <= 0:
+        st.caption("Add claim value on the RO before recording OEM paid amount.")
+        return None
+
+    has_partial = False
+    current_paid = submitted_val
+    if current is not None and not pd.isna(current):
+        try:
+            current_paid = float(current)
+            has_partial = current_paid < submitted_val - 0.01
+        except (TypeError, ValueError):
+            has_partial = False
+
+    use_less = st.checkbox(
+        "OEM paid less than full claim",
+        key=f"{key}_partial",
+        value=has_partial,
+        help="Use when overlapping labor, disallowed parts, or other adjustments reduced OEM payment.",
+    )
+    if not use_less:
+        return None
+
+    paid = st.number_input(
+        "OEM paid amount",
+        min_value=0.0,
+        max_value=submitted_val,
+        value=min(current_paid, submitted_val),
+        step=1.0,
+        format="%.2f",
+        key=f"{key}_amount",
+    )
+    short = compute_short_pay(submitted_val, paid)
+    if short > 0.01:
+        st.caption(
+            f"Short pay: **${short:,.2f}** "
+            f"(audited ${submitted_val:,.2f} − OEM paid ${float(paid):,.2f})"
+        )
+    return float(paid)
+
+
 def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, str]:
     selected_reason = str(selected_reason or "").strip()
     notes = str(notes or "").strip()
@@ -7439,6 +7526,8 @@ def _parse_review_outcome_selection(
     paid_after_rejection: bool,
     rejection_reason: str = "",
     initial_decline_reason: str = "",
+    oem_paid_amount: float | None = None,
+    submitted_claim_value: float = 0,
 ) -> tuple[bool, dict | str]:
     outcome_selected = sum(
         1 for x in (first_pass_paid, rejected, paid_after_rejection) if x
@@ -7463,11 +7552,22 @@ def _parse_review_outcome_selection(
         if not final_reason:
             return False, "Enter why the claim was initially declined."
 
+    stored_oem: float | None = None
+    if is_paid_outcome(save_first_pass_paid, save_rejected, save_paid_after_rejection):
+        try:
+            stored_oem = normalize_oem_paid_amount(
+                oem_paid_amount,
+                submitted=float(submitted_claim_value or 0),
+            )
+        except ValueError as exc:
+            return False, str(exc)
+
     return True, {
         "first_pass_paid": save_first_pass_paid,
         "rejected": save_rejected,
         "paid_after_rejection": save_paid_after_rejection,
         "rejection_reason": final_reason,
+        "oem_paid_amount": stored_oem,
     }
 
 
@@ -7487,6 +7587,8 @@ def _persist_review_outcome(
     ro_number: str,
     vin: str,
     outcome: dict,
+    *,
+    submitted_claim_value: float = 0,
 ) -> bool:
     review_id = _resolve_review_id_for_outcome(form_version, ro_number, vin)
     if not review_id:
@@ -7504,6 +7606,8 @@ def _persist_review_outcome(
             rejected=outcome["rejected"],
             paid_after_rejection=outcome["paid_after_rejection"],
             rejection_reason=outcome["rejection_reason"],
+            oem_paid_amount=outcome.get("oem_paid_amount"),
+            submitted_claim_value=float(submitted_claim_value or 0),
             updated_by=current_person_name() or auth_user_email(),
         )
         invalidate_reviews_cache()
@@ -7576,9 +7680,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     work = df.copy()
     work["first_pass_paid"] = pd.to_numeric(work.get("first_pass_paid", 0), errors="coerce").fillna(0).astype(int)
     work["rejected"] = pd.to_numeric(work.get("rejected", 0), errors="coerce").fillna(0).astype(int)
-    work["paid_after_rejection"] = pd.to_numeric(
-        work.get("paid_after_rejection", 0), errors="coerce"
-    ).fillna(0).astype(int)
+    work = normalize_reviews_dataframe(work)
     if "outcome_status" not in work.columns:
         work["outcome_status"] = [
             review_outcome_label(fp, rej, par)
@@ -7597,6 +7699,8 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     rejected_final_count = int(work["rejected"].sum())
     paid_after_count = int(work["paid_after_rejection"].sum())
     oem_rejection_total = rejected_final_count + paid_after_count
+    partial_pay_count = int(work.get("is_partial_pay", pd.Series([False])).sum())
+    short_pay_total = float(work.get("short_pay_amount", pd.Series([0])).sum())
     resolved_count = len(work) - pending_count
 
     render_metric_rows([
@@ -7628,6 +7732,18 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 "First-Pass % (resolved)",
                 f"{(first_pass_count / resolved_count * 100):.1f}%" if resolved_count else "—",
                 "First-pass paid ÷ reviews with any recorded OEM outcome.",
+            ),
+        ],
+        [
+            (
+                "Partial-pay claims",
+                f"{partial_pay_count:,}",
+                "Paid outcomes where OEM paid less than the audited claim value.",
+            ),
+            (
+                "Short-pay total ($)",
+                f"${short_pay_total:,.0f}",
+                "Sum of (audited claim − OEM paid) across partial-pay claims.",
             ),
         ],
     ])
@@ -7696,6 +7812,16 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     )
     info_cols[3].metric("Current", review_outcome_label(current_fp, current_rej, current_par))
 
+    submitted_claim = float(selected.get("total_claim_value") or 0)
+    current_oem = selected.get("oem_paid_amount")
+    if current_oem is not None and not pd.isna(current_oem):
+        short_pay = compute_short_pay(submitted_claim, current_oem)
+        if short_pay > 0.01:
+            st.info(
+                f"**Partial OEM payment:** audited **${submitted_claim:,.2f}** · "
+                f"OEM paid **${float(current_oem):,.2f}** · short pay **${short_pay:,.2f}**"
+            )
+
     if current_reason:
         category, notes = _split_rejection_reason(current_reason)
         st.info(
@@ -7760,6 +7886,14 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 height=100,
             )
 
+        oem_paid_amount = None
+        if outcome_choice in ("First-Pass Paid", "Paid After Rejection"):
+            oem_paid_amount = _render_oem_paid_amount_input(
+                submitted=submitted_claim,
+                key="outcome_followup_oem",
+                current=current_oem,
+            )
+
         submitted = st.form_submit_button("Save outcome", type="primary", use_container_width=True)
 
     if submitted:
@@ -7778,6 +7912,17 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 st.error("Enter why the claim was initially declined.")
                 return
 
+        stored_oem = None
+        if is_paid_outcome(first_pass_paid, rejected, paid_after_rejection):
+            try:
+                stored_oem = normalize_oem_paid_amount(
+                    oem_paid_amount,
+                    submitted=submitted_claim,
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+                return
+
         try:
             update_review_outcome(
                 supabase,
@@ -7786,6 +7931,8 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 rejected=rejected,
                 paid_after_rejection=paid_after_rejection,
                 rejection_reason=rejection_reason,
+                oem_paid_amount=stored_oem,
+                submitted_claim_value=submitted_claim,
                 updated_by=current_person_name() or auth_user_email(),
             )
             invalidate_reviews_cache()

@@ -62,6 +62,7 @@ ALTER TABLE reviews ADD COLUMN IF NOT EXISTS vin_recall_identified INTEGER DEFAU
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS vin_recall_count INTEGER DEFAULT 0;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS vin_recall_campaigns TEXT;
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS vin_recall_acknowledged INTEGER DEFAULT 0;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS oem_paid_amount NUMERIC;
 
 -- Service bulletins / rules (moved off local SQLite)
 CREATE TABLE IF NOT EXISTS bulletins (
