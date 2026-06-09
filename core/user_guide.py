@@ -210,6 +210,38 @@ def user_guide_css(theme: str = "Dark") -> str:
     """
 
 
+def sidebar_help_button_css(theme: str = "Dark") -> str:
+    is_light = str(theme).lower() == "light"
+    border = "var(--rg-border, #b6c7da)" if is_light else "rgba(96, 165, 250, .32)"
+    text = "#0f172a" if is_light else "#e8f0f8"
+    accent = "#1d4ed8" if is_light else "#60a5fa"
+    accent_soft = "rgba(29, 78, 216, .14)" if is_light else "rgba(96, 165, 250, .16)"
+    active_bg = "rgba(29, 78, 216, .22)" if is_light else "rgba(37, 99, 235, .28)"
+
+    return f"""
+    section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button {{
+        border: 1px solid {border} !important;
+        border-radius: 10px !important;
+        font-weight: 650 !important;
+        letter-spacing: 0.01em !important;
+        min-height: 2.35rem !important;
+    }}
+    section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="secondary"] {{
+        background: {accent_soft} !important;
+        color: {text} !important;
+    }}
+    section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="secondary"]:hover {{
+        border-color: {accent} !important;
+        color: {accent} !important;
+    }}
+    section[data-testid="stSidebar"] .rg-sidebar-help-marker + div[data-testid="stVerticalBlock"] button[kind="primary"] {{
+        background: {active_bg} !important;
+        border-color: {accent} !important;
+        color: {accent} !important;
+    }}
+    """
+
+
 def _nav_mock(active: str) -> str:
     tabs = [
         "Review",
@@ -217,7 +249,6 @@ def _nav_mock(active: str) -> str:
         "Reporting",
         "Claim Learning",
         "Admin",
-        "Help",
     ]
     pills = []
     for tab in tabs:
@@ -269,14 +300,26 @@ def _topic_getting_started() -> str:
         )
         + _step(
             3,
-            "Pick a section from the top bar",
-            "After sign-in, use the horizontal tabs to move between Review, Reporting, Admin, and other tools.",
-            visual=_nav_mock("Review"),
+            "Open Help from the sidebar",
+            "Under the RO GUARD logo, click <strong>Help & User Guide</strong> for step-by-step instructions "
+            "with visual cues. Select any main tab above to return to your work.",
+            visual=(
+                '<div class="ug-panel"><div class="ug-panel-label">Sidebar</div>'
+                '<div class="ug-panel-value">RO GUARD · Patent Pending</div>'
+                '<span class="ug-btn ug-btn-primary ug-highlight">❓ Help & User Guide</span>'
+                '<div class="ug-panel-value" style="margin-top:.45rem">Account · Sign out</div></div>'
+            ),
         )
         + _step(
             4,
+            "Pick a section from the top bar",
+            "Use the horizontal tabs to move between Review, Reporting, Admin, and other tools.",
+            visual=_nav_mock("Review"),
+        )
+        + _step(
+            5,
             "Adjust display in the sidebar",
-            "Use <strong>Appearance</strong> (Dark/Light) and font size in the left sidebar if text is hard to read.",
+            "Use <strong>Appearance</strong> (Dark/Light) and font size below the divider if text is hard to read.",
         )
         + '<div class="ug-tip"><strong>Tip:</strong> Use sidebar <strong>Refresh data</strong> to reload Supabase data without signing out.</div>'
     )
@@ -565,6 +608,34 @@ def _topic_troubleshooting() -> str:
         + '<div class="ug-tip"><strong>Still stuck?</strong> Contact your dealership RO Guard administrator '
         "with the RO number, tab you were on, and the exact error message.</div>"
     )
+
+
+def clear_user_guide_view() -> None:
+    st.session_state["show_user_guide"] = False
+
+
+def render_sidebar_help_nav(*, theme: str = "Dark") -> None:
+    """Help entry point in the sidebar under RO GUARD branding."""
+    if "show_user_guide" not in st.session_state:
+        st.session_state.show_user_guide = False
+
+    st.markdown(
+        f"<style>{sidebar_help_button_css(theme)}</style>",
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown(
+        '<div class="rg-sidebar-help-marker" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+    active = bool(st.session_state.get("show_user_guide"))
+    if st.sidebar.button(
+        "❓  Help & User Guide",
+        use_container_width=True,
+        key="sidebar_help_btn",
+        type="primary" if active else "secondary",
+    ):
+        st.session_state.show_user_guide = True
+        st.rerun()
 
 
 GUIDE_TOPICS: list[tuple[str, str, callable]] = [
