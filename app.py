@@ -26,6 +26,7 @@ from core.pdf_reports import (
     build_decline_reasons_pdf,
     build_review_report_pdf,
     build_roi_report_pdf,
+    build_short_pay_report_pdf,
 )
 from core.report_export_ui import (
     period_label_from_df,
@@ -72,6 +73,8 @@ from core.review_store import (
     normalize_oem_paid_amount,
     compute_short_pay,
     is_paid_outcome,
+    build_short_pay_report_dataframe,
+    validate_short_pay_reason,
     review_outcome_label,
     save_audit_rules,
     save_bulletin as persist_bulletin,
@@ -4882,6 +4885,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         )
     except (TypeError, ValueError):
         st.session_state[f"loaded_oem_paid_{fv}"] = None
+    st.session_state[f"loaded_short_pay_reason_{fv}"] = str(review.get("short_pay_reason") or "").strip()
 
     rejection_reason = str(review.get("rejection_reason") or "").strip()
     if _truthy_flag(review.get("paid_after_rejection")):
@@ -5721,6 +5725,7 @@ def render_review():
     render_live_submit_status_bar(live_summary)
 
     oem_paid_amount = None
+    short_pay_reason = ""
     submitted_claim = 0.0
     with st.expander("Claim outcome (optional — save here or in Reporting)", expanded=False):
         st.caption(
@@ -5783,11 +5788,13 @@ def render_review():
 
         submitted_claim = _form_submitted_claim_value(int(st.session_state.get("job_count", 1)))
         oem_paid_amount = None
+        short_pay_reason = ""
         if first_pass_paid or paid_after_rejection:
-            oem_paid_amount = _render_oem_paid_amount_input(
+            oem_paid_amount, short_pay_reason = _render_oem_paid_amount_input(
                 submitted=submitted_claim,
                 key=f"review_oem_paid_{fv}",
                 current=st.session_state.get(f"loaded_oem_paid_{fv}"),
+                current_reason=st.session_state.get(f"loaded_short_pay_reason_{fv}", ""),
             )
 
         outcome_selected = sum(
@@ -5826,6 +5833,7 @@ def render_review():
                     rejection_reason=rejection_reason,
                     initial_decline_reason=str(initial_decline_reason or ""),
                     oem_paid_amount=oem_paid_amount,
+                    short_pay_reason=short_pay_reason,
                     submitted_claim_value=submitted_claim,
                 )
                 if not ok_outcome:
@@ -6009,6 +6017,7 @@ def render_review():
             rejection_reason=rejection_reason,
             initial_decline_reason=str(initial_decline_reason or ""),
             oem_paid_amount=oem_paid_amount,
+            short_pay_reason=short_pay_reason,
             submitted_claim_value=total_value,
         )
         if not ok_outcome:
@@ -6114,6 +6123,7 @@ def render_review():
                 "paid_after_rejection": outcome["paid_after_rejection"],
                 "rejection_reason": outcome["rejection_reason"],
                 "oem_paid_amount": outcome.get("oem_paid_amount"),
+                "short_pay_reason": outcome.get("short_pay_reason"),
                 "advisor": advisor,
                 "technician": technician,
                 "warranty_admin": warranty_admin,
@@ -7464,12 +7474,13 @@ def _render_oem_paid_amount_input(
     submitted: float,
     key: str,
     current=None,
-) -> float | None:
+    current_reason: str = "",
+) -> tuple[float | None, str]:
     """Optional OEM paid amount when outcome is first-pass or paid-after-rejection."""
     submitted_val = float(submitted or 0)
     if submitted_val <= 0:
         st.caption("Add claim value on the RO before recording OEM paid amount.")
-        return None
+        return None, ""
 
     has_partial = False
     current_paid = submitted_val
@@ -7487,7 +7498,7 @@ def _render_oem_paid_amount_input(
         help="Use when overlapping labor, disallowed parts, or other adjustments reduced OEM payment.",
     )
     if not use_less:
-        return None
+        return None, ""
 
     paid = st.number_input(
         "OEM paid amount",
@@ -7504,7 +7515,15 @@ def _render_oem_paid_amount_input(
             f"Short pay: **${short:,.2f}** "
             f"(audited ${submitted_val:,.2f} − OEM paid ${float(paid):,.2f})"
         )
-    return float(paid)
+    reason = st.text_area(
+        "Why was it short paid? (required)",
+        value=str(current_reason or ""),
+        placeholder="Example: Overlapping labor op 1234A — OEM paid main line only.",
+        height=90,
+        key=f"{key}_reason",
+        help="Required when OEM paid less than the audited claim value.",
+    )
+    return float(paid), str(reason or "").strip()
 
 
 def _compose_rejection_reason(selected_reason: str, notes: str) -> tuple[bool, str]:
@@ -7528,6 +7547,7 @@ def _parse_review_outcome_selection(
     initial_decline_reason: str = "",
     oem_paid_amount: float | None = None,
     submitted_claim_value: float = 0,
+    short_pay_reason: str = "",
 ) -> tuple[bool, dict | str]:
     outcome_selected = sum(
         1 for x in (first_pass_paid, rejected, paid_after_rejection) if x
@@ -7553,11 +7573,17 @@ def _parse_review_outcome_selection(
             return False, "Enter why the claim was initially declined."
 
     stored_oem: float | None = None
+    stored_short_reason = ""
     if is_paid_outcome(save_first_pass_paid, save_rejected, save_paid_after_rejection):
         try:
             stored_oem = normalize_oem_paid_amount(
                 oem_paid_amount,
                 submitted=float(submitted_claim_value or 0),
+            )
+            stored_short_reason = validate_short_pay_reason(
+                stored_oem,
+                submitted=float(submitted_claim_value or 0),
+                reason=short_pay_reason,
             )
         except ValueError as exc:
             return False, str(exc)
@@ -7568,6 +7594,7 @@ def _parse_review_outcome_selection(
         "paid_after_rejection": save_paid_after_rejection,
         "rejection_reason": final_reason,
         "oem_paid_amount": stored_oem,
+        "short_pay_reason": stored_short_reason or None,
     }
 
 
@@ -7607,6 +7634,7 @@ def _persist_review_outcome(
             paid_after_rejection=outcome["paid_after_rejection"],
             rejection_reason=outcome["rejection_reason"],
             oem_paid_amount=outcome.get("oem_paid_amount"),
+            short_pay_reason=str(outcome.get("short_pay_reason") or ""),
             submitted_claim_value=float(submitted_claim_value or 0),
             updated_by=current_person_name() or auth_user_email(),
         )
@@ -7762,6 +7790,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
             "Rejected (Final)",
             "Paid After Rejection",
             "Any OEM rejection",
+            "Partial pay / Short pay",
         ],
         horizontal=True,
         key="outcome_followup_filter",
@@ -7778,6 +7807,8 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
         filtered = filtered[work["paid_after_rejection"] == 1]
     elif filter_choice == "Any OEM rejection":
         filtered = filtered[(work["rejected"] == 1) | (work["paid_after_rejection"] == 1)]
+    elif filter_choice == "Partial pay / Short pay":
+        filtered = filtered[work.get("is_partial_pay", pd.Series([False] * len(work)))]
 
     if filtered.empty:
         st.info(f"No reviews match **{filter_choice}** for this date range.")
@@ -7821,6 +7852,11 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 f"**Partial OEM payment:** audited **${submitted_claim:,.2f}** · "
                 f"OEM paid **${float(current_oem):,.2f}** · short pay **${short_pay:,.2f}**"
             )
+            current_short_reason = str(selected.get("short_pay_reason") or "").strip()
+            if current_short_reason:
+                st.caption(f"**Short pay reason:** {current_short_reason}")
+            else:
+                st.warning("Short pay is recorded but no reason is saved yet — add one below.")
 
     if current_reason:
         category, notes = _split_rejection_reason(current_reason)
@@ -7887,11 +7923,13 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
             )
 
         oem_paid_amount = None
+        short_pay_reason = ""
         if outcome_choice in ("First-Pass Paid", "Paid After Rejection"):
-            oem_paid_amount = _render_oem_paid_amount_input(
+            oem_paid_amount, short_pay_reason = _render_oem_paid_amount_input(
                 submitted=submitted_claim,
                 key="outcome_followup_oem",
                 current=current_oem,
+                current_reason=str(selected.get("short_pay_reason") or ""),
             )
 
         submitted = st.form_submit_button("Save outcome", type="primary", use_container_width=True)
@@ -7913,11 +7951,17 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 return
 
         stored_oem = None
+        stored_short_reason = ""
         if is_paid_outcome(first_pass_paid, rejected, paid_after_rejection):
             try:
                 stored_oem = normalize_oem_paid_amount(
                     oem_paid_amount,
                     submitted=submitted_claim,
+                )
+                stored_short_reason = validate_short_pay_reason(
+                    stored_oem,
+                    submitted=submitted_claim,
+                    reason=short_pay_reason,
                 )
             except ValueError as exc:
                 st.error(str(exc))
@@ -7932,6 +7976,7 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
                 paid_after_rejection=paid_after_rejection,
                 rejection_reason=rejection_reason,
                 oem_paid_amount=stored_oem,
+                short_pay_reason=stored_short_reason,
                 submitted_claim_value=submitted_claim,
                 updated_by=current_person_name() or auth_user_email(),
             )
@@ -8387,9 +8432,58 @@ def render_reporting_team_performance(df: pd.DataFrame) -> None:
         )
 
 
+def render_reporting_short_pay(df: pd.DataFrame) -> None:
+    st.caption(
+        "Claims where OEM paid less than the audited value. Each row includes the required short-pay explanation."
+    )
+    data = normalize_reviews_dataframe(df)
+    partial_count = int(data.get("is_partial_pay", pd.Series([False])).sum())
+    short_pay_total = float(data.get("short_pay_amount", pd.Series([0])).sum())
+    missing_reason = 0
+    if partial_count and "short_pay_reason" in data.columns:
+        partial_rows = data[data.get("is_partial_pay", False)]
+        missing_reason = int(
+            partial_rows["short_pay_reason"].fillna("").astype(str).str.strip().eq("").sum()
+        )
+
+    render_metric_rows([
+        [
+            ("Partial-pay claims", f"{partial_count:,}"),
+            ("Short-pay total ($)", f"${short_pay_total:,.0f}"),
+            ("Missing short-pay reason", f"{missing_reason:,}"),
+        ],
+    ])
+
+    short_pay_df = build_short_pay_report_dataframe(df)
+    if short_pay_df.empty:
+        st.info(
+            "No partial OEM payments in this date range. Record OEM paid amount on **Review** or **Claim Outcomes**."
+        )
+        return
+
+    if missing_reason:
+        st.warning(
+            f"{missing_reason} partial-pay claim(s) are missing a short-pay reason — update them under **Claim Outcomes**."
+        )
+
+    render_branded_report_table(
+        short_pay_df,
+        pdf_builder=lambda: build_short_pay_report_pdf(
+            short_pay_df,
+            period_label=period_label_from_df(data),
+        ),
+        pdf_title="RO GUARD Short Pay Report",
+        period_label=period_label_from_df(data),
+        pdf_subtitle="Partial OEM Payments",
+        pdf_filename="RO_Guard_Short_Pay_Report.pdf",
+        csv_filename="RO_Guard_Short_Pay_Report.csv",
+        export_key="short_pay_report",
+    )
+
+
 def render_reporting_review_log(df: pd.DataFrame) -> None:
     st.caption("Full review history for the selected date range. Export for meetings or records.")
-    display_df = df.drop(columns=["jobs"], errors="ignore").copy()
+    display_df = normalize_reviews_dataframe(df.drop(columns=["jobs"], errors="ignore").copy())
     if "outcome_status" not in display_df.columns and "first_pass_paid" in display_df.columns:
         display_df["outcome_status"] = [
             review_outcome_label(fp, rej, par)
@@ -8409,6 +8503,9 @@ def render_reporting_review_log(df: pd.DataFrame) -> None:
             "score",
             "status",
             "total_claim_value",
+            "oem_paid_amount",
+            "short_pay_amount",
+            "short_pay_reason",
             "hard_stop_count",
             "rejected",
             "paid_after_rejection",
@@ -8503,6 +8600,7 @@ def render_reporting():
         "Claim Outcomes",
         "VIN Recalls",
         "Rejections",
+        "Short Pay",
         "Team Performance",
         "Review Log",
     ]
@@ -8524,6 +8622,8 @@ def render_reporting():
         render_reporting_vin_recalls(df, all_time_df=all_reviews)
     elif report_view == "Rejections":
         render_reporting_rejections(df)
+    elif report_view == "Short Pay":
+        render_reporting_short_pay(df)
     elif report_view == "Team Performance":
         render_reporting_team_performance(df)
     elif report_view == "Review Log":

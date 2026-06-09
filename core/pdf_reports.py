@@ -451,6 +451,18 @@ def build_dataframe_report_pdf(
     return bytes(pdf.output())
 
 
+def build_short_pay_report_pdf(df, *, period_label: str = "Selected period") -> bytes:
+    return build_dataframe_report_pdf(
+        df,
+        title="RO GUARD Short Pay Report",
+        period_label=period_label,
+        subtitle="Partial OEM Payments",
+        section_title="Short Pay Detail",
+        max_rows=150,
+        landscape=True,
+    )
+
+
 def build_decline_reasons_pdf(df, *, period_label: str = "Selected period") -> bytes:
     return build_dataframe_report_pdf(
         df,

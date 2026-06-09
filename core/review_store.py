@@ -85,6 +85,8 @@ def normalize_review_record(data: dict) -> dict:
     if "oem_paid_amount" in payload:
         raw_oem = payload.get("oem_paid_amount")
         record["oem_paid_amount"] = None if raw_oem is None else _num("oem_paid_amount")
+    if "short_pay_reason" in payload:
+        record["short_pay_reason"] = str(payload.get("short_pay_reason") or "").strip() or None
     return record
 
 
@@ -233,6 +235,74 @@ def compute_short_pay(submitted: float, oem_paid_amount) -> float:
     return max(0.0, submitted_val - paid)
 
 
+def validate_short_pay_reason(
+    stored_oem_paid: float | None,
+    *,
+    submitted: float,
+    reason: str,
+) -> str:
+    """Require an explanation when OEM paid less than the audited claim."""
+    if stored_oem_paid is None:
+        return ""
+    text = str(reason or "").strip()
+    if compute_short_pay(submitted, stored_oem_paid) <= 0.01:
+        return ""
+    if len(text) < 10:
+        raise ValueError(
+            "Explain why the claim was short paid (at least 10 characters) — "
+            "for example overlapping labor or parts not covered."
+        )
+    return text
+
+
+def build_short_pay_report_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Reporting table for partial OEM payments."""
+    data = normalize_reviews_dataframe(df)
+    if data.empty or "is_partial_pay" not in data.columns:
+        return pd.DataFrame()
+
+    partial = data[data["is_partial_pay"]].copy()
+    if partial.empty:
+        return pd.DataFrame()
+
+    rows: list[dict] = []
+    for _, row in partial.iterrows():
+        fp = int(row.get("first_pass_paid") or 0)
+        rej = int(row.get("rejected") or 0)
+        par = int(row.get("paid_after_rejection") or 0)
+        submitted = float(row.get("total_claim_value") or 0)
+        oem_paid = row.get("oem_paid_amount")
+        oem_paid_val = float(oem_paid) if oem_paid is not None and not pd.isna(oem_paid) else submitted
+        audited_at = row.get("created_at")
+        if audited_at is not None and not pd.isna(audited_at):
+            audited_label = pd.to_datetime(audited_at).strftime("%Y-%m-%d %H:%M")
+        else:
+            audited_label = ""
+        updated_at = row.get("outcome_updated_at")
+        if updated_at is not None and str(updated_at) not in ("", "NaT") and not pd.isna(updated_at):
+            try:
+                updated_label = pd.to_datetime(updated_at).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                updated_label = str(updated_at)[:16]
+        else:
+            updated_label = ""
+        rows.append(
+            {
+                "Audited": audited_label,
+                "RO": row.get("ro_number"),
+                "Advisor": row.get("advisor"),
+                "Outcome": review_outcome_label(fp, rej, par),
+                "Submitted Claim $": submitted,
+                "OEM Paid $": oem_paid_val,
+                "Short Pay $": float(row.get("short_pay_amount") or compute_short_pay(submitted, oem_paid)),
+                "Short Pay Reason": str(row.get("short_pay_reason") or "").strip() or "—",
+                "Outcome Updated By": str(row.get("outcome_updated_by") or "").strip() or "—",
+                "Outcome Updated": updated_label or "—",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def review_outcome_label(first_pass_paid, rejected, paid_after_rejection=0) -> str:
     fp = int(first_pass_paid or 0)
     rej = int(rejected or 0)
@@ -259,6 +329,7 @@ def update_review_outcome(
     updated_by: str = "",
     oem_paid_amount: float | None = None,
     submitted_claim_value: float | None = None,
+    short_pay_reason: str = "",
 ) -> None:
     if supabase is None:
         raise RuntimeError("Supabase is not configured.")
@@ -270,11 +341,16 @@ def update_review_outcome(
     if paid_after_rejection and not str(rejection_reason or "").strip():
         raise ValueError("Enter why the claim was initially declined.")
     stored_paid: float | None = None
+    stored_short_reason: str | None = None
+    submitted = float(submitted_claim_value if submitted_claim_value is not None else 0)
     if is_paid_outcome(first_pass_paid, rejected, paid_after_rejection):
-        submitted = float(
-            submitted_claim_value if submitted_claim_value is not None else 0
-        )
         stored_paid = normalize_oem_paid_amount(oem_paid_amount, submitted=submitted)
+        validated_reason = validate_short_pay_reason(
+            stored_paid,
+            submitted=submitted,
+            reason=short_pay_reason,
+        )
+        stored_short_reason = validated_reason or None
     payload = {
         "first_pass_paid": 1 if first_pass_paid else 0,
         "rejected": 1 if rejected else 0,
@@ -285,6 +361,7 @@ def update_review_outcome(
             else ""
         ),
         "oem_paid_amount": stored_paid,
+        "short_pay_reason": stored_short_reason,
         "outcome_updated_at": _utc_now_iso(),
         "outcome_updated_by": str(updated_by or "").strip(),
     }
