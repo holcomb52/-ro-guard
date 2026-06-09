@@ -1064,6 +1064,8 @@ def compute_roi_metrics(
         "paid_after_rejection_count": 0,
         "rejected_pct": 0.0,
         "rejected_count": 0,
+        "rejected_final_count": 0,
+        "oem_rejection_total_count": 0,
         "rejected_value": 0.0,
         "pending_outcome_count": 0,
         "hard_stop_count": 0,
@@ -1092,6 +1094,7 @@ def compute_roi_metrics(
     first_pass_count = int(data.get("first_pass_paid", pd.Series([0])).sum())
     rejected_count = int(data.get("rejected", pd.Series([0])).sum())
     paid_after_rejection_count = int(data.get("paid_after_rejection", pd.Series([0])).sum())
+    oem_rejection_total_count = rejected_count + paid_after_rejection_count
     pending_outcome_count = int(
         (
             (data.get("first_pass_paid", pd.Series([0])) == 0)
@@ -1171,6 +1174,8 @@ def compute_roi_metrics(
         "paid_after_rejection_count": paid_after_rejection_count,
         "rejected_pct": rejected_pct,
         "rejected_count": rejected_count,
+        "rejected_final_count": rejected_count,
+        "oem_rejection_total_count": oem_rejection_total_count,
         "rejected_value": rejected_value,
         "pending_outcome_count": pending_outcome_count,
         "hard_stop_count": hard_stops,

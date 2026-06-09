@@ -7594,25 +7594,48 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
     )
     pending_count = int(pending_mask.sum())
     first_pass_count = int(work["first_pass_paid"].sum())
-    rejected_count = int(work["rejected"].sum())
+    rejected_final_count = int(work["rejected"].sum())
     paid_after_count = int(work["paid_after_rejection"].sum())
+    oem_rejection_total = rejected_final_count + paid_after_count
     resolved_count = len(work) - pending_count
 
     render_metric_rows([
         [
-            ("Pending Outcome", f"{pending_count:,}"),
-            ("First-Pass Paid", f"{first_pass_count:,}"),
-            ("Rejected / Returned", f"{rejected_count:,}"),
-            ("Paid After Rejection", f"{paid_after_count:,}"),
+            ("Pending Outcome", f"{pending_count:,}", "No OEM paid/rejected outcome recorded yet."),
+            (
+                "First-Pass Paid",
+                f"{first_pass_count:,}",
+                "OEM paid the claim on the first submission (no rejection).",
+            ),
+            (
+                "Paid After Rejection",
+                f"{paid_after_count:,}",
+                "OEM initially rejected or returned the claim, then paid after resubmit or correction.",
+            ),
         ],
         [
             (
+                "Rejected (Final)",
+                f"{rejected_final_count:,}",
+                "OEM rejected the claim and it was not paid (final denial).",
+            ),
+            (
+                "OEM Rejections (Total)",
+                f"{oem_rejection_total:,}",
+                "All claims rejected at least once — includes those later paid after rejection.",
+            ),
+            (
                 "First-Pass % (resolved)",
                 f"{(first_pass_count / resolved_count * 100):.1f}%" if resolved_count else "—",
-                "Paid on first submission ÷ reviews with a recorded paid or rejected outcome.",
+                "First-pass paid ÷ reviews with any recorded OEM outcome.",
             ),
         ],
     ])
+    if paid_after_count and not rejected_final_count:
+        st.caption(
+            f"**{paid_after_count:,}** claim(s) were rejected by the OEM and later paid — they count under "
+            "**OEM Rejections (Total)** and **Paid After Rejection**, not **Rejected (Final)**."
+        )
 
     filter_choice = st.radio(
         "Show reviews",
@@ -7620,8 +7643,9 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
             "Pending only",
             "All in date range",
             "First-Pass Paid",
-            "Rejected / Returned",
+            "Rejected (Final)",
             "Paid After Rejection",
+            "Any OEM rejection",
         ],
         horizontal=True,
         key="outcome_followup_filter",
@@ -7632,10 +7656,12 @@ def render_outcome_followup(df: pd.DataFrame, *, show_title: bool = True) -> Non
         filtered = filtered[pending_mask]
     elif filter_choice == "First-Pass Paid":
         filtered = filtered[work["first_pass_paid"] == 1]
-    elif filter_choice == "Rejected / Returned":
+    elif filter_choice == "Rejected (Final)":
         filtered = filtered[work["rejected"] == 1]
     elif filter_choice == "Paid After Rejection":
         filtered = filtered[work["paid_after_rejection"] == 1]
+    elif filter_choice == "Any OEM rejection":
+        filtered = filtered[(work["rejected"] == 1) | (work["paid_after_rejection"] == 1)]
 
     if filtered.empty:
         st.info(f"No reviews match **{filter_choice}** for this date range.")

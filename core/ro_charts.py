@@ -132,7 +132,7 @@ def first_pass_pie(metrics: dict, *, compact: bool = False) -> bytes:
     other = max(0, metrics.get("review_count", 0) - tracked)
     _pie_or_placeholder(
         ax,
-        ["First-Pass Paid", "Rejected", "Paid After Rejection", "Not Tracked"],
+        ["First-Pass Paid", "Rejected (Final)", "Paid After Rejection", "Not Tracked"],
         [
             metrics.get("first_pass_count", 0),
             metrics.get("rejected_count", 0),
