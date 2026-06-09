@@ -118,6 +118,7 @@ from core.sales_pricing import render_pricing_roi_page
 from core.deployment_admin import render_deployment_secrets_admin, user_can_view_deployment
 from core.scheduled_reports_admin import render_scheduled_reports_admin
 from core.display_prefs import build_user_display_css, render_display_settings_sidebar, request_display_widget_resync
+from core.user_guide import render_user_guide
 from core.popps_report import render_popps_report
 from core.html_embed import embed_html, embed_script, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
@@ -9375,6 +9376,7 @@ def main():
         ("TSB / Bulletins", render_tsb_bulletins),
         ("Scheduled Reports", render_scheduled_reports),
         ("WAM", render_wam),
+        ("Help", lambda: render_user_guide(theme=st.session_state.get("appearance", "Dark"))),
     ]
 
     section_labels = [label for label, _ in tab_entries]
