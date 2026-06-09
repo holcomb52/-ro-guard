@@ -21,7 +21,12 @@ from core.ro_charts import (
     score_distribution_chart,
     weekly_activity_chart,
 )
-from core.pdf_reports import build_audit_report_pdf, build_review_report_pdf, build_roi_report_pdf
+from core.pdf_reports import (
+    build_audit_report_pdf,
+    build_decline_reasons_pdf,
+    build_review_report_pdf,
+    build_roi_report_pdf,
+)
 from core.auth import (
     apply_session_to_client,
     auth_user_email,
@@ -6100,7 +6105,7 @@ def render_review():
                 st.download_button(
                     "Download Audit PDF",
                     data=audit_pdf,
-                    file_name=f"RO_Shield_Audit_{safe_ro}.pdf",
+                    file_name=f"RO_Guard_Audit_{safe_ro}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                     key=f"audit_pdf_{st.session_state.form_version}",
@@ -7270,7 +7275,7 @@ def render_roi_dashboard():
         st.download_button(
             "Download ROI Summary PDF",
             data=roi_pdf,
-            file_name="RO_Shield_ROI_Summary.pdf",
+            file_name="RO_Guard_ROI_Summary.pdf",
             mime="application/pdf",
             use_container_width=True,
             key="roi_summary_pdf",
@@ -7881,31 +7886,50 @@ def render_reporting_rejections(df: pd.DataFrame) -> None:
         st.warning(
             f"{missing} declined claim(s) are missing a reason — update them under **Claim Outcomes**."
         )
-    st.dataframe(
-        detail.rename(
-            columns={
-                "created_at": "Audited",
-                "ro_number": "RO",
-                "advisor": "Advisor",
-                "outcome": "Outcome",
-                "decline_category": "Reason Category",
-                "decline_notes": "User Notes",
-                "full_decline_reason": "Full Decline Reason (as entered)",
-                "total_claim_value": "Claim Value",
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
+    export_detail = detail.rename(
+        columns={
+            "created_at": "Audited",
+            "ro_number": "RO",
+            "advisor": "Advisor",
+            "outcome": "Outcome",
+            "decline_category": "Reason Category",
+            "decline_notes": "User Notes",
+            "full_decline_reason": "Full Decline Reason (as entered)",
+            "total_claim_value": "Claim Value",
+        }
     )
+    st.dataframe(export_detail, use_container_width=True, hide_index=True)
 
-    st.download_button(
-        "Download Decline Reasons CSV",
-        detail.to_csv(index=False),
-        "ro_shield_decline_reasons.csv",
-        "text/csv",
-        use_container_width=True,
-        key="decline_reasons_csv",
-    )
+    if "created_at" in detail.columns and detail["created_at"].notna().any():
+        decline_period = f"{detail['created_at'].min()} to {detail['created_at'].max()}"
+    else:
+        decline_period = "Selected period"
+
+    dl_pdf, dl_csv = st.columns(2)
+    with dl_pdf:
+        try:
+            decline_pdf = build_decline_reasons_pdf(export_detail, period_label=decline_period)
+            st.download_button(
+                "Download Decline Reasons PDF",
+                data=decline_pdf,
+                file_name="RO_Guard_Decline_Reasons.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="decline_reasons_pdf",
+            )
+        except ImportError:
+            st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
+        except Exception as exc:
+            st.error(f"Decline reasons PDF could not be generated: {exc}")
+    with dl_csv:
+        st.download_button(
+            "Download Decline Reasons CSV",
+            export_detail.to_csv(index=False),
+            "RO_Guard_Decline_Reasons.csv",
+            "text/csv",
+            use_container_width=True,
+            key="decline_reasons_csv",
+        )
 
 
 _SCORE_BAND_GREEN = "background-color: #dcfce7; color: #166534; font-weight: 700"
@@ -8112,23 +8136,14 @@ def render_reporting_review_log(df: pd.DataFrame) -> None:
     else:
         report_period = "Selected period"
 
-    dl1, dl2 = st.columns(2)
-    with dl1:
-        st.download_button(
-            "Download Review Report CSV",
-            display_df.to_csv(index=False),
-            "ro_shield_review_report.csv",
-            "text/csv",
-            use_container_width=True,
-            key="review_report_csv",
-        )
-    with dl2:
+    dl_pdf, dl_csv = st.columns(2)
+    with dl_pdf:
         try:
             review_pdf = build_review_report_pdf(display_df, period_label=report_period)
             st.download_button(
                 "Download Review Report PDF",
                 data=review_pdf,
-                file_name="RO_Shield_Review_Report.pdf",
+                file_name="RO_Guard_Review_Report.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 key="review_report_pdf",
@@ -8137,6 +8152,15 @@ def render_reporting_review_log(df: pd.DataFrame) -> None:
             st.error("PDF export needs fpdf2. Run: python3 -m pip install -r requirements.txt")
         except Exception as e:
             st.error(f"Review PDF could not be generated: {e}")
+    with dl_csv:
+        st.download_button(
+            "Download Review Report CSV",
+            display_df.to_csv(index=False),
+            "RO_Guard_Review_Report.csv",
+            "text/csv",
+            use_container_width=True,
+            key="review_report_csv",
+        )
 
 
 def render_reporting():

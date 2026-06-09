@@ -822,7 +822,17 @@ def popps_quarter_from_period_sort(period_sort: int) -> tuple[int, str]:
 def _enrich_entry_quarter_fields(entry: dict) -> dict:
     entry = dict(entry)
     period_sort = int(entry.get("period_sort") or 0)
-    quarter_sort, quarter_label = popps_quarter_from_period_sort(period_sort)
+    if period_sort < 100001:
+        report = entry.get("report") if isinstance(entry.get("report"), dict) else {}
+        period_label = str(entry.get("period_label") or report.get("period_label") or "").strip()
+        period_sort = popps_period_sort_key(
+            period_label,
+            file_name=str(entry.get("file_name") or ""),
+            uploaded_at=str(entry.get("uploaded_at") or ""),
+        )
+        if period_sort:
+            entry["period_sort"] = period_sort
+    quarter_sort, quarter_label = popps_quarter_from_period_sort(int(entry.get("period_sort") or 0))
     if quarter_sort:
         entry["quarter_sort"] = quarter_sort
         entry["quarter_label"] = quarter_label
@@ -881,7 +891,6 @@ def _sort_popps_library_entries(
     return sorted(
         enriched,
         key=lambda entry: (
-            int(entry.get("quarter_sort") or 0),
             int(entry.get("period_sort") or 0),
             str(entry.get("uploaded_at") or ""),
             str(entry.get("fingerprint") or ""),
@@ -891,19 +900,10 @@ def _sort_popps_library_entries(
 
 
 def _active_library_fingerprint(reports: dict[str, dict]) -> str:
-    """Newest month within the most recent calendar quarter."""
+    """Newest POPPS report month on file (e.g. May 2026 over March 2026)."""
     if not reports:
         return ""
-    enriched = [_enrich_entry_quarter_fields(entry) for entry in reports.values()]
-    max_quarter = max(int(entry.get("quarter_sort") or 0) for entry in enriched)
-    if not max_quarter:
-        ordered = _sort_popps_library_entries(enriched, newest_first=True)
-        return str(ordered[0].get("fingerprint") or "")
-
-    in_current_quarter = [
-        entry for entry in enriched if int(entry.get("quarter_sort") or 0) == max_quarter
-    ]
-    ordered = _sort_popps_library_entries(in_current_quarter, newest_first=True)
+    ordered = _sort_popps_library_entries(list(reports.values()), newest_first=True)
     return str(ordered[0].get("fingerprint") or "")
 
 
@@ -964,6 +964,25 @@ def load_popps_library(supabase) -> dict:
 DAZE_MONTH_SLOTS = ("march", "april", "may")
 
 
+def _daze_field_present(raw: str) -> bool:
+    text = str(raw or "").strip()
+    return bool(text) and text not in ("—", "-", "N/A", "n/a", "NA")
+
+
+def _daze_summary_is_complete(daze: PoppsDazeSummary) -> bool:
+    """True when all three months have % and warranty dollar amounts."""
+    for slot in DAZE_MONTH_SLOTS:
+        if not _daze_field_present(getattr(daze, f"dealership_{slot}", "")):
+            return False
+        zone = _parse_percent_number(getattr(daze, f"business_center_{slot}", ""))
+        if zone is None or zone < 50:
+            return False
+        amount = _parse_money_number(getattr(daze, f"expense_{slot}", ""))
+        if amount is None or amount < 500:
+            return False
+    return True
+
+
 def _popps_user_marker(auth_user: str) -> str:
     return re.sub(r"[^a-zA-Z0-9@._-]", "_", str(auth_user or "").strip().lower()) or "_anonymous"
 
@@ -977,7 +996,7 @@ def _daze_slot_has_value(daze: PoppsDazeSummary, slot: str) -> bool:
 
 
 def _merged_quarter_daze(library: dict, *, quarter_sort: int) -> PoppsDazeSummary:
-    """Fill Mar/Apr/May from each saved month in the quarter (newest upload wins per slot)."""
+    """Fill Mar/Apr/May from saved PDFs — prefer the newest report with complete DAZE."""
     merged = PoppsDazeSummary()
     if not quarter_sort:
         return merged
@@ -990,6 +1009,14 @@ def _merged_quarter_daze(library: dict, *, quarter_sort: int) -> PoppsDazeSummar
         ],
         newest_first=True,
     )
+    for entry in entries:
+        try:
+            parsed = popps_report_from_storage_dict(entry.get("report"))
+        except Exception:
+            continue
+        if _daze_summary_is_complete(parsed.daze):
+            return parsed.daze
+
     for slot in DAZE_MONTH_SLOTS:
         for entry in entries:
             try:
@@ -1000,13 +1027,21 @@ def _merged_quarter_daze(library: dict, *, quarter_sort: int) -> PoppsDazeSummar
             for prefix in ("dealership", "business_center", "expense"):
                 attr = f"{prefix}_{slot}"
                 incoming = str(getattr(source, attr, "") or "").strip()
-                if incoming and not str(getattr(merged, attr, "") or "").strip():
+                if not _daze_field_present(incoming):
+                    continue
+                if prefix == "business_center" and (_parse_percent_number(incoming) or 0) < 50:
+                    continue
+                if prefix == "expense" and (_parse_money_number(incoming) or 0) < 500:
+                    continue
+                if not str(getattr(merged, attr, "") or "").strip():
                     setattr(merged, attr, getattr(source, attr))
     return merged
 
 
 def _display_daze_for_report(report: PoppsReport, library: dict, active_fingerprint: str) -> PoppsDazeSummary:
-    """Prefer merged quarter DAZE when multiple monthly PDFs are in the cloud library."""
+    """Use the active report's DAZE when complete; otherwise merge valid data from the quarter."""
+    if _daze_summary_is_complete(report.daze):
+        return report.daze
     active_entry = _enrich_entry_quarter_fields(
         (library.get("reports") or {}).get(active_fingerprint) or {}
     )
@@ -1014,6 +1049,8 @@ def _display_daze_for_report(report: PoppsReport, library: dict, active_fingerpr
     if not quarter_sort or len((library.get("reports") or {})) < 2:
         return report.daze
     merged = _merged_quarter_daze(library, quarter_sort=quarter_sort)
+    if _daze_summary_is_complete(merged):
+        return merged
     if any(_daze_slot_has_value(merged, slot) for slot in DAZE_MONTH_SLOTS):
         return merged
     return report.daze
@@ -1312,8 +1349,29 @@ def popps_report_to_storage_dict(report: PoppsReport) -> dict:
     return payload
 
 
+def _hydrate_stored_report_daze(data: dict | None) -> dict:
+    """Re-parse DAZE from stored PDF text so warranty dollars are not lost in Supabase."""
+    payload = dict(data or {})
+    raw = str(payload.get("raw_text") or "")
+    if not raw:
+        return payload
+    scratch = PoppsReport(raw_text=raw)
+    _parse_daze(raw, scratch)
+    fresh = asdict(scratch.daze)
+    existing = dict(payload.get("daze") or {})
+    merged = dict(existing)
+    for key, value in fresh.items():
+        if str(value or "").strip():
+            merged[key] = value
+    if _daze_summary_is_complete(_dataclass_from_dict(PoppsDazeSummary, merged)):
+        payload["daze"] = fresh
+    else:
+        payload["daze"] = merged
+    return payload
+
+
 def popps_report_from_storage_dict(data: dict | None) -> PoppsReport:
-    return _dataclass_from_dict(PoppsReport, data)
+    return _dataclass_from_dict(PoppsReport, _hydrate_stored_report_daze(data))
 
 
 def reset_popps_hydrate_attempt_flags() -> None:
@@ -2776,25 +2834,79 @@ def _render_popps_audit_panel(
             st.info("No POPPS reviews saved for this file yet.")
         else:
             st.dataframe(snapshot, use_container_width=True, hide_index=True)
-            st.download_button(
-                "Download review snapshot (CSV)",
-                snapshot.to_csv(index=False),
-                file_name=f"popps_reviews_{report.dealer_code}_{report.period_label or 'report'}.csv".replace(
-                    " ", "_"
-                ),
-                mime="text/csv",
-                key=f"popps_audit_snapshot_csv_{audit_key}",
+            snap_base = f"RO_Guard_POPPS_Reviews_{report.dealer_code}_{report.period_label or 'report'}".replace(
+                " ", "_"
             )
+            snap_pdf, snap_csv = st.columns(2)
+            with snap_pdf:
+                try:
+                    from .pdf_reports import build_popps_audit_pdf
+
+                    snapshot_pdf = build_popps_audit_pdf(
+                        snapshot,
+                        title="RO GUARD POPPS Review Snapshot",
+                        dealer_code=str(report.dealer_code or ""),
+                        period_label=str(report.period_label or ""),
+                        file_name=file_name,
+                    )
+                    st.download_button(
+                        "Download review snapshot (PDF)",
+                        data=snapshot_pdf,
+                        file_name=f"{snap_base}.pdf",
+                        mime="application/pdf",
+                        key=f"popps_audit_snapshot_pdf_{audit_key}",
+                        use_container_width=True,
+                    )
+                except ImportError:
+                    st.error("PDF export needs fpdf2.")
+                except Exception as exc:
+                    st.warning(f"Snapshot PDF could not be generated: {exc}")
+            with snap_csv:
+                st.download_button(
+                    "Download review snapshot (CSV)",
+                    snapshot.to_csv(index=False),
+                    file_name=f"{snap_base}.csv",
+                    mime="text/csv",
+                    key=f"popps_audit_snapshot_csv_{audit_key}",
+                    use_container_width=True,
+                )
         if not history_df.empty:
             st.markdown("**Full save history (newest first)**")
             st.dataframe(history_df.head(200), use_container_width=True, hide_index=True)
-            st.download_button(
-                "Download full audit history (CSV)",
-                history_df.to_csv(index=False),
-                file_name=f"popps_audit_history_{report.dealer_code}.csv".replace(" ", "_"),
-                mime="text/csv",
-                key=f"popps_audit_history_csv_{audit_key}",
-            )
+            hist_base = f"RO_Guard_POPPS_Audit_History_{report.dealer_code}".replace(" ", "_")
+            hist_pdf, hist_csv = st.columns(2)
+            with hist_pdf:
+                try:
+                    from .pdf_reports import build_popps_audit_pdf
+
+                    history_pdf = build_popps_audit_pdf(
+                        history_df,
+                        title="RO GUARD POPPS Audit History",
+                        dealer_code=str(report.dealer_code or ""),
+                        period_label=str(report.period_label or ""),
+                        file_name=file_name,
+                    )
+                    st.download_button(
+                        "Download full audit history (PDF)",
+                        data=history_pdf,
+                        file_name=f"{hist_base}.pdf",
+                        mime="application/pdf",
+                        key=f"popps_audit_history_pdf_{audit_key}",
+                        use_container_width=True,
+                    )
+                except ImportError:
+                    st.error("PDF export needs fpdf2.")
+                except Exception as exc:
+                    st.warning(f"History PDF could not be generated: {exc}")
+            with hist_csv:
+                st.download_button(
+                    "Download full audit history (CSV)",
+                    history_df.to_csv(index=False),
+                    file_name=f"{hist_base}.csv",
+                    mime="text/csv",
+                    key=f"popps_audit_history_csv_{audit_key}",
+                    use_container_width=True,
+                )
 
 
 def _claims_dataframe(claims: list[PoppsClaimRow]) -> pd.DataFrame:

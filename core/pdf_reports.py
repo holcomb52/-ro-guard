@@ -50,40 +50,107 @@ def _safe_multi_cell(pdf: FPDF, h: float, text: str, *, align: str = "L") -> Non
     pdf.multi_cell(width, h, cleaned, align=align, new_x="LMARGIN", new_y="NEXT")
 
 
+# RO GUARD brand palette (matches app chrome)
+_BRAND_NAVY = (15, 45, 85)
+_BRAND_BLUE = (37, 99, 235)
+_BRAND_BLUE_DARK = (29, 78, 216)
+_BRAND_PAGE_BG = (238, 244, 252)
+_BRAND_TABLE_HEADER = (20, 60, 110)
+_BRAND_GHOST = (218, 226, 236)
+_BRAND_SUBTITLE = (180, 200, 230)
+
+
 class _ReportPDF(FPDF):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.set_top_margin(22)
+        self.set_top_margin(28)
+        self._report_title = ""
+
+    def set_report_title(self, title: str) -> None:
+        self._report_title = _safe_text(title)
 
     def header(self):
         self._draw_page_background()
-        self._draw_watermark()
-        self.set_xy(self.l_margin, 10)
-        self.set_font("Helvetica", "I", 9)
-        self.set_text_color(90, 90, 90)
-        self.cell(0, 5, "Patent Pending", align="R", new_x="LMARGIN", new_y="NEXT")
+        self._draw_ghost_watermark()
+        self._draw_brand_bar()
 
     def _draw_page_background(self):
-        self.set_fill_color(238, 244, 252)
+        self.set_fill_color(*_BRAND_PAGE_BG)
         self.rect(0, 0, self.w, self.h, style="F")
 
-    def _draw_watermark(self):
-        self.set_font("Helvetica", "B", 54)
-        self.set_text_color(225, 225, 225)
+    def _draw_ghost_watermark(self):
+        """Diagonal ROGUARD ghost — visible on screen/print like branded letterhead."""
+        self.set_font("Helvetica", "B", 62)
+        self.set_text_color(*_BRAND_GHOST)
         cx = self.w / 2
         cy = self.h / 2
-        text = "RO GUARD"
+        text = "ROGUARD"
         text_w = self.get_string_width(text)
         x = cx - text_w / 2
-        y = cy - 5
-        with self.rotation(32, x=cx, y=cy):
+        y = cy - 6
+        with self.rotation(35, x=cx, y=cy):
             self.text(x, y, text)
+        # Secondary faint marks — "ghost printer" repeat
+        self.set_font("Helvetica", "B", 28)
+        self.set_text_color(232, 237, 244)
+        for px, py, angle in (
+            (self.w * 0.18, self.h * 0.22, 35),
+            (self.w * 0.82, self.h * 0.78, 35),
+            (self.w * 0.15, self.h * 0.72, -25),
+        ):
+            tw = self.get_string_width(text)
+            with self.rotation(angle, x=px, y=py):
+                self.text(px - tw / 2, py, text)
+
+    def _draw_brand_mark(self, x: float, y: float, size: float = 8.0) -> None:
+        w = size * 0.82
+        h = size
+        self.set_fill_color(*_BRAND_BLUE)
+        self.set_draw_color(*_BRAND_BLUE_DARK)
+        self.set_line_width(0.2)
+        points = [
+            (x + w / 2, y),
+            (x + w, y + h * 0.22),
+            (x + w, y + h * 0.58),
+            (x + w / 2, y + h),
+            (x, y + h * 0.58),
+            (x, y + h * 0.22),
+        ]
+        coords = [(px, py) for px, py in points]
+        self.polygon(coords, style="FD")
+        self.set_font("Helvetica", "B", size * 0.38)
+        self.set_text_color(255, 255, 255)
+        self.set_xy(x, y + h * 0.28)
+        self.cell(w, h * 0.42, "RO", align="C")
+
+    def _draw_brand_bar(self):
+        bar_h = 16.0
+        self.set_fill_color(*_BRAND_NAVY)
+        self.rect(0, 0, self.w, bar_h, style="F")
+        self._draw_brand_mark(self.l_margin, 4.0, 8.0)
+        self.set_xy(self.l_margin + 12.0, 5.5)
+        self.set_font("Helvetica", "B", 11)
+        self.set_text_color(255, 255, 255)
+        self.cell(24, 5, "RO GUARD")
+        self.set_font("Helvetica", "", 8)
+        self.set_text_color(*_BRAND_SUBTITLE)
+        tagline = self._report_title or "Warranty Audit Intelligence"
+        self.cell(0, 5, tagline)
+        self.set_xy(self.l_margin, 10.5)
+        self.set_font("Helvetica", "I", 7)
+        self.set_text_color(150, 170, 200)
+        self.cell(0, 4, "Patent Pending", align="R")
 
     def footer(self):
-        self.set_y(-14)
+        self.set_y(-12)
         self.set_font("Helvetica", "I", 8)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 8, f"RO Shield - Patent Pending  |  Page {self.page_no()}", new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(90, 100, 115)
+        self.cell(
+            0,
+            8,
+            f"RO GUARD  |  Confidential  |  roguard.app  |  Page {self.page_no()}",
+            align="C",
+        )
 
 
 def _ensure_left(pdf: FPDF):
@@ -143,15 +210,18 @@ def _format_money(value) -> str:
         return "$0"
 
 
-def _report_header(pdf: FPDF, title: str, period_label: str):
+def _report_header(pdf: FPDF, title: str, period_label: str, *, subtitle: str = ""):
+    if hasattr(pdf, "set_report_title"):
+        pdf.set_report_title(subtitle or title)
     _ensure_left(pdf)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(10, 40, 80)
-    pdf.multi_cell(0, 8, title)
+    pdf.multi_cell(0, 8, _safe_text(title))
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(80, 80, 80)
-    _ensure_left(pdf)
-    pdf.multi_cell(0, 5, f"Period: {_safe_text(period_label)}")
+    if period_label:
+        _ensure_left(pdf)
+        pdf.multi_cell(0, 5, f"Period: {_safe_text(period_label)}")
     _ensure_left(pdf)
     pdf.multi_cell(
         0,
@@ -243,6 +313,175 @@ def _review_log_table(pdf: FPDF, rows):
         pdf.ln(5.5)
 
     pdf.ln(1)
+
+
+def _column_char_budgets(columns: list[str], rows, *, max_chars: int = 48) -> list[int]:
+    budgets = [min(max(len(str(col)), 6), max_chars) for col in columns]
+    for row in rows:
+        for idx, col in enumerate(columns):
+            val = row[col] if col in row.index else ""
+            text = _safe_text(val)
+            budgets[idx] = min(max(budgets[idx], len(text)), max_chars)
+    return budgets
+
+
+def _fit_column_widths(budgets: list[int], total_width: float, *, min_w: float = 10.0) -> list[float]:
+    if not budgets:
+        return []
+    total = float(sum(budgets)) or 1.0
+    widths = [max(min_w, total_width * (b / total)) for b in budgets]
+    scale = total_width / sum(widths)
+    return [w * scale for w in widths]
+
+
+def _dataframe_table(
+    pdf: FPDF,
+    df,
+    *,
+    section_title: str = "Detail",
+    max_rows: int = 150,
+) -> bool:
+    """Render a dataframe as a branded table. Returns True if rows were truncated."""
+    import pandas as pd
+
+    data = df.copy() if df is not None else pd.DataFrame()
+    if data.empty:
+        _body_text(pdf, "No rows to display.")
+        return False
+
+    columns = [str(c) for c in data.columns.tolist()]
+    truncated = len(data) > max_rows
+    rows = data.head(max_rows)
+
+    budgets = _column_char_budgets(columns, [row for _, row in rows.iterrows()])
+    col_widths = _fit_column_widths(budgets, pdf.epw, min_w=8.0)
+
+    _section_title(pdf, section_title)
+    _ensure_left(pdf)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_fill_color(*_BRAND_TABLE_HEADER)
+    for width, label in zip(col_widths, columns):
+        header = _truncate(label, max_len=max(8, int(width / 1.6)))
+        pdf.cell(width, 6, header, border=1, fill=True, align="C")
+    pdf.ln(6)
+
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(20, 20, 20)
+    fill = False
+    row_h = 5.5
+    for _, row in rows.iterrows():
+        if pdf.get_y() + row_h > pdf.page_break_trigger:
+            pdf.add_page()
+            _ensure_left(pdf)
+            pdf.set_font("Helvetica", "B", 7)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_fill_color(*_BRAND_TABLE_HEADER)
+            for width, label in zip(col_widths, columns):
+                header = _truncate(label, max_len=max(8, int(width / 1.6)))
+                pdf.cell(width, 6, header, border=1, fill=True, align="C")
+            pdf.ln(6)
+            pdf.set_font("Helvetica", "", 7)
+            pdf.set_text_color(20, 20, 20)
+
+        _ensure_left(pdf)
+        fill = not fill
+        pdf.set_fill_color(245, 248, 252) if fill else pdf.set_fill_color(255, 255, 255)
+        for width, col in zip(col_widths, columns):
+            val = row[col] if col in row.index else ""
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                text = ""
+            else:
+                text = _safe_text(val)
+            max_len = max(6, int(width / 1.5))
+            if len(text) > max_len:
+                text = text[: max_len - 3] + "..."
+            align = "R" if _looks_numeric(text) else "L"
+            pdf.cell(width, row_h, text, border=1, fill=True, align=align)
+        pdf.ln(row_h)
+
+    pdf.ln(1)
+    return truncated
+
+
+def _looks_numeric(text: str) -> bool:
+    cleaned = text.replace(",", "").replace("$", "").replace("%", "").strip()
+    if not cleaned:
+        return False
+    try:
+        float(cleaned)
+        return True
+    except ValueError:
+        return False
+
+
+def build_dataframe_report_pdf(
+    df,
+    *,
+    title: str,
+    period_label: str = "",
+    subtitle: str = "",
+    section_title: str = "Detail",
+    max_rows: int = 150,
+    landscape: bool | None = None,
+) -> bytes:
+    """Branded tabular export with ROGUARD ghost watermark."""
+    import pandas as pd
+
+    data = df.copy() if df is not None else pd.DataFrame()
+    col_count = len(data.columns) if not data.empty else 0
+    use_landscape = landscape if landscape is not None else col_count > 6
+
+    pdf = _ReportPDF(orientation="L" if use_landscape else "P", unit="mm", format="Letter")
+    pdf.set_report_title(subtitle or title)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+    _report_header(pdf, title, period_label, subtitle=subtitle or title)
+
+    if not data.empty:
+        _body_text(pdf, f"Rows: {len(data):,}", size=9)
+
+    truncated = _dataframe_table(pdf, data, section_title=section_title, max_rows=max_rows)
+    if truncated:
+        _body_text(
+            pdf,
+            f"Showing the first {max_rows} rows. Use CSV export for the complete dataset.",
+            size=9,
+        )
+    return bytes(pdf.output())
+
+
+def build_decline_reasons_pdf(df, *, period_label: str = "Selected period") -> bytes:
+    return build_dataframe_report_pdf(
+        df,
+        title="RO GUARD Decline Reasons Report",
+        period_label=period_label,
+        subtitle="Decline Reasons",
+        section_title="Decline Detail",
+        max_rows=120,
+        landscape=True,
+    )
+
+
+def build_popps_audit_pdf(
+    df,
+    *,
+    title: str,
+    dealer_code: str = "",
+    period_label: str = "",
+    file_name: str = "",
+) -> bytes:
+    meta_parts = [p for p in (f"Dealer {dealer_code}" if dealer_code else "", period_label, file_name) if p]
+    period = " · ".join(meta_parts) if meta_parts else "POPPS review export"
+    return build_dataframe_report_pdf(
+        df,
+        title=title,
+        period_label=period,
+        subtitle="POPPS Review Audit",
+        section_title="Review Records",
+        max_rows=200,
+        landscape=True,
+    )
 
 
 def _key_value_lines(pdf: FPDF, pairs: list[tuple[str, str]]):
@@ -350,23 +589,18 @@ def _embed_png(
 
 def build_audit_report_pdf(data: dict) -> bytes:
     """Build a shareable single-RO audit PDF."""
+    ro_number = _safe_text(data.get("ro_number") or "RO")
     pdf = _ReportPDF()
+    pdf.set_report_title("Warranty Audit")
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    ro_number = _safe_text(data.get("ro_number") or "RO")
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(10, 40, 80)
-    _safe_multi_cell(pdf, 8, "RO Shield Warranty Audit Report")
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(60, 60, 60)
-    _safe_multi_cell(pdf, 6, f"RO Number: {ro_number}")
-    _safe_multi_cell(
+    _report_header(
         pdf,
-        6,
-        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+        "RO GUARD Warranty Audit Report",
+        f"RO {ro_number}",
+        subtitle="Warranty Audit",
     )
-    pdf.ln(4)
 
     _section_title(pdf, "Summary")
     _key_value_lines(
@@ -463,24 +697,16 @@ def build_roi_report_pdf(
 ) -> bytes:
     """Build a manager-ready ROI summary PDF."""
     pdf = _ReportPDF()
+    pdf.set_report_title("ROI Summary")
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    _ensure_left(pdf)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(10, 40, 80)
-    pdf.multi_cell(0, 8, "RO Shield ROI Summary")
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(60, 60, 60)
-    _ensure_left(pdf)
-    pdf.multi_cell(0, 6, f"Period: {_safe_text(period_label)}")
-    _ensure_left(pdf)
-    pdf.multi_cell(
-        0,
-        6,
-        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+    _report_header(
+        pdf,
+        "RO GUARD ROI Summary",
+        _safe_text(period_label),
+        subtitle="ROI Summary",
     )
-    pdf.ln(4)
 
     _section_title(pdf, "Estimated Value Captured")
     _ensure_left(pdf)
@@ -603,6 +829,7 @@ def build_review_report_pdf(df, *, period_label: str = "All reviews") -> bytes:
     import pandas as pd
 
     pdf = _ReportPDF(orientation="L", unit="mm", format="Letter")
+    pdf.set_report_title("Review Report")
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
 
@@ -615,7 +842,7 @@ def build_review_report_pdf(df, *, period_label: str = "All reviews") -> bytes:
         if col in data.columns:
             data[col] = pd.to_numeric(data[col], errors="coerce").fillna(0)
 
-    _report_header(pdf, "RO Shield Review Report", period_label)
+    _report_header(pdf, "RO GUARD Review Report", period_label, subtitle="Review Report")
 
     summary_metrics = [
         ("Reviews", str(len(data))),
@@ -645,7 +872,7 @@ def build_review_report_pdf(df, *, period_label: str = "All reviews") -> bytes:
     if truncated:
         _body_text(
             pdf,
-            f"Showing the most recent {max_rows} reviews. Use CSV export for the complete log.",
+            f"Showing the most recent {max_rows} reviews. Use CSV export for the complete log, or contact your admin for a full extract.",
             size=9,
         )
 

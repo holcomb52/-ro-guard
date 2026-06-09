@@ -26,6 +26,7 @@ from .scheduled_reports import (
     send_schedule_report,
     send_smtp_test_email,
     smtp_config_status,
+    smtp_last_delivery_log,
     upsert_email_schedule,
     cancel_email_schedule,
 )
@@ -136,8 +137,18 @@ def render_scheduled_reports_admin(supabase) -> None:
                 else:
                     try:
                         sent_to = send_smtp_test_email(test_to)
+                        delivery = smtp_last_delivery_log()
+                        detail = "; ".join(f"{addr}: {status}" for addr, status in delivery.items())
                         st.success(
-                            f"Test email sent to {', '.join(sent_to)}. Check inbox and spam."
+                            f"SMTP accepted mail for {', '.join(sent_to)}. "
+                            f"A copy was also sent to your SMTP login inbox if different."
+                        )
+                        if detail:
+                            st.caption(detail)
+                        st.warning(
+                            "If dealership inboxes are still empty, your mail server is likely blocking "
+                            "**Gmail → @newsmyrnacjd.com**. Switch REPORT_SMTP_* to **Office 365** "
+                            "with a **@newsmyrnacjd.com** sender (see deliverability tip above)."
                         )
                     except Exception as exc:
                         st.error(format_smtp_send_error(exc, load_smtp_config()))

@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 
 import pandas as pd
 
@@ -248,7 +249,27 @@ def diagnose_scheduled_email_system(supabase) -> list[dict]:
             ),
         }
     )
+    config = load_smtp_config()
+    if config:
+        sender = normalize_email(str(config.get("user") or config.get("sender") or ""))
+        if sender.endswith("@gmail.com"):
+            checks.append(
+                {
+                    "label": "Deliverability tip",
+                    "ok": True,
+                    "detail": (
+                        "Sending **from Gmail** to dealership addresses (@newsmyrnacjd.com, etc.) "
+                        "is often blocked by corporate mail filters even when the app shows success. "
+                        "Prefer **Office 365** SMTP with a **@newsmyrnacjd.com** mailbox: "
+                        "`REPORT_SMTP_HOST=smtp.office365.com`, user/from = your dealership email."
+                    ),
+                }
+            )
     return checks
+
+
+def smtp_last_delivery_log() -> dict[str, str]:
+    return dict(getattr(_smtp_deliver_message, "_last_log", {}) or {})
 
 
 def load_manager_emails(supabase) -> list[str]:
@@ -444,6 +465,72 @@ def _smtp_envelope_sender(config: dict) -> str:
     return str(config.get("user") or config.get("sender") or "").strip()
 
 
+def _stamp_message_headers(message: MIMEMultipart, *, config: dict, recipients: list[str]) -> None:
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain=str(config.get("host") or "roguard.local"))
+    message["From"] = str(config.get("sender") or config.get("user") or "").strip()
+    message["To"] = ", ".join(recipients)
+
+
+def _smtp_deliver_message(config: dict, recipients: list[str], message: MIMEMultipart) -> dict:
+    """Send one message per recipient; raise if SMTP refuses any address."""
+    recipients = parse_recipient_list(", ".join(recipients))
+    if not recipients:
+        raise ValueError("No valid recipient email addresses.")
+
+    envelope_from = _smtp_envelope_sender(config)
+    refused: dict[str, tuple[int, bytes]] = {}
+    log: dict[str, str] = {}
+
+    def _send_one(server: smtplib.SMTP, rcpt: str) -> None:
+        _stamp_message_headers(message, config=config, recipients=[rcpt])
+        result = server.sendmail(envelope_from, [rcpt], message.as_string())
+        if result:
+            refused.update(result)
+        else:
+            log[rcpt] = "accepted by SMTP server"
+
+    sender_copy = normalize_email(str(config.get("user") or ""))
+    send_sender_copy = bool(
+        sender_copy and sender_copy not in {normalize_email(r) for r in recipients}
+    )
+
+    if config["use_tls"]:
+        with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(config["user"], config["password"])
+            for rcpt in recipients:
+                _send_one(server, rcpt)
+            main_refused = dict(refused)
+            if send_sender_copy:
+                _send_one(server, sender_copy)
+                if sender_copy in refused and sender_copy not in main_refused:
+                    log[sender_copy] = "copy to sender failed (non-fatal)"
+                else:
+                    log[sender_copy] = "copy to sender mailbox"
+    else:
+        with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
+            server.login(config["user"], config["password"])
+            for rcpt in recipients:
+                _send_one(server, rcpt)
+            main_refused = dict(refused)
+            if send_sender_copy:
+                _send_one(server, sender_copy)
+                if sender_copy in refused and sender_copy not in main_refused:
+                    log[sender_copy] = "copy to sender failed (non-fatal)"
+                else:
+                    log[sender_copy] = "copy to sender mailbox"
+
+    if main_refused:
+        details = "; ".join(f"{addr}: {code}" for addr, (code, _msg) in main_refused.items())
+        raise RuntimeError(f"SMTP server refused recipient(s): {details}")
+
+    _smtp_deliver_message._last_log = log
+    return log
+
+
 def send_smtp_test_email(
     recipients: list[str],
     *,
@@ -462,7 +549,9 @@ def send_smtp_test_email(
         body_text=(
             "This is a test message from RO Guard Scheduled Reports.\n\n"
             f"Sent from {config.get('sender')} via {config.get('host')}.\n"
-            "If you received this, SMTP is working — check spam if PDF reports are missing.\n"
+            f"A copy is also sent to the SMTP login ({config.get('user')}) when it differs from recipients.\n"
+            "If the login inbox receives mail but dealership addresses do not, switch to "
+            "Office 365 SMTP with a @newsmyrnacjd.com sender.\n"
         ),
         smtp_config=config,
     )
@@ -502,22 +591,8 @@ def send_plain_email(
 
     message = MIMEMultipart()
     message["Subject"] = subject
-    message["From"] = config["sender"]
-    message["To"] = ", ".join(recipients)
     message.attach(MIMEText(body_text, "plain"))
-
-    envelope_from = _smtp_envelope_sender(config)
-    if config["use_tls"]:
-        with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(config["user"], config["password"])
-            server.sendmail(envelope_from, recipients, message.as_string())
-    else:
-        with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
-            server.login(config["user"], config["password"])
-            server.sendmail(envelope_from, recipients, message.as_string())
+    _smtp_deliver_message(config, recipients, message)
 
 
 def send_report_email(
@@ -539,8 +614,6 @@ def send_report_email(
 
     message = MIMEMultipart()
     message["Subject"] = subject
-    message["From"] = config["sender"]
-    message["To"] = ", ".join(recipients)
     message.attach(MIMEText(body_text, "plain"))
 
     for pdf_bytes, filename in attachments:
@@ -548,18 +621,7 @@ def send_report_email(
         attachment.add_header("Content-Disposition", "attachment", filename=filename)
         message.attach(attachment)
 
-    envelope_from = _smtp_envelope_sender(config)
-    if config["use_tls"]:
-        with smtplib.SMTP(config["host"], config["port"], timeout=60) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(config["user"], config["password"])
-            server.sendmail(envelope_from, recipients, message.as_string())
-    else:
-        with smtplib.SMTP_SSL(config["host"], config["port"], timeout=60) as server:
-            server.login(config["user"], config["password"])
-            server.sendmail(envelope_from, recipients, message.as_string())
+    _smtp_deliver_message(config, recipients, message)
 
 
 def _safe_filename(label: str) -> str:
