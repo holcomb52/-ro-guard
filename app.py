@@ -124,6 +124,13 @@ from core.user_guide import (
     render_sidebar_help_nav,
     render_user_guide,
 )
+from core.review_simple_ui import (
+    close_simple_section,
+    render_compact_live_status,
+    render_review_view_toggle,
+    render_simple_section_header,
+    render_simple_step_rail,
+)
 from core.popps_report import render_popps_report
 from core.html_embed import embed_html, embed_script, ensure_sidebar_expanded
 from core.ro_ocr import extract_ro_text, merge_form_imports, ocr_available, parsed_to_form_import, scan_repair_order_pdf
@@ -158,44 +165,16 @@ def filter_actionable_recalls(
     )
     return actionable
 
-try:
-    from dotenv import load_dotenv
+from core.supabase_config import create_supabase_client, load_local_env
 
-    load_dotenv(Path(__file__).resolve().parent / ".env")
-except ImportError:
-    pass
+load_local_env()
 
 try:
     from PyPDF2 import PdfReader
 except Exception:
     PdfReader = None
 
-try:
-    from supabase import create_client
-except Exception:
-    create_client = None
-
-
-def _load_supabase_credentials():
-    """Local .env first; Streamlit Cloud uses app Secrets (st.secrets)."""
-    url = os.getenv("SUPABASE_URL", "").strip()
-    key = os.getenv("SUPABASE_KEY", "").strip()
-    try:
-        if not url:
-            url = str(st.secrets.get("SUPABASE_URL", "")).strip()
-        if not key:
-            key = str(st.secrets.get("SUPABASE_KEY", "")).strip()
-    except Exception:
-        pass
-    return url, key
-
-
-SUPABASE_URL, SUPABASE_KEY = _load_supabase_credentials()
-
-if create_client and SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-else:
-    supabase = None
+supabase, SUPABASE_URL, SUPABASE_KEY = create_supabase_client()
 
 st.set_page_config(page_title="RO Shield", layout="wide", initial_sidebar_state="expanded")
 
@@ -5320,12 +5299,121 @@ def _review_job_tab_label(
     return f"Job {job_no} · OK"
 
 
+def _render_warranty_checks_grouped(
+    job_no: int,
+    *,
+    narrative_preview: dict,
+    rental_dollars_per_day: float,
+) -> dict:
+    """Grouped documentation checkboxes for Simple Review view."""
+    applies = lambda topic: _narrative_indicates_repair(narrative_preview, topic)
+
+    groups: list[tuple[str, list[str], list[tuple[str, str, str]]]] = [
+        (
+            "Leak & fluids",
+            ["oil_leak"],
+            [
+                ("oil_leak", "Oil Leak", f"oil_leak_{job_no}"),
+                ("oil_dye_billed", "Oil Dye Billed", f"oil_dye_{job_no}"),
+            ],
+        ),
+        (
+            "Battery & A/C",
+            ["battery_replacement", "ac_repair"],
+            [
+                ("battery_replacement", "Battery Replacement", f"battery_{job_no}"),
+                ("battery_test_slip", "MAXIMUS Battery slip attached", f"battery_slip_{job_no}"),
+                ("ac_repair", "A/C Repair", f"ac_{job_no}"),
+                ("ac_evac_slip", "A/C EVAC Slip", f"ac_slip_{job_no}"),
+            ],
+        ),
+        (
+            "Alignment",
+            ["alignment_involved"],
+            [
+                ("alignment_involved", "Alignment", f"alignment_{job_no}"),
+                (
+                    "alignment_report_attached",
+                    "Alignment Report Attached to RO",
+                    f"alignment_report_{job_no}",
+                ),
+            ],
+        ),
+        (
+            "Sublet",
+            ["sublet_repair"],
+            [
+                ("sublet_repair", "Sublet Repair", f"sublet_{job_no}"),
+                ("sublet_vin", "Sublet VIN Present", f"sublet_vin_{job_no}"),
+                ("sublet_mileage", "Sublet Mileage Present", f"sublet_mileage_{job_no}"),
+                ("sublet_notes", "Sublet Detailed Notes Present", f"sublet_notes_{job_no}"),
+            ],
+        ),
+        (
+            "Rental & approvals",
+            ["rental_involved", "warranty_add_on"],
+            [
+                ("rental_involved", "Rental Involved", f"rental_{job_no}"),
+                ("manager_signed_rental", service_manager_action_label("Signed Rental"), f"rental_signed_{job_no}"),
+                ("warranty_add_on", "Warranty Add-On (W+)", f"addon_{job_no}"),
+                ("manager_approval", service_manager_action_label("Signed Off"), f"manager_approval_{job_no}"),
+            ],
+        ),
+        (
+            "Parts warranty",
+            ["parts_warranty"],
+            [
+                ("parts_warranty", "Parts Warranty", f"parts_warranty_{job_no}"),
+                ("mopa_original_ro", "MOPAR + Original RO", f"mopa_{job_no}"),
+            ],
+        ),
+    ]
+
+    values: dict = {}
+    rental_days = 0.0
+
+    st.markdown("**Documentation**")
+    st.caption("Step 3 — open a group and check boxes to confirm proof is on the RO.")
+    for title, topics, fields in groups:
+        relevant = any(applies(t) for t in topics)
+        checked_any = any(st.session_state.get(key, False) for _, _, key in fields)
+        expand = relevant or checked_any
+        hint = (
+            '<div class="review-doc-group-hint">Suggested for this job story</div>'
+            if relevant
+            else ""
+        )
+        with st.expander(title, expanded=expand):
+            if hint:
+                st.markdown(hint, unsafe_allow_html=True)
+            for field_name, label, key in fields:
+                values[field_name] = st.checkbox(label, key=key)
+            if title == "Rental & approvals":
+                rental_days = _render_number_input_with_copy(
+                    "Rental days billed",
+                    f"rental_days_{job_no}",
+                    copy_id=f"copy_rental_days_{job_no}",
+                    min_value=0.0,
+                    step=1.0,
+                )
+                if rental_dollars_per_day > 0:
+                    rental_total = float(rental_days or 0) * rental_dollars_per_day
+                    st.caption(
+                        f"**Rental total:** ${rental_total:,.2f} "
+                        f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
+                    )
+
+    values["rental_days"] = rental_days
+    return values
+
+
 def _render_review_job_panel(
     job_no: int,
     *,
     form_version: int,
     smart_warranty_time_exempt: bool,
     rental_dollars_per_day: float,
+    simple_mode: bool = False,
 ) -> tuple[dict, bool, str]:
     """Render one warranty job on the Review tab."""
     fv = form_version
@@ -5337,22 +5425,37 @@ def _render_review_job_panel(
         '<div class="review-job-narratives-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
-    st.caption("Use **Copy** under each field to paste into Dealer Connect.")
-    concern = _render_narrative_field(
-        "Concern",
-        f"concern_{job_no}_{fv}",
-        copy_id=f"copy_concern_{job_no}_{fv}",
-    )
-    cause = _render_narrative_field(
-        "Cause",
-        f"cause_{job_no}_{fv}",
-        copy_id=f"copy_cause_{job_no}_{fv}",
-    )
-    correction = _render_narrative_field(
-        "Correction",
-        f"correction_{job_no}_{fv}",
-        copy_id=f"copy_correction_{job_no}_{fv}",
-    )
+    if simple_mode:
+        st.caption("Step 2 — job story. Use **Copy all** once to paste into Dealer Connect.")
+        concern = st.text_area("Concern", key=f"concern_{job_no}_{fv}", height=72)
+        cause = st.text_area("Cause", key=f"cause_{job_no}_{fv}", height=72)
+        correction = st.text_area("Correction", key=f"correction_{job_no}_{fv}", height=72)
+        combined_ccc = (
+            f"Concern:\n{concern}\n\nCause:\n{cause}\n\nCorrection:\n{correction}"
+        ).strip()
+        _render_field_copy_button(
+            combined_ccc,
+            label="Copy all CCC",
+            element_id=f"copy_all_ccc_{job_no}_{fv}",
+            iframe_width=120,
+        )
+    else:
+        st.caption("Use **Copy** under each field to paste into Dealer Connect.")
+        concern = _render_narrative_field(
+            "Concern",
+            f"concern_{job_no}_{fv}",
+            copy_id=f"copy_concern_{job_no}_{fv}",
+        )
+        cause = _render_narrative_field(
+            "Cause",
+            f"cause_{job_no}_{fv}",
+            copy_id=f"copy_cause_{job_no}_{fv}",
+        )
+        correction = _render_narrative_field(
+            "Correction",
+            f"correction_{job_no}_{fv}",
+            copy_id=f"copy_correction_{job_no}_{fv}",
+        )
 
     if job_no == 1:
         if smart_warranty_time_exempt:
@@ -5406,51 +5509,77 @@ def _render_review_job_panel(
     )
 
     st.markdown("**Warranty checks**")
-    c1, c2 = st.columns(2)
-    with c1:
-        oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
-        oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
-        battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-        battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
-        alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
-        alignment_report_attached = st.checkbox(
-            "Alignment Report Attached to RO",
-            key=f"alignment_report_{job_no}",
-        )
-        sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
-        sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
-        sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
-        sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
-    with c2:
-        rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-        rental_days = _render_number_input_with_copy(
-            "Rental days billed",
-            f"rental_days_{job_no}",
-            copy_id=f"copy_rental_days_{job_no}",
-            min_value=0.0,
-            step=1.0,
-        )
-        if rental_dollars_per_day > 0:
-            rental_total = float(rental_days or 0) * rental_dollars_per_day
-            st.caption(
-                f"**Rental total:** ${rental_total:,.2f} "
-                f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
-            )
-        manager_signed_rental = st.checkbox(
-            service_manager_action_label("Signed Rental"),
-            key=f"rental_signed_{job_no}",
-        )
-        warranty_add_on = st.checkbox("Warranty Add-On (W+)", key=f"addon_{job_no}")
-        manager_approval = st.checkbox(
-            service_manager_action_label("Signed Off"),
-            key=f"manager_approval_{job_no}",
-        )
-        ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
-        ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-        parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
-        mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
-
     narrative_preview = {"concern": concern, "cause": cause, "correction": correction}
+    if simple_mode:
+        check_values = _render_warranty_checks_grouped(
+            job_no,
+            narrative_preview=narrative_preview,
+            rental_dollars_per_day=rental_dollars_per_day,
+        )
+        oil_leak = check_values["oil_leak"]
+        oil_dye_billed = check_values["oil_dye_billed"]
+        battery_replacement = check_values["battery_replacement"]
+        battery_test_slip = check_values["battery_test_slip"]
+        alignment_involved = check_values["alignment_involved"]
+        alignment_report_attached = check_values["alignment_report_attached"]
+        sublet_repair = check_values["sublet_repair"]
+        sublet_vin = check_values["sublet_vin"]
+        sublet_mileage = check_values["sublet_mileage"]
+        sublet_notes = check_values["sublet_notes"]
+        rental_involved = check_values["rental_involved"]
+        rental_days = check_values["rental_days"]
+        manager_signed_rental = check_values["manager_signed_rental"]
+        warranty_add_on = check_values["warranty_add_on"]
+        manager_approval = check_values["manager_approval"]
+        ac_repair = check_values["ac_repair"]
+        ac_evac_slip = check_values["ac_evac_slip"]
+        parts_warranty = check_values["parts_warranty"]
+        mopa_original_ro = check_values["mopa_original_ro"]
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
+            oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
+            battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
+            battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
+            alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
+            alignment_report_attached = st.checkbox(
+                "Alignment Report Attached to RO",
+                key=f"alignment_report_{job_no}",
+            )
+            sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
+            sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
+            sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
+            sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
+        with c2:
+            rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
+            rental_days = _render_number_input_with_copy(
+                "Rental days billed",
+                f"rental_days_{job_no}",
+                copy_id=f"copy_rental_days_{job_no}",
+                min_value=0.0,
+                step=1.0,
+            )
+            if rental_dollars_per_day > 0:
+                rental_total = float(rental_days or 0) * rental_dollars_per_day
+                st.caption(
+                    f"**Rental total:** ${rental_total:,.2f} "
+                    f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
+                )
+            manager_signed_rental = st.checkbox(
+                service_manager_action_label("Signed Rental"),
+                key=f"rental_signed_{job_no}",
+            )
+            warranty_add_on = st.checkbox("Warranty Add-On (W+)", key=f"addon_{job_no}")
+            manager_approval = st.checkbox(
+                service_manager_action_label("Signed Off"),
+                key=f"manager_approval_{job_no}",
+            )
+            ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
+            ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
+            parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
+            mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
+
     if _narrative_indicates_repair(narrative_preview, "alignment_involved") and not alignment_report_attached:
         st.error("Hard stop: alignment printout report must be attached to the repair order.")
     if _narrative_indicates_repair(narrative_preview, "warranty_add_on") and not manager_approval:
@@ -5484,15 +5613,23 @@ def _render_review_job_panel(
         '<div class="review-job-coaching-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
-    applicable_manual = find_applicable_manual_sections(preview_job)
-    render_applicable_manual_sections(
-        applicable_manual,
-        key_prefix=f"live_manual_{job_no}_{fv}",
-    )
-    similar_claims = find_similar_paid_claims(current_job_preview)
-    render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
-    similar_declined = find_similar_declined_claims(current_job_preview)
-    render_declined_claim_alert(current_job_preview, similar_declined)
+
+    def _render_job_coaching_blocks() -> None:
+        applicable_manual = find_applicable_manual_sections(preview_job)
+        render_applicable_manual_sections(
+            applicable_manual,
+            key_prefix=f"live_manual_{job_no}_{fv}",
+        )
+        similar_claims = find_similar_paid_claims(current_job_preview)
+        render_narrative_gap_coach(current_job_preview, similar_claims, job_no)
+        similar_declined = find_similar_declined_claims(current_job_preview)
+        render_declined_claim_alert(current_job_preview, similar_declined)
+
+    if simple_mode:
+        with st.expander("Coaching & manual references (optional)", expanded=False):
+            _render_job_coaching_blocks()
+    else:
+        _render_job_coaching_blocks()
 
     job = {
         "job_no": str(job_no),
@@ -5630,38 +5767,67 @@ def render_review():
         unsafe_allow_html=True,
     )
 
+    theme = st.session_state.get("appearance", "Dark")
+    simple_mode = render_review_view_toggle(theme=theme)
+    if simple_mode:
+        st.markdown(
+            '<div class="review-simple-mode" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        render_simple_step_rail(active_step=1)
+
     pending_review = st.session_state.pop("_pending_review_load", None)
     if pending_review is not None:
         _apply_saved_review_to_form(pending_review, st.session_state.form_version)
 
     _render_review_open_claims_strip()
 
-    with st.expander(
-        "Scan Repair Order & Invoice",
-        expanded=bool(st.session_state.get("ro_scan_summary")),
-    ):
+    scan_expanded = bool(st.session_state.get("ro_scan_summary"))
+    scan_title = "Scan RO & invoice (optional)" if simple_mode else "Scan Repair Order & Invoice"
+    with st.expander(scan_title, expanded=scan_expanded and not simple_mode):
         _render_ro_scanner()
 
-    _, next_col = st.columns([5, 1])
-    with next_col:
-        if st.button("Next Claim"):
-            fv = st.session_state.form_version
-            st.session_state.pop(f"vin_recall_result_{fv}", None)
-            st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
-            st.session_state.pop(_vin_recall_skip_fetch_key(fv), None)
-            for key in (
-                _active_review_id_key(fv),
-                _active_review_ro_key(fv),
-                _active_review_vin_key(fv),
-            ):
-                st.session_state.pop(key, None)
-            st.session_state.form_version += 1
-            st.session_state.pop("_ro_scan_advisor", None)
-            st.session_state.pop("_ro_scan_technician", None)
-            st.session_state.pop("ro_scan_summary", None)
-            st.session_state.pop("loaded_review_ro", None)
-            st.session_state.pop("loaded_review_id", None)
-            st.rerun()
+    if simple_mode:
+        with st.expander("More actions", expanded=False):
+            if st.button("Next Claim", key="simple_next_claim"):
+                fv = st.session_state.form_version
+                st.session_state.pop(f"vin_recall_result_{fv}", None)
+                st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+                st.session_state.pop(_vin_recall_skip_fetch_key(fv), None)
+                for key in (
+                    _active_review_id_key(fv),
+                    _active_review_ro_key(fv),
+                    _active_review_vin_key(fv),
+                ):
+                    st.session_state.pop(key, None)
+                st.session_state.form_version += 1
+                st.session_state.pop("_ro_scan_advisor", None)
+                st.session_state.pop("_ro_scan_technician", None)
+                st.session_state.pop("ro_scan_summary", None)
+                st.session_state.pop("loaded_review_ro", None)
+                st.session_state.pop("loaded_review_id", None)
+                st.rerun()
+    else:
+        _, next_col = st.columns([5, 1])
+        with next_col:
+            if st.button("Next Claim"):
+                fv = st.session_state.form_version
+                st.session_state.pop(f"vin_recall_result_{fv}", None)
+                st.session_state.pop(f"vin_recall_tracked_vin_{fv}", None)
+                st.session_state.pop(_vin_recall_skip_fetch_key(fv), None)
+                for key in (
+                    _active_review_id_key(fv),
+                    _active_review_ro_key(fv),
+                    _active_review_vin_key(fv),
+                ):
+                    st.session_state.pop(key, None)
+                st.session_state.form_version += 1
+                st.session_state.pop("_ro_scan_advisor", None)
+                st.session_state.pop("_ro_scan_technician", None)
+                st.session_state.pop("ro_scan_summary", None)
+                st.session_state.pop("loaded_review_ro", None)
+                st.session_state.pop("loaded_review_id", None)
+                st.rerun()
 
     if "job_count" not in st.session_state:
         st.session_state.job_count = 1
@@ -5673,13 +5839,20 @@ def render_review():
     rejection_library = load_rejection_reason_library(supabase)
     rental_dollars_per_day = float(audit_rules["thresholds"].get("rental_dollars_per_day", 0) or 0)
 
-    if smart_warranty_time_exempt:
-        st.caption(
-            f"Smart Warranty **{sw_level.title()}** — time punch validation waived (Plus/Premium)."
-        )
-    else:
-        st.caption(
-            f"Smart Warranty **Base** — tech flagged time vs. time allotted validation applies."
+    if not simple_mode:
+        if smart_warranty_time_exempt:
+            st.caption(
+                f"Smart Warranty **{sw_level.title()}** — time punch validation waived (Plus/Premium)."
+            )
+        else:
+            st.caption(
+                f"Smart Warranty **Base** — tech flagged time vs. time allotted validation applies."
+            )
+
+    if simple_mode:
+        render_simple_section_header(
+            "RO info",
+            "Step 1 — header, dates, and team.",
         )
 
     job_count = st.number_input(
@@ -5736,12 +5909,18 @@ def render_review():
         smart_warranty_time_exempt=smart_warranty_time_exempt,
         audit_rules=audit_rules,
     )
-    render_live_submit_status_bar(live_summary)
+    if not simple_mode:
+        render_live_submit_status_bar(live_summary)
 
     oem_paid_amount = None
     short_pay_reason = ""
     submitted_claim = 0.0
-    with st.expander("Claim outcome (optional — save here or in Reporting)", expanded=False):
+    outcome_expander_title = (
+        "OEM outcome (optional)"
+        if simple_mode
+        else "Claim outcome (optional — save here or in Reporting)"
+    )
+    with st.expander(outcome_expander_title, expanded=False):
         st.caption(
             "Record the Stellantis result when you know it. Leave all unchecked if the claim "
             "is still pending. Click **Save outcome** to update the saved review without re-running "
@@ -5894,48 +6073,93 @@ def render_review():
     if matched_warranty:
         st.session_state[f"warranty_admin_{fv}"] = matched_warranty
 
-    person_col1, person_col2, person_col3 = st.columns(3)
-    with person_col1:
-        advisor = st.selectbox(
-            "Advisor",
-            advisor_list,
-            key=f"advisor_{fv}",
-        )
-    with person_col2:
-        technician = st.selectbox(
-            "Technician",
-            tech_list,
-            key=f"technician_{fv}",
-        )
-    with person_col3:
-        warranty_admin = st.selectbox(
-            "Warranty Admin",
-            warranty_list,
-            key=f"warranty_admin_{fv}",
-        )
+    if simple_mode:
+        person_col1, person_col2 = st.columns(2)
+        with person_col1:
+            advisor = st.selectbox(
+                "Advisor",
+                advisor_list,
+                key=f"advisor_{fv}",
+            )
+        with person_col2:
+            technician = st.selectbox(
+                "Technician",
+                tech_list,
+                key=f"technician_{fv}",
+            )
+        with st.expander("More team fields (optional)", expanded=False):
+            warranty_admin = st.selectbox(
+                "Warranty Admin",
+                warranty_list,
+                key=f"warranty_admin_{fv}",
+            )
+            sm_names = service_manager_names()
+            if sm_names:
+                loaded_manager = st.session_state.pop("_loaded_review_service_manager", None)
+                matched_manager = _match_personnel_name(loaded_manager, sm_names) if loaded_manager else None
+                if matched_manager:
+                    st.session_state[f"service_manager_{fv}"] = matched_manager
+                service_manager = st.selectbox(
+                    service_manager_selectbox_label(),
+                    sm_names,
+                    key=f"service_manager_{fv}",
+                )
+            else:
+                st.session_state.pop("_loaded_review_service_manager", None)
+                service_manager = ""
+                st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
+        close_simple_section()
+    else:
+        person_col1, person_col2, person_col3 = st.columns(3)
+        with person_col1:
+            advisor = st.selectbox(
+                "Advisor",
+                advisor_list,
+                key=f"advisor_{fv}",
+            )
+        with person_col2:
+            technician = st.selectbox(
+                "Technician",
+                tech_list,
+                key=f"technician_{fv}",
+            )
+        with person_col3:
+            warranty_admin = st.selectbox(
+                "Warranty Admin",
+                warranty_list,
+                key=f"warranty_admin_{fv}",
+            )
 
-    sm_names = service_manager_names()
-    if sm_names:
-        loaded_manager = st.session_state.pop("_loaded_review_service_manager", None)
-        matched_manager = _match_personnel_name(loaded_manager, sm_names) if loaded_manager else None
-        if matched_manager:
-            st.session_state[f"service_manager_{fv}"] = matched_manager
-        service_manager = st.selectbox(
-            service_manager_selectbox_label(),
-            sm_names,
-            key=f"service_manager_{fv}",
+        sm_names = service_manager_names()
+        if sm_names:
+            loaded_manager = st.session_state.pop("_loaded_review_service_manager", None)
+            matched_manager = _match_personnel_name(loaded_manager, sm_names) if loaded_manager else None
+            if matched_manager:
+                st.session_state[f"service_manager_{fv}"] = matched_manager
+            service_manager = st.selectbox(
+                service_manager_selectbox_label(),
+                sm_names,
+                key=f"service_manager_{fv}",
+            )
+        else:
+            st.session_state.pop("_loaded_review_service_manager", None)
+            service_manager = ""
+            st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
+
+    if simple_mode:
+        render_simple_section_header(
+            "Job story & documentation",
+            "Steps 2–3 — narratives, times, and proof checkboxes.",
         )
     else:
-        st.session_state.pop("_loaded_review_service_manager", None)
-        service_manager = ""
-        st.caption("Add a **Manager** under Admin → Personnel to show the service manager on this RO.")
- 
-    st.markdown("---")
-    st.subheader("Warranty Jobs")
-    if multi_job:
+        st.markdown("---")
+        st.subheader("Warranty Jobs")
+    if multi_job and not simple_mode:
         st.caption(
             "Use the tabs below to work one job at a time. **Stop / Review / OK** shows each job's live audit status."
         )
+    elif multi_job and simple_mode:
+        st.caption("Multiple jobs — use the tabs below. Each tab is one warranty job.")
 
     jobs = []
     time_bypass = False
@@ -5959,6 +6183,7 @@ def render_review():
                     form_version=fv,
                     smart_warranty_time_exempt=smart_warranty_time_exempt,
                     rental_dollars_per_day=rental_dollars_per_day,
+                    simple_mode=simple_mode,
                 )
                 if job_no == 1:
                     time_bypass = job_bypass
@@ -5970,30 +6195,60 @@ def render_review():
             form_version=fv,
             smart_warranty_time_exempt=smart_warranty_time_exempt,
             rental_dollars_per_day=rental_dollars_per_day,
+            simple_mode=simple_mode,
         )
         jobs.append(job)
 
-    st.markdown("**Dealer Connect**")
-    with st.container():
-        st.markdown(
-            '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
-            unsafe_allow_html=True,
-        )
-        fv = st.session_state.form_version
-        dc_expand_all = False
-        if _dealer_connect_has_copy_sections(jobs, ro_number=ro_number, vin=vin):
-            dc_expand_all = st.checkbox(
-                "Expand all for copying into Dealer Connect",
-                key=f"dc_expand_all_{fv}",
+    if simple_mode:
+        close_simple_section()
+        render_simple_step_rail(active_step=4)
+        render_compact_live_status(live_summary)
+
+    if simple_mode:
+        with st.expander("Dealer Connect copy tools (optional)", expanded=False):
+            st.markdown("**Dealer Connect**")
+            with st.container():
+                st.markdown(
+                    '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
+                    unsafe_allow_html=True,
+                )
+                fv = st.session_state.form_version
+                dc_expand_all = False
+                if _dealer_connect_has_copy_sections(jobs, ro_number=ro_number, vin=vin):
+                    dc_expand_all = st.checkbox(
+                        "Expand all for copying into Dealer Connect",
+                        key=f"dc_expand_all_{fv}",
+                    )
+                _render_paid_labor_op_helper(jobs, expand_all=dc_expand_all)
+                _render_dealer_connect_job_lines_export(
+                    jobs,
+                    ro_number=ro_number,
+                    vin=vin,
+                    expand_all=dc_expand_all,
+                )
+                _inject_dealer_connect_expander_header_fix(st.session_state.get("appearance", "Dark"))
+    else:
+        st.markdown("**Dealer Connect**")
+        with st.container():
+            st.markdown(
+                '<div class="dealer-connect-workspace-marker" aria-hidden="true"></div>',
+                unsafe_allow_html=True,
             )
-        _render_paid_labor_op_helper(jobs, expand_all=dc_expand_all)
-        _render_dealer_connect_job_lines_export(
-            jobs,
-            ro_number=ro_number,
-            vin=vin,
-            expand_all=dc_expand_all,
-        )
-        _inject_dealer_connect_expander_header_fix(st.session_state.get("appearance", "Dark"))
+            fv = st.session_state.form_version
+            dc_expand_all = False
+            if _dealer_connect_has_copy_sections(jobs, ro_number=ro_number, vin=vin):
+                dc_expand_all = st.checkbox(
+                    "Expand all for copying into Dealer Connect",
+                    key=f"dc_expand_all_{fv}",
+                )
+            _render_paid_labor_op_helper(jobs, expand_all=dc_expand_all)
+            _render_dealer_connect_job_lines_export(
+                jobs,
+                ro_number=ro_number,
+                vin=vin,
+                expand_all=dc_expand_all,
+            )
+            _inject_dealer_connect_expander_header_fix(st.session_state.get("appearance", "Dark"))
 
     st.markdown("---")
 
@@ -9311,7 +9566,12 @@ def main():
         restore_client_session(supabase)
 
     if not is_authenticated():
-        render_login_page(supabase, apply_style=apply_style)
+        render_login_page(
+            supabase,
+            apply_style=apply_style,
+            supabase_url=SUPABASE_URL,
+            supabase_key=SUPABASE_KEY,
+        )
         st.stop()
 
     sync_personnel_identity(supabase)

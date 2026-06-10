@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import re
 from typing import Callable
@@ -9,6 +11,7 @@ from typing import Callable
 import streamlit as st
 
 from .html_embed import embed_script
+from .supabase_config import load_supabase_credentials
 from .personnel_roles import format_roles_display, parse_personnel_roles
 
 AUTH_SESSION_KEY = "supabase_auth_session"
@@ -32,6 +35,114 @@ def normalize_email(email: str) -> str:
 
 def is_valid_email(email: str) -> bool:
     return bool(EMAIL_PATTERN.match(normalize_email(email)))
+
+
+def describe_supabase_key(key: str) -> str:
+    text = str(key or "").strip()
+    if not text:
+        return "missing"
+    if text.startswith("sb_publishable_"):
+        return "publishable"
+    if text.startswith("sb_secret_"):
+        return "secret"
+    if text.startswith("eyJ"):
+        try:
+            payload = text.split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            data = json.loads(base64.urlsafe_b64decode(payload))
+            role = str(data.get("role") or "")
+            if role == "service_role":
+                return "service_role_jwt"
+            if role == "anon":
+                return "anon_jwt"
+        except Exception:
+            return "jwt"
+        return "jwt"
+    return "unknown"
+
+
+def diagnose_supabase_client_key(key: str) -> str | None:
+    """Return a user-facing warning when SUPABASE_KEY is the wrong type for login."""
+    kind = describe_supabase_key(key)
+    if kind == "missing":
+        return "Supabase is not configured. Add `SUPABASE_URL` and `SUPABASE_KEY` to `.env`."
+    if kind == "secret":
+        return (
+            "Your `SUPABASE_KEY` looks like a **secret** key (`sb_secret_...`). "
+            "Login needs the **publishable** or **anon** key from Supabase → Project Settings → API."
+        )
+    if kind == "service_role_jwt":
+        return (
+            "Your `SUPABASE_KEY` is the **service_role** key. "
+            "Login needs the **anon** or **publishable** key instead."
+        )
+    return None
+
+
+def probe_supabase_auth_access(supabase, *, url: str = "", key: str = "") -> tuple[bool, str]:
+    """Quick health check before sign-in — catches bad local API keys early."""
+    if supabase is None:
+        return False, "Supabase client is not configured."
+
+    key_warning = diagnose_supabase_client_key(key)
+    if key_warning:
+        return False, key_warning
+
+    try:
+        supabase.auth.get_session()
+    except Exception:
+        pass
+
+    try:
+        settings = supabase.auth.get_settings()
+        if settings is not None:
+            return True, ""
+    except AttributeError:
+        pass
+    except Exception as exc:
+        message = str(exc)
+        lowered = message.lower()
+        if "403" in message or "forbidden" in lowered:
+            return False, (
+                "Supabase rejected the API key (403 Forbidden). "
+                "Copy the **publishable** or **anon** key from Supabase → Project Settings → API "
+                "into local `.env`, then restart the app."
+            )
+        if "401" in message or "invalid api key" in lowered:
+            return False, "Supabase rejected the API key (401). Check `SUPABASE_KEY` in `.env`."
+
+    if url and key:
+        try:
+            import httpx
+
+            with httpx.Client(trust_env=False, timeout=12) as client:
+                response = client.get(
+                    f"{str(url).rstrip('/')}/auth/v1/settings",
+                    headers={"apikey": key, "Authorization": f"Bearer {key}"},
+                )
+            if response.status_code == 200:
+                return True, ""
+            if response.status_code in (401, 403):
+                return False, (
+                    f"Supabase auth settings returned {response.status_code}. "
+                    "Use the **publishable** or **anon** key from the same project as `SUPABASE_URL`."
+                )
+        except Exception:
+            pass
+
+    return True, ""
+
+
+def render_login_supabase_diagnostics(supabase, *, url: str = "", key: str = "") -> None:
+    if not url or not key:
+        url, key = load_supabase_credentials()
+    ok, message = probe_supabase_auth_access(supabase, url=url, key=key)
+    if ok:
+        kind = describe_supabase_key(key)
+        if kind in ("publishable", "anon_jwt"):
+            st.caption(f"Supabase connection OK ({kind.replace('_', ' ')} key detected).")
+        return
+    st.error(message)
 
 
 def app_redirect_url() -> str:
@@ -231,6 +342,19 @@ def sign_in_with_password(supabase, email: str, password: str) -> tuple[bool, st
     except Exception as exc:
         message = str(exc)
         lowered = message.lower()
+        if "403" in message or "forbidden" in lowered:
+            return False, (
+                "Sign in blocked (403 Forbidden). This is usually your Supabase **API key** in `.env`, "
+                "not your password. Use the **publishable** or **anon** key from Supabase → "
+                "Project Settings → API — not the secret/service_role key. "
+                "Then stop Terminal and restart with `./run.sh`."
+            )
+        if "api key" in lowered and ("missing" in lowered or "required" in lowered or "not found" in lowered):
+            return False, (
+                "Supabase API key is missing for this app session. "
+                "Add `SUPABASE_URL` and `SUPABASE_KEY` to `ro_guard/.env`, then stop Terminal and run `./run.sh` again. "
+                "Use the **publishable** or **anon** key — not the secret/service_role key."
+            )
         if "invalid login credentials" in lowered or "invalid email or password" in lowered:
             return False, "Invalid email or password."
         if "email not confirmed" in lowered:
@@ -502,7 +626,13 @@ def _render_login_brand_panel(*, headline: str, lede: str, compact: bool = False
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
+def render_login_page(
+    supabase,
+    *,
+    apply_style: Callable[[str], None],
+    supabase_url: str = "",
+    supabase_key: str = "",
+) -> None:
     apply_style("Dark")
     _mark_login_page()
     inject_auth_hash_bridge()
@@ -524,6 +654,11 @@ def render_login_page(supabase, *, apply_style: Callable[[str], None]) -> None:
         st.markdown('<div class="login-form-column-marker"></div>', unsafe_allow_html=True)
         st.markdown('<p class="login-form-title">Sign In</p>', unsafe_allow_html=True)
         st.caption("Use your dealership account to access review, reporting, and admin tools.")
+        render_login_supabase_diagnostics(
+            supabase,
+            url=supabase_url,
+            key=supabase_key,
+        )
 
         with st.form("ro_shield_login_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="you@dealership.com")
