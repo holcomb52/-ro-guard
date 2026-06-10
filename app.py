@@ -6016,6 +6016,7 @@ def render_review():
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
     ):
+        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
         ok_outcome, parsed_or_msg = _parse_review_outcome_selection(
             first_pass_paid=first_pass_paid,
             rejected=rejected,
@@ -6033,11 +6034,6 @@ def render_review():
             all_hard = []
             all_warn = []
             scores = []
-
-            total_value = sum(
-                float(j.get("claim_value") or 0)
-                for j in jobs
-            )
 
             hard_value = 0.0
 
