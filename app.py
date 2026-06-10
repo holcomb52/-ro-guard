@@ -3109,6 +3109,24 @@ def _job_narrative_text(job):
     ]).lower()
 
 
+def _narrative_indicates_repair(job, topic: str) -> bool:
+    """True when concern/cause/correction text suggests this repair type applies."""
+    phrases = JOB_MANUAL_TRIGGERS.get(topic, [])
+    if not phrases:
+        return False
+    text = _job_narrative_text(job)
+    return any(phrase in text for phrase in phrases)
+
+
+def _rental_work_applies(job) -> bool:
+    if _narrative_indicates_repair(job, "rental_involved"):
+        return True
+    try:
+        return int(job.get("rental_days") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _significant_terms(text):
     return {
         w.strip(".,:;()[]\"'").lower()
@@ -3790,24 +3808,13 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
                 "Pencil Wrench Correction: proper operation was not verified after repair.",
             )
 
-    oil_leak = bool(job.get("oil_leak"))
-    oil_dye_billed = bool(job.get("oil_dye_billed"))
-    if oil_leak and not oil_dye_billed:
+    if _narrative_indicates_repair(job, "oil_leak") and not job.get("oil_dye_billed"):
         _add_audit_finding(
             hard, warn, audit_rules, "oil_leak",
             "Oil leak repair requires oil dye billed.",
         )
-    elif oil_dye_billed and not oil_leak:
-        _add_audit_finding(
-            hard, warn, audit_rules, "oil_leak",
-            "Oil dye billed but Oil Leak is not selected.",
-        )
 
-    if job.get("sublet_repair"):
-        _add_audit_finding(
-            hard, warn, audit_rules, "sublet",
-            "Sublet selected: invoice must include VIN, mileage, and detailed repair notes.",
-        )
+    if _narrative_indicates_repair(job, "sublet_repair"):
         if not job.get("sublet_vin"):
             _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must show VIN.")
         if not job.get("sublet_mileage"):
@@ -3815,7 +3822,7 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
         if not job.get("sublet_notes"):
             _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must include detailed repair notes.")
 
-    if job.get("rental_involved"):
+    if _rental_work_applies(job):
         if job.get("rental_days", 0) <= 0:
             _add_audit_finding(hard, warn, audit_rules, "rental", "Rental involved but rental days are not billed.")
         if not job.get("manager_signed_rental"):
@@ -3827,7 +3834,7 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
                 "rental days is submitted to Stellantis with the claim.",
             )
 
-    if job.get("warranty_add_on") and not job.get("manager_approval"):
+    if _narrative_indicates_repair(job, "warranty_add_on") and not job.get("manager_approval"):
         manager_name = service_manager_signoff_phrase()
         _add_audit_finding(
             hard, warn, audit_rules, "warranty_add_on",
@@ -3862,22 +3869,22 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
         elif tech_flagged_time > 0 and time_allotted <= 0:
             _add_audit_finding(hard, warn, audit_rules, "tech_time", "Time Allotted for the job is missing.")
 
-    if job.get("battery_replacement") and not job.get("battery_test_slip"):
+    if _narrative_indicates_repair(job, "battery_replacement") and not job.get("battery_test_slip"):
         _add_audit_finding(
             hard, warn, audit_rules, "battery_test_slip",
             "Battery replacement requires failed battery test slip/code.",
         )
-    if job.get("ac_repair") and not job.get("ac_evac_slip"):
+    if _narrative_indicates_repair(job, "ac_repair") and not job.get("ac_evac_slip"):
         _add_audit_finding(
             hard, warn, audit_rules, "ac_evac_slip",
             "A/C repair requires EVAC/recharge slip.",
         )
-    if job.get("alignment_involved") and not job.get("alignment_report_attached"):
+    if _narrative_indicates_repair(job, "alignment_involved") and not job.get("alignment_report_attached"):
         _add_audit_finding(
             hard, warn, audit_rules, "alignment_report",
             "Alignment requires printout report attached to the repair order.",
         )
-    if job.get("parts_warranty") and not job.get("mopa_original_ro"):
+    if _narrative_indicates_repair(job, "parts_warranty") and not job.get("mopa_original_ro"):
         _add_audit_finding(
             hard, warn, audit_rules, "parts_warranty_mopa",
             "Parts warranty requires MOPAR and original RO support.",
@@ -5443,9 +5450,10 @@ def _render_review_job_panel(
         parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
         mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
 
-    if alignment_involved and not alignment_report_attached:
+    narrative_preview = {"concern": concern, "cause": cause, "correction": correction}
+    if _narrative_indicates_repair(narrative_preview, "alignment_involved") and not alignment_report_attached:
         st.error("Hard stop: alignment printout report must be attached to the repair order.")
-    if warranty_add_on and not manager_approval:
+    if _narrative_indicates_repair(narrative_preview, "warranty_add_on") and not manager_approval:
         st.error(
             f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
         )
