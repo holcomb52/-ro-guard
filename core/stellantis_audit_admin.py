@@ -237,7 +237,7 @@ def render_stellantis_audit_guide_tab(
                 hide_index=True,
             )
 
-            doc_ids = docs["id"].astype(int).tolist()
+            doc_ids = docs["id"].astype(str).tolist()
             labels = [
                 f"{'★ ' if row['is_active'] else ''}{row['source_file']} ({row['created_at']})"
                 for _, row in docs.iterrows()
@@ -270,7 +270,7 @@ def render_stellantis_audit_guide_tab(
 
             preview_id = st.session_state.get("stellantis_preview_id")
             if preview_id:
-                doc = get_stellantis_document_content(supabase, int(preview_id))
+                doc = get_stellantis_document_content(supabase, str(preview_id))
                 if doc:
                     st.markdown(f"### Preview — {doc.get('source_file') or 'Guide'}")
                     parsed = doc.get("parsed_config") or {}
