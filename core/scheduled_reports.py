@@ -735,14 +735,14 @@ def send_schedule_report(
         attachments=attachments,
     )
 
-    if record_send and supabase is not None:
-        supabase.table("email_schedules").update(
-            {
-                "last_sent_at": _utc_now_iso(),
-                "last_error": None,
-                "updated_at": _utc_now_iso(),
-            }
-        ).eq("frequency", frequency).execute()
+    if supabase is not None:
+        payload: dict = {
+            "last_error": None,
+            "updated_at": _utc_now_iso(),
+        }
+        if record_send:
+            payload["last_sent_at"] = _utc_now_iso()
+        supabase.table("email_schedules").update(payload).eq("frequency", frequency).execute()
 
     return {
         "frequency": frequency,
