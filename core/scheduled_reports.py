@@ -29,6 +29,12 @@ DEFAULT_ROI_REWORK_PCT = 0.40
 DEFAULT_ROI_MINUTES_SAVED = 15.0
 DEFAULT_ROI_HOURLY_RATE = 38.0
 
+REPORT_SMTP_ENV_VARS = (
+    "REPORT_SMTP_HOST",
+    "REPORT_SMTP_USER",
+    "REPORT_SMTP_PASSWORD",
+)
+
 FREQUENCY_LABELS = {
     "daily": "Daily",
     "monthly": "Monthly",
@@ -83,6 +89,15 @@ def _normalize_smtp_host(host: str) -> str:
     return cleaned
 
 
+def missing_report_smtp_env_vars() -> list[str]:
+    """Return REPORT_SMTP_* names that are unset in the current environment."""
+    missing: list[str] = []
+    for name in REPORT_SMTP_ENV_VARS:
+        if not str(os.getenv(name, "") or "").strip():
+            missing.append(name)
+    return missing
+
+
 def load_smtp_config() -> dict | None:
     def _get(name: str, default: str = "") -> str:
         value = os.getenv(name, default).strip()
@@ -123,6 +138,16 @@ def smtp_config_status() -> tuple[bool, str]:
     config = load_smtp_config()
     if config:
         return True, f"SMTP ready ({config['sender']} via {config['host']})."
+    missing = missing_report_smtp_env_vars()
+    if missing:
+        missing_text = ", ".join(f"`{name}`" for name in missing)
+        return (
+            False,
+            "Report email is not configured. Missing: "
+            f"{missing_text}. Add them to **Streamlit Cloud secrets** (for Send now buttons) "
+            "and **GitHub Actions secrets** (for overnight automation). "
+            "See docs/SCHEDULED_REPORTS.md.",
+        )
     return (
         False,
         "Report email is not configured. Add REPORT_SMTP_* secrets (see docs/SCHEDULED_REPORTS.md).",
@@ -728,6 +753,20 @@ def record_schedule_error(supabase, frequency: str, error: str) -> None:
             "updated_at": _utc_now_iso(),
         }
     ).eq("frequency", frequency).execute()
+
+
+def record_automation_error_for_enabled_schedules(supabase, error: str) -> None:
+    """Surface GitHub Actions / cron preflight failures in the Admin UI."""
+    message = str(error or "").strip()
+    if not message or supabase is None:
+        return
+    for schedule in load_email_schedules(supabase):
+        if not schedule.get("enabled"):
+            continue
+        try:
+            record_schedule_error(supabase, str(schedule.get("frequency") or ""), message)
+        except Exception:
+            pass
 
 
 def run_due_scheduled_reports(supabase, *, reference: date | None = None) -> list[dict]:

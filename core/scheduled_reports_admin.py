@@ -109,7 +109,10 @@ def render_scheduled_reports_admin(supabase) -> None:
                 st.error(f"**{check['label']}** — {check['detail']}")
         st.caption(
             "Overnight automation needs **GitHub** → repo **Settings** → **Secrets and variables** → **Actions**: "
-            "`SUPABASE_URL`, `SUPABASE_KEY`, and all `REPORT_SMTP_*` values. "
+            "`SUPABASE_URL`, `SUPABASE_KEY`, `REPORT_SMTP_HOST`, `REPORT_SMTP_USER`, "
+            "`REPORT_SMTP_PASSWORD`, and optional `REPORT_SMTP_PORT`, `REPORT_SMTP_FROM`, "
+            "`REPORT_SMTP_USE_TLS`. "
+            "Streamlit secrets alone do **not** power GitHub Actions — both places need the same SMTP values. "
             "Then **Actions** → **Scheduled RO Guard reports** → **Run workflow** to test."
         )
         schedules_preview = load_email_schedules(supabase)
