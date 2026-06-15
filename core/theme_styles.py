@@ -1409,39 +1409,133 @@ THEME_CSS = {
         font-weight: 600;
         color: #ffe08a !important;
     }
-    section.main div[data-testid="stVerticalBlock"]:has(> .ro-signature-check-marker),
+    @keyframes ro-signature-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(255, 80, 80, .45), 0 12px 32px rgba(255, 40, 40, .18);
+            border-color: rgba(255, 120, 120, .85) !important;
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(255, 80, 80, .16), 0 16px 40px rgba(255, 80, 40, .28);
+            border-color: rgba(255, 170, 120, 1) !important;
+        }
+    }
+    .ro-signature-check-section-label {
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #fca5a5 !important;
+        margin: 0.35rem 0 0.15rem;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker),
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) {
-        border: 2px solid rgba(255, 120, 120, .62) !important;
-        background: linear-gradient(135deg, rgba(255, 70, 70, .16), rgba(255, 140, 60, .10)) !important;
-        border-radius: 16px !important;
-        padding: 0.85rem 1rem 0.65rem !important;
-        margin: 0.35rem 0 1rem !important;
-        box-shadow: 0 10px 28px rgba(255, 60, 60, .12);
+        border-width: 3px !important;
+        border-style: solid !important;
+        border-radius: 18px !important;
+        padding: 0.15rem 0.35rem 0.35rem !important;
+        margin: 0.85rem 0 1.25rem !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--pending),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--pending) {
+        border-color: rgba(255, 110, 110, .92) !important;
+        background: linear-gradient(135deg, rgba(120, 20, 30, .72), rgba(80, 12, 18, .55)) !important;
+        animation: ro-signature-pulse 2.2s ease-in-out infinite;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) {
+        border-color: rgba(74, 222, 128, .72) !important;
+        background: linear-gradient(135deg, rgba(20, 83, 45, .42), rgba(6, 40, 24, .35)) !important;
+        box-shadow: 0 10px 28px rgba(34, 197, 94, .12) !important;
+        animation: none !important;
+    }
+    .ro-signature-check-hero {
+        padding: 0.55rem 0.85rem 0.35rem;
+        border-left: 5px solid rgba(255, 120, 120, .95);
+        margin: 0.35rem 0 0.5rem;
+        background: rgba(255, 255, 255, .03);
+        border-radius: 0 12px 12px 0;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed) .ro-signature-check-hero,
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) .ro-signature-check-hero {
+        border-left-color: rgba(74, 222, 128, .9);
+    }
+    .ro-signature-check-badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.22rem 0.62rem;
+        border-radius: 999px;
+        margin-bottom: 0.45rem;
+    }
+    .ro-signature-check-badge--pending {
+        color: #fff1f2 !important;
+        background: rgba(220, 38, 38, .88);
+        box-shadow: 0 0 18px rgba(248, 113, 113, .45);
+    }
+    .ro-signature-check-badge--confirmed {
+        color: #ecfdf5 !important;
+        background: rgba(22, 163, 74, .88);
     }
     .ro-signature-check-title {
-        font-size: 1.05rem;
+        font-size: 1.35rem;
         font-weight: 800;
-        color: #ffe4e6 !important;
-        letter-spacing: 0.01em;
-        margin-bottom: 0.2rem;
+        color: #fff7ed !important;
+        letter-spacing: 0.015em;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
     }
     .ro-signature-check-caption {
-        font-size: 0.82rem;
+        font-size: 0.86rem;
         color: #fecaca !important;
-        margin-bottom: 0.55rem;
+        margin-bottom: 0.15rem;
+        line-height: 1.45;
     }
     .ro-signature-check-caption strong {
         color: #fff1f2 !important;
     }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"],
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] {
+        background: rgba(255, 255, 255, .06) !important;
+        border: 2px solid rgba(255, 160, 120, .55) !important;
+        border-radius: 12px !important;
+        padding: 0.85rem 1rem !important;
+        margin: 0.15rem 0 0.35rem !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.65rem !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed) label[data-baseweb="checkbox"],
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) label[data-baseweb="checkbox"] {
+        border-color: rgba(74, 222, 128, .55) !important;
+        background: rgba(34, 197, 94, .08) !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p,
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p {
-        font-size: 0.98rem !important;
-        font-weight: 700 !important;
+        font-size: 1.06rem !important;
+        font-weight: 800 !important;
         color: #fff7ed !important;
     }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"],
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"] {
-        transform: scale(1.12);
+        transform: scale(1.28);
         transform-origin: left center;
+    }
+    .ro-signature-check-alert {
+        margin: 0.15rem 0 0.35rem;
+        padding: 0.72rem 0.9rem;
+        border-radius: 12px;
+        border: 1px solid rgba(248, 113, 113, .65);
+        background: rgba(127, 29, 29, .72);
+        color: #fff1f2 !important;
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.45;
     }
     section.main .block-container,
     div[data-testid="stMainBlockContainer"],
@@ -2423,39 +2517,133 @@ THEME_CSS = {
         font-weight: 600;
         color: #b45309 !important;
     }
-    section.main div[data-testid="stVerticalBlock"]:has(> .ro-signature-check-marker),
+    @keyframes ro-signature-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, .28), 0 12px 28px rgba(220, 38, 38, .14);
+            border-color: #ef4444 !important;
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(248, 113, 113, .18), 0 16px 36px rgba(220, 38, 38, .22);
+            border-color: #f97316 !important;
+        }
+    }
+    .ro-signature-check-section-label {
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #dc2626 !important;
+        margin: 0.35rem 0 0.15rem;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker),
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) {
-        border: 2px solid #f87171 !important;
+        border-width: 3px !important;
+        border-style: solid !important;
+        border-radius: 18px !important;
+        padding: 0.15rem 0.35rem 0.35rem !important;
+        margin: 0.85rem 0 1.25rem !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--pending),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--pending) {
+        border-color: #ef4444 !important;
         background: linear-gradient(135deg, #fff1f2, #fff7ed) !important;
-        border-radius: 16px !important;
-        padding: 0.85rem 1rem 0.65rem !important;
-        margin: 0.35rem 0 1rem !important;
-        box-shadow: 0 10px 24px rgba(220, 38, 38, .12);
+        animation: ro-signature-pulse 2.2s ease-in-out infinite;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) {
+        border-color: #22c55e !important;
+        background: linear-gradient(135deg, #ecfdf5, #f0fdf4) !important;
+        box-shadow: 0 10px 24px rgba(34, 197, 94, .12) !important;
+        animation: none !important;
+    }
+    .ro-signature-check-hero {
+        padding: 0.55rem 0.85rem 0.35rem;
+        border-left: 5px solid #ef4444;
+        margin: 0.35rem 0 0.5rem;
+        background: rgba(255, 255, 255, .72);
+        border-radius: 0 12px 12px 0;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed) .ro-signature-check-hero,
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) .ro-signature-check-hero {
+        border-left-color: #22c55e;
+    }
+    .ro-signature-check-badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.22rem 0.62rem;
+        border-radius: 999px;
+        margin-bottom: 0.45rem;
+    }
+    .ro-signature-check-badge--pending {
+        color: #fff1f2 !important;
+        background: #dc2626;
+        box-shadow: 0 0 16px rgba(239, 68, 68, .35);
+    }
+    .ro-signature-check-badge--confirmed {
+        color: #ecfdf5 !important;
+        background: #16a34a;
     }
     .ro-signature-check-title {
-        font-size: 1.05rem;
+        font-size: 1.35rem;
         font-weight: 800;
-        color: #991b1b !important;
-        letter-spacing: 0.01em;
-        margin-bottom: 0.2rem;
+        color: #7f1d1d !important;
+        letter-spacing: 0.015em;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
     }
     .ro-signature-check-caption {
-        font-size: 0.82rem;
+        font-size: 0.86rem;
         color: #b91c1c !important;
-        margin-bottom: 0.55rem;
+        margin-bottom: 0.15rem;
+        line-height: 1.45;
     }
     .ro-signature-check-caption strong {
         color: #7f1d1d !important;
     }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"],
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] {
+        background: #ffffff !important;
+        border: 2px solid #fca5a5 !important;
+        border-radius: 12px !important;
+        padding: 0.85rem 1rem !important;
+        margin: 0.15rem 0 0.35rem !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.65rem !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed) label[data-baseweb="checkbox"],
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) label[data-baseweb="checkbox"] {
+        border-color: #86efac !important;
+        background: #f0fdf4 !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p,
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p {
-        font-size: 0.98rem !important;
-        font-weight: 700 !important;
+        font-size: 1.06rem !important;
+        font-weight: 800 !important;
         color: #7f1d1d !important;
     }
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"],
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"] {
-        transform: scale(1.12);
+        transform: scale(1.28);
         transform-origin: left center;
+    }
+    .ro-signature-check-alert {
+        margin: 0.15rem 0 0.35rem;
+        padding: 0.72rem 0.9rem;
+        border-radius: 12px;
+        border: 1px solid #f87171;
+        background: #fef2f2;
+        color: #991b1b !important;
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.45;
     }
     section.main .block-container,
     div[data-testid="stMainBlockContainer"],

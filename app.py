@@ -4789,26 +4789,46 @@ def compute_live_audit_summary(
 def _render_ro_signed_by_customer_check(form_version: int) -> bool:
     """RO-level customer signature — grouped with documentation checkboxes."""
     fv = int(form_version)
-    st.markdown(
-        '<div class="ro-signature-check-marker" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
+    is_signed = bool(st.session_state.get(f"customer_signature_{fv}", False))
+    state_class = (
+        "ro-signature-check-panel--confirmed"
+        if is_signed
+        else "ro-signature-check-panel--pending"
     )
-    st.markdown(
-        '<div class="ro-signature-check-title">RO signed by customer</div>'
-        '<div class="ro-signature-check-caption">'
-        "Required for the entire repair order · Stellantis reason code <strong>S</strong>"
-        "</div>",
-        unsafe_allow_html=True,
+    badge_text = "Confirmed" if is_signed else "Action required"
+    badge_class = (
+        "ro-signature-check-badge ro-signature-check-badge--confirmed"
+        if is_signed
+        else "ro-signature-check-badge ro-signature-check-badge--pending"
     )
-    ro_signed = st.checkbox(
-        "Confirm customer authorization signature is on file",
-        key=f"customer_signature_{fv}",
-        help="Hard stop when unchecked — Stellantis field audit reason code S.",
-    )
-    if not ro_signed:
-        st.error(
-            "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S)."
+
+    with st.container(border=True):
+        st.markdown(
+            f'<div class="ro-signature-check-marker {state_class}" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
         )
+        st.markdown(
+            f'<div class="ro-signature-check-hero">'
+            f'<span class="{badge_class}">{badge_text}</span>'
+            f'<div class="ro-signature-check-title">RO signed by customer</div>'
+            f'<div class="ro-signature-check-caption">'
+            f"Required for the entire repair order before warranty submit · "
+            f"Stellantis field audit reason code <strong>S</strong>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+        ro_signed = st.checkbox(
+            "Yes — customer authorization signature is on file",
+            key=f"customer_signature_{fv}",
+            help="Hard stop when unchecked — Stellantis field audit reason code S.",
+        )
+        if not ro_signed:
+            st.markdown(
+                '<div class="ro-signature-check-alert">'
+                "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S)."
+                "</div>",
+                unsafe_allow_html=True,
+            )
     return ro_signed
 
 
@@ -6279,6 +6299,10 @@ def render_review():
         )
         jobs.append(job)
 
+    st.markdown(
+        '<div class="ro-signature-check-section-label">Before you submit</div>',
+        unsafe_allow_html=True,
+    )
     _render_ro_signed_by_customer_check(fv)
 
     live_summary = compute_live_audit_summary(
