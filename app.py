@@ -3116,6 +3116,10 @@ def _rental_work_applies(job) -> bool:
         return False
 
 
+def _warranty_add_on_applies(job) -> bool:
+    return bool(job.get("warranty_add_on")) or _narrative_indicates_repair(job, "warranty_add_on")
+
+
 def _significant_terms(text):
     return {
         w.strip(".,:;()[]\"'").lower()
@@ -3866,6 +3870,15 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             f"Missing W+ manager sign-off — obtain {manager_name} approval (WAM + Stellantis L/E).",
         )
 
+    if _warranty_add_on_applies(job) and not job.get("customer_warranty_add_on_signoff"):
+        _add_audit_finding(
+            hard,
+            warn,
+            audit_rules,
+            "warranty_add_on_customer_signoff",
+            "Hard stop: customer signed off on warranty add-on must be confirmed before submit (Stellantis E/L).",
+        )
+
     if _rental_work_applies(job) and job.get("rental_days", 0) >= rental_warn_days:
         _add_audit_finding(
             hard, warn, audit_rules, "rental_high_days",
@@ -4228,6 +4241,7 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
         "manager_signed_rental": bool(st.session_state.get(f"rental_signed_{j}", False)),
         "warranty_add_on": bool(st.session_state.get(f"addon_{j}", False)),
         "manager_approval": bool(st.session_state.get(f"manager_approval_{j}", False)),
+        "customer_warranty_add_on_signoff": bool(st.session_state.get(f"customer_addon_signoff_{j}", False)),
         "ac_repair": bool(st.session_state.get(f"ac_{j}", False)),
         "ac_evac_slip": bool(st.session_state.get(f"ac_slip_{j}", False)),
         "parts_warranty": bool(st.session_state.get(f"parts_warranty_{j}", False)),
@@ -4925,6 +4939,7 @@ _JOB_CHECKBOX_FIELDS = (
     ("manager_signed_rental", "rental_signed"),
     ("warranty_add_on", "addon"),
     ("manager_approval", "manager_approval"),
+    ("customer_warranty_add_on_signoff", "customer_addon_signoff"),
     ("ac_repair", "ac"),
     ("ac_evac_slip", "ac_slip"),
     ("parts_warranty", "parts_warranty"),
@@ -5452,6 +5467,7 @@ def _render_warranty_checks_grouped(
                 ("rental_involved", "Rental Involved", f"rental_{job_no}"),
                 ("manager_signed_rental", service_manager_action_label("Signed Rental"), f"rental_signed_{job_no}"),
                 ("warranty_add_on", "Warranty Add-On (W+)", f"addon_{job_no}"),
+                ("customer_warranty_add_on_signoff", "Customer signed off on warranty add on", f"customer_addon_signoff_{job_no}"),
                 ("manager_approval", service_manager_action_label("Signed Off"), f"manager_approval_{job_no}"),
             ],
         ),
@@ -5626,6 +5642,7 @@ def _render_review_job_panel(
         rental_days = check_values["rental_days"]
         manager_signed_rental = check_values["manager_signed_rental"]
         warranty_add_on = check_values["warranty_add_on"]
+        customer_warranty_add_on_signoff = check_values["customer_warranty_add_on_signoff"]
         manager_approval = check_values["manager_approval"]
         ac_repair = check_values["ac_repair"]
         ac_evac_slip = check_values["ac_evac_slip"]
@@ -5667,6 +5684,10 @@ def _render_review_job_panel(
                 key=f"rental_signed_{job_no}",
             )
             warranty_add_on = st.checkbox("Warranty Add-On (W+)", key=f"addon_{job_no}")
+            customer_warranty_add_on_signoff = st.checkbox(
+                "Customer signed off on warranty add on",
+                key=f"customer_addon_signoff_{job_no}",
+            )
             manager_approval = st.checkbox(
                 service_manager_action_label("Signed Off"),
                 key=f"manager_approval_{job_no}",
@@ -5681,6 +5702,10 @@ def _render_review_job_panel(
     if _narrative_indicates_repair(narrative_preview, "warranty_add_on") and not manager_approval:
         st.error(
             f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
+        )
+    if _warranty_add_on_applies({**narrative_preview, "warranty_add_on": warranty_add_on}) and not customer_warranty_add_on_signoff:
+        st.error(
+            "Hard stop: customer signed off on warranty add-on must be confirmed before submission."
         )
 
     preview_job = {
@@ -5749,6 +5774,7 @@ def _render_review_job_panel(
         "manager_signed_rental": manager_signed_rental,
         "warranty_add_on": warranty_add_on,
         "manager_approval": manager_approval,
+        "customer_warranty_add_on_signoff": customer_warranty_add_on_signoff,
         "ac_repair": ac_repair,
         "ac_evac_slip": ac_evac_slip,
         "parts_warranty": parts_warranty,

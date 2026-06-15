@@ -376,6 +376,14 @@ def list_compliance_check_catalog() -> list[dict]:
     )
     rows.append(
         {
+            "label": "W+ customer sign-off",
+            "rule_key": "warranty_add_on_customer_signoff",
+            "stellantis": "E, L, S",
+            "action": "Confirm customer signed off on warranty add-on work.",
+        }
+    )
+    rows.append(
+        {
             "label": "RO signed by customer",
             "rule_key": "stellantis_customer_signature",
             "stellantis": "S",

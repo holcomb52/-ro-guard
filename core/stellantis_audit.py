@@ -135,6 +135,7 @@ AUDIT_RULE_TO_STELLANTIS: dict[str, list[str]] = {
     "rental": ["L"],
     "rental_high_days": ["L"],
     "warranty_add_on": ["E", "L"],
+    "warranty_add_on_customer_signoff": ["E", "L", "S"],
     "tech_time": ["C", "H"],
     "battery_test_slip": ["K"],
     "ac_evac_slip": ["K"],

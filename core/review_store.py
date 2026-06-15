@@ -597,6 +597,7 @@ DEFAULT_AUDIT_RULES = {
     "rental": {"enabled": True, "severity": "hard"},
     "rental_high_days": {"enabled": True, "severity": "warn"},
     "warranty_add_on": {"enabled": True, "severity": "hard"},
+    "warranty_add_on_customer_signoff": {"enabled": True, "severity": "hard"},
     "tech_time": {"enabled": True, "severity": "hard"},
     "battery_test_slip": {"enabled": True, "severity": "hard"},
     "ac_evac_slip": {"enabled": True, "severity": "hard"},
@@ -622,6 +623,7 @@ AUDIT_RULE_LABELS = {
     "rental": "Rental — days billed and manager sign-off",
     "rental_high_days": "Rental — long-rental documentation warning",
     "warranty_add_on": "W+ add-on — Service Manager sign-off",
+    "warranty_add_on_customer_signoff": "W+ add-on — customer sign-off on file",
     "tech_time": "Tech flagged time vs time allotted",
     "battery_test_slip": "Battery replacement — failed test slip/code",
     "ac_evac_slip": "A/C repair — EVAC/recharge slip",
@@ -641,6 +643,7 @@ ADVISOR_COACHING_PHRASES = {
     "rental": "rental days or manager sign-off missing",
     "rental_high_days": "long rental — supporting documentation may be missing",
     "warranty_add_on": "W+ add-on missing Service Manager sign-off",
+    "warranty_add_on_customer_signoff": "W+ add-on missing customer sign-off",
     "tech_time": "tech flagged time vs. time allotted out of range",
     "battery_test_slip": "battery test slip/code missing",
     "ac_evac_slip": "A/C EVAC/recharge slip missing",
@@ -758,6 +761,8 @@ def classify_finding_message(message: str) -> str:
     if "rental days" in msg and "documentation" in msg:
         return "rental_high_days"
     if "add-on" in msg or "w+" in msg or "warranty add-on" in msg:
+        if "customer signed off" in msg or "customer sign-off" in msg:
+            return "warranty_add_on_customer_signoff"
         return "warranty_add_on"
     if "tech flagged time" in msg or "time allotted" in msg:
         return "tech_time"
