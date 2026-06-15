@@ -491,6 +491,10 @@ def _smtp_envelope_sender(config: dict) -> str:
 
 
 def _stamp_message_headers(message: MIMEMultipart, *, config: dict, recipients: list[str]) -> None:
+    """Set headers on a reused MIME message without stacking duplicate To/Date lines."""
+    for header in ("Date", "Message-ID", "From", "To"):
+        while header in message:
+            del message[header]
     message["Date"] = formatdate(localtime=True)
     message["Message-ID"] = make_msgid(domain=str(config.get("host") or "roguard.local"))
     message["From"] = str(config.get("sender") or config.get("user") or "").strip()
@@ -595,6 +599,11 @@ def format_smtp_send_error(exc: Exception, config: dict | None = None) -> str:
         return (
             "SMTP login failed. For Gmail, use a 16-character **app password** "
             "(not your normal Gmail password) in `REPORT_SMTP_PASSWORD`."
+        )
+    if "multiple To headers" in message or "RFC 5322" in message:
+        return (
+            "Gmail rejected the message format (duplicate To headers). "
+            "This is fixed in the latest app deploy — refresh and try **Send daily reports now** again."
         )
     return message
 
