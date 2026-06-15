@@ -157,7 +157,7 @@ STELLANTIS_AUDIT_RULES: dict[str, dict] = {
 }
 
 STELLANTIS_AUDIT_LABELS: dict[str, str] = {
-    "stellantis_customer_signature": "Stellantis S — customer RO signature on file",
+    "stellantis_customer_signature": "Stellantis S — RO signed by customer",
     "stellantis_non_warranty_item": "Stellantis B — non-warranty item in story",
     "stellantis_diagnostic_op": "Stellantis T — diagnostic operation / DTC support",
     "stellantis_zero_mile_paint": "Stellantis X — zero-mile paint/trim manager authorization",
@@ -165,7 +165,7 @@ STELLANTIS_AUDIT_LABELS: dict[str, str] = {
 }
 
 STELLANTIS_COACHING_PHRASES: dict[str, str] = {
-    "stellantis_customer_signature": "missing customer repair order signature (Stellantis S)",
+    "stellantis_customer_signature": "RO signed by customer not confirmed (Stellantis S)",
     "stellantis_non_warranty_item": "non-warranty language in the story (Stellantis B)",
     "stellantis_diagnostic_op": "diagnostic operation not supported (Stellantis T)",
     "stellantis_zero_mile_paint": "zero-mile paint/trim without manager authorization (Stellantis X)",
@@ -376,7 +376,7 @@ def audit_ro_level_findings(
             attach_stellantis_codes(
                 {
                     "rule": "stellantis_customer_signature",
-                    "message": "Customer repair order signature is not confirmed on file.",
+                    "message": "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S).",
                 },
                 extra_codes=["S"],
             )

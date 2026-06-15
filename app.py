@@ -5955,16 +5955,20 @@ def render_review():
     fv = st.session_state.form_version
     st.markdown("#### Audit & WAM compliance")
     st.caption(
-        "Confirm RO-level proof auditors and Stellantis expect before submit. Missing customer signature, "
-        "test slips, manager sign-offs, and other WAM items are hard stops when enabled under Admin → Audit Rules."
+        "Confirm RO-level proof auditors and Stellantis expect before submit. Unchecked **RO signed by customer**, "
+        "missing test slips, manager sign-offs, and other WAM items are hard stops when enabled under Admin → Audit Rules."
     )
     sig_col, mile_col = st.columns(2)
     with sig_col:
-        st.checkbox(
-            "Customer RO signature confirmed on file",
+        ro_signed_by_customer = st.checkbox(
+            "RO signed by customer",
             key=f"customer_signature_{fv}",
-            help="Stellantis reason code S — customer authorization signature.",
+            help="Stellantis reason code S — customer authorization signature must be on file.",
         )
+        if not ro_signed_by_customer:
+            st.error(
+                "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S)."
+            )
     with mile_col:
         st.number_input(
             "Vehicle mileage (optional)",

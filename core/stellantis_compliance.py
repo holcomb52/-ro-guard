@@ -376,7 +376,7 @@ def list_compliance_check_catalog() -> list[dict]:
     )
     rows.append(
         {
-            "label": "Customer RO signature",
+            "label": "RO signed by customer",
             "rule_key": "stellantis_customer_signature",
             "stellantis": "S",
             "action": "Confirm customer authorization signature is on file before submit.",

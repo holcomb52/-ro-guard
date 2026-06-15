@@ -771,7 +771,7 @@ def classify_finding_message(message: str) -> str:
         return "parts_warranty_mopa"
     if "manual guidance" in msg or "warranty manual" in msg:
         return "manual_guidance"
-    if "stellantis s" in msg or "customer repair order signature" in msg or "customer ro signature" in msg:
+    if "stellantis s" in msg or "customer repair order signature" in msg or "customer ro signature" in msg or "ro signed by customer" in msg:
         return "stellantis_customer_signature"
     if "stellantis b" in msg or "non-warranty" in msg:
         return "stellantis_non_warranty_item"
