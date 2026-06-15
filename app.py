@@ -85,6 +85,13 @@ from core.review_store import (
     smart_warranty_punch_exempt,
     update_review_outcome,
 )
+from core.stellantis_audit import (
+    apply_stellantis_job_checks,
+    attach_stellantis_codes,
+    audit_ro_level_findings,
+    render_stellantis_audit_reference,
+    split_ro_level_findings,
+)
 from core.theme_styles import (
     BRAND_TEXT,
     THEME_CSS,
@@ -3689,11 +3696,45 @@ def _add_audit_finding(hard, warn, audit_rules, rule_key, message):
     severity = _audit_rule_severity(audit_rules, rule_key)
     if severity is None:
         return
-    finding = {"rule": rule_key, "message": message}
+    finding = attach_stellantis_codes({"rule": rule_key, "message": message})
     if severity == "warn":
         warn.append(finding)
     else:
         hard.append(finding)
+
+
+def _stellantis_ro_level_inputs(form_version: int) -> tuple[bool, float]:
+    customer_signature = bool(st.session_state.get(f"customer_signature_{form_version}", False))
+    try:
+        vehicle_mileage = float(st.session_state.get(f"vehicle_mileage_{form_version}", 0) or 0)
+    except (TypeError, ValueError):
+        vehicle_mileage = 0.0
+    return customer_signature, vehicle_mileage
+
+
+def _append_stellantis_ro_level_findings(all_hard, all_warn, audit_rules, form_version: int):
+    customer_signature, vehicle_mileage = _stellantis_ro_level_inputs(form_version)
+    raw = audit_ro_level_findings(
+        customer_signature=customer_signature,
+        vehicle_mileage=vehicle_mileage,
+    )
+    hard, warn, _disabled = split_ro_level_findings(raw, audit_rules)
+    all_hard.extend(hard)
+    all_warn.extend(warn)
+    return hard, warn
+
+
+def _persist_ro_meta_on_jobs(jobs: list, *, ro_level_hard: list, ro_level_warn: list, form_version: int):
+    if not jobs:
+        return jobs
+    customer_signature, vehicle_mileage = _stellantis_ro_level_inputs(form_version)
+    jobs[0]["_ro_meta"] = {
+        "customer_signature": customer_signature,
+        "vehicle_mileage": vehicle_mileage,
+        "ro_level_hard_stops": ro_level_hard,
+        "ro_level_warnings": ro_level_warn,
+    }
+    return jobs
 
 
 def _correction_verifies_proper_operation(correction_text: str) -> bool:
@@ -3717,7 +3758,7 @@ def _correction_verifies_proper_operation(correction_text: str) -> bool:
     )
 
 
-def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules=None):
+def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules=None, vehicle_mileage=0):
     audit_rules = normalize_audit_rules(audit_rules)
     thresholds = audit_rules["thresholds"]
     tech_min = float(thresholds.get("tech_time_min_pct", 0.70))
@@ -3877,6 +3918,15 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             hard, warn, audit_rules, "manual_guidance",
             "Applicable warranty manual guidance is shown below — confirm compliance before submission.",
         )
+
+    apply_stellantis_job_checks(
+        job,
+        hard,
+        warn,
+        audit_rules,
+        _add_audit_finding,
+        vehicle_mileage=vehicle_mileage,
+    )
 
     score = max(0, 100 - len(hard) * 15 - len(warn) * 5)
     return hard, warn, score
@@ -4694,6 +4744,7 @@ def compute_live_audit_summary(
     audit_rules: dict,
 ) -> dict:
     time_bypass = bool(st.session_state.get("time_bypass", False))
+    customer_signature, vehicle_mileage = _stellantis_ro_level_inputs(form_version)
     all_hard = []
     all_warn = []
     scores = []
@@ -4707,6 +4758,7 @@ def compute_live_audit_summary(
             time_bypass,
             smart_warranty_time_exempt=smart_warranty_time_exempt,
             audit_rules=audit_rules,
+            vehicle_mileage=vehicle_mileage,
         )
         claim_val = float(job.get("claim_value") or 0)
         total_value += claim_val
@@ -4715,6 +4767,12 @@ def compute_live_audit_summary(
         all_hard.extend(hard)
         all_warn.extend(warn)
         scores.append(score)
+
+    ro_hard, _ro_warn = _append_stellantis_ro_level_findings(
+        all_hard, all_warn, audit_rules, form_version
+    )
+    if ro_hard:
+        hard_value = max(hard_value, total_value)
 
     recall_block = _vin_recall_blocks_audit(form_version, vin, job_count)
 
@@ -4918,6 +4976,16 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         st.session_state[f"rental_days_{idx}"] = int(float(job.get("rental_days") or 0))
         for src, dest in _JOB_CHECKBOX_FIELDS:
             st.session_state[f"{dest}_{idx}"] = _truthy_flag(job.get(src))
+
+    ro_meta = {}
+    if jobs and isinstance(jobs[0], dict):
+        ro_meta = jobs[0].get("_ro_meta") or {}
+    if isinstance(ro_meta, dict):
+        st.session_state[f"customer_signature_{fv}"] = bool(ro_meta.get("customer_signature"))
+        try:
+            st.session_state[f"vehicle_mileage_{fv}"] = int(float(ro_meta.get("vehicle_mileage") or 0))
+        except (TypeError, ValueError):
+            st.session_state[f"vehicle_mileage_{fv}"] = 0
 
     _restore_saved_recall_state(review, fv)
 
@@ -5902,6 +5970,28 @@ def render_review():
 
     render_vin_recall_panel(vin, st.session_state.form_version, job_count)
 
+    fv = st.session_state.form_version
+    st.markdown("#### Stellantis OEM audit")
+    st.caption(
+        "Confirm RO-level items auditors check before submit. Missing customer signature is a hard stop "
+        "when the Stellantis S rule is enabled under Admin → Audit Rules."
+    )
+    sig_col, mile_col = st.columns(2)
+    with sig_col:
+        st.checkbox(
+            "Customer RO signature confirmed on file",
+            key=f"customer_signature_{fv}",
+            help="Stellantis reason code S — customer authorization signature.",
+        )
+    with mile_col:
+        st.number_input(
+            "Vehicle mileage (optional)",
+            min_value=0,
+            step=1,
+            key=f"vehicle_mileage_{fv}",
+            help="Used for Stellantis X zero-mile paint/trim authorization checks.",
+        )
+
     live_summary = compute_live_audit_summary(
         st.session_state.form_version,
         int(job_count),
@@ -6299,6 +6389,7 @@ def render_review():
             scores = []
 
             hard_value = 0.0
+            _, vehicle_mileage = _stellantis_ro_level_inputs(fv)
 
             for job in jobs:
                 hard, warn, score = audit_job(
@@ -6306,6 +6397,7 @@ def render_review():
                     time_bypass,
                     smart_warranty_time_exempt=smart_warranty_time_exempt,
                     audit_rules=audit_rules,
+                    vehicle_mileage=vehicle_mileage,
                 )
 
                 job["hard_stops"] = hard
@@ -6318,6 +6410,12 @@ def render_review():
 
                 if hard:
                     hard_value += float(job.get("claim_value") or 0)
+
+            ro_level_hard, ro_level_warn = _append_stellantis_ro_level_findings(
+                all_hard, all_warn, audit_rules, fv
+            )
+            if ro_level_hard:
+                hard_value = max(hard_value, total_value)
 
             final_score = int(sum(scores) / len(scores)) if scores else 0
 
@@ -6356,6 +6454,17 @@ def render_review():
             x3.metric("Total Claim Value", f"${total_value:,.2f}")
             x4.metric("Hard Stop Value", f"${hard_value:,.2f}")
             x5.metric("Hard Stops", len(all_hard))
+
+            if ro_level_hard or ro_level_warn:
+                with st.container(border=True):
+                    st.markdown(
+                        '<div class="audit-job-result-header">RO-level Stellantis checks</div>',
+                        unsafe_allow_html=True,
+                    )
+                    for h in ro_level_hard:
+                        st.error(finding_message(h))
+                    for w in ro_level_warn:
+                        st.warning(finding_message(w))
 
             for job in jobs:
                 with st.container(border=True):
@@ -6402,7 +6511,12 @@ def render_review():
                 "time_bypass": False if smart_warranty_time_exempt else time_bypass,
                 "time_bypass_user": "" if smart_warranty_time_exempt else time_bypass_user,
                 "entered_by": current_person_name(),
-                "jobs": jobs,
+                "jobs": _persist_ro_meta_on_jobs(
+                    jobs,
+                    ro_level_hard=ro_level_hard,
+                    ro_level_warn=ro_level_warn,
+                    form_version=fv,
+                ),
                 **_vin_recall_save_fields(st.session_state.form_version, vin, job_count),
             }
 
@@ -9309,6 +9423,9 @@ def render_audit_rules_admin():
         render_role_gate_message(ADMIN_WRITE_ROLES, "save audit rules")
 
     st.info(f"**Last saved by:** {updated_by} · {updated_at}")
+
+    with st.expander("Stellantis OEM audit reference (reason codes A–X)", expanded=False):
+        render_stellantis_audit_reference()
 
     with st.form("audit_rules_form"):
         st.subheader("Thresholds")

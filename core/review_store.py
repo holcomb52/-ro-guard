@@ -605,6 +605,14 @@ DEFAULT_AUDIT_RULES = {
     "manual_guidance": {"enabled": True, "severity": "warn"},
 }
 
+try:
+    from core.stellantis_audit import STELLANTIS_AUDIT_LABELS, STELLANTIS_AUDIT_RULES, STELLANTIS_COACHING_PHRASES
+
+    DEFAULT_AUDIT_RULES = {**DEFAULT_AUDIT_RULES, **STELLANTIS_AUDIT_RULES}
+except ImportError:
+    STELLANTIS_AUDIT_LABELS = {}
+    STELLANTIS_COACHING_PHRASES = {}
+
 AUDIT_RULE_LABELS = {
     "narrative_required": "Require concern, cause, and correction",
     "pencil_wrench_cause": "Pencil Wrench — cause quality checks",
@@ -621,6 +629,7 @@ AUDIT_RULE_LABELS = {
     "parts_warranty_mopa": "Parts warranty — MOPAR and original RO",
     "manual_guidance": "WAM / TSB guidance confirmation warning",
     "other": "Other / uncategorized finding",
+    **STELLANTIS_AUDIT_LABELS,
 }
 
 ADVISOR_COACHING_PHRASES = {
@@ -639,6 +648,7 @@ ADVISOR_COACHING_PHRASES = {
     "parts_warranty_mopa": "parts warranty missing MOPAR/original RO support",
     "manual_guidance": "WAM/TSB guidance not confirmed",
     "other": "other audit documentation issue",
+    **STELLANTIS_COACHING_PHRASES,
 }
 
 
@@ -711,7 +721,12 @@ def _valid_advisor_name(name: str) -> bool:
 
 def finding_message(item) -> str:
     if isinstance(item, dict):
-        return str(item.get("message") or "").strip()
+        try:
+            from core.stellantis_audit import format_finding_display
+
+            return format_finding_display(item)
+        except ImportError:
+            return str(item.get("message") or "").strip()
     return str(item or "").strip()
 
 
@@ -756,6 +771,14 @@ def classify_finding_message(message: str) -> str:
         return "parts_warranty_mopa"
     if "manual guidance" in msg or "warranty manual" in msg:
         return "manual_guidance"
+    if "stellantis s" in msg or "customer repair order signature" in msg or "customer ro signature" in msg:
+        return "stellantis_customer_signature"
+    if "stellantis b" in msg or "non-warranty" in msg:
+        return "stellantis_non_warranty_item"
+    if "stellantis t" in msg or "diagnostic operation" in msg:
+        return "stellantis_diagnostic_op"
+    if "stellantis x" in msg or "zero-mile paint" in msg or "zero mile paint" in msg:
+        return "stellantis_zero_mile_paint"
     return "other"
 
 
@@ -785,6 +808,31 @@ def _iter_review_findings(review_row: dict) -> list[dict]:
     ro_number = str(review_row.get("ro_number") or "").strip()
     created_at = review_row.get("created_at")
     rows = []
+
+    ro_meta = {}
+    if jobs and isinstance(jobs[0], dict):
+        ro_meta = jobs[0].get("_ro_meta") or {}
+    if isinstance(ro_meta, dict):
+        for severity, key in (("hard", "ro_level_hard_stops"), ("warn", "ro_level_warnings")):
+            for item in ro_meta.get(key) or []:
+                message = finding_message(item)
+                if not message:
+                    continue
+                rule_key = finding_rule_key(item)
+                rows.append(
+                    {
+                        "ro_number": ro_number,
+                        "advisor": advisor,
+                        "technician": technician,
+                        "created_at": created_at,
+                        "job_no": "RO",
+                        "severity": severity,
+                        "rule_key": rule_key,
+                        "rule_label": audit_rule_label(rule_key),
+                        "message": message,
+                        "claim_value": float(review_row.get("total_claim_value") or 0),
+                    }
+                )
 
     for job in jobs:
         if not isinstance(job, dict):
