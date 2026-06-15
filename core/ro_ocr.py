@@ -61,6 +61,19 @@ def ocr_available() -> bool:
     return pytesseract is not None and convert_from_bytes is not None
 
 
+def poppler_available() -> bool:
+    """True when pdf2image can rasterize PDFs (Poppler pdftoppm/pdfinfo on PATH)."""
+    if not ocr_available():
+        return False
+    import shutil
+
+    return bool(shutil.which("pdftoppm") or shutil.which("pdfinfo"))
+
+
+def ocr_runtime_ready() -> bool:
+    return ocr_available() and poppler_available()
+
+
 def _normalize_text(text: str) -> str:
     text = text.replace("\r", "\n")
     text = text.replace("—", "-").replace("–", "-")
@@ -84,7 +97,23 @@ def _ocr_pdf_bytes(pdf_bytes: bytes, dpi: int = 200) -> str:
             "OCR is not available. Install: python3 -m pip install pytesseract pdf2image Pillow "
             "and ensure Tesseract is installed on your computer."
         )
-    images = convert_from_bytes(pdf_bytes, dpi=dpi)
+    if not poppler_available():
+        raise RuntimeError(
+            "Poppler is not installed (pdftoppm/pdfinfo not on PATH). "
+            "On Streamlit Cloud, add poppler-utils to packages.txt. "
+            "On Mac: brew install poppler."
+        )
+    try:
+        images = convert_from_bytes(pdf_bytes, dpi=dpi)
+    except Exception as exc:
+        message = str(exc or "").strip()
+        if "poppler" in message.lower() or "page count" in message.lower():
+            raise RuntimeError(
+                "Unable to read this scanned PDF — Poppler is missing or misconfigured. "
+                "On Streamlit Cloud, ensure packages.txt includes poppler-utils and redeploy. "
+                "You can also upload a .txt export of the guide text."
+            ) from exc
+        raise
     chunks = [pytesseract.image_to_string(img) for img in images]
     return _normalize_text("\n".join(chunks))
 
@@ -107,6 +136,14 @@ def extract_ro_text(source: Union[bytes, BinaryIO], *, force_ocr: bool = False) 
     text = "" if force_ocr else _extract_text_layer(pdf_bytes)
     if not force_ocr and _is_extracted_text_usable(text):
         return text, False
+    if not ocr_runtime_ready():
+        if text.strip():
+            return text, False
+        raise RuntimeError(
+            "This PDF has little or no selectable text and OCR is not available on the server. "
+            "Install Poppler + Tesseract (see packages.txt on Streamlit Cloud), "
+            "or upload a .txt copy of the document text."
+        )
     return _ocr_pdf_bytes(pdf_bytes), True
 
 

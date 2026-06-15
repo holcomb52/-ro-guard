@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from core.auth import auth_user_email
-from core.ro_ocr import ocr_available
+from core.ro_ocr import ocr_runtime_ready
 from core.stellantis_audit import render_stellantis_audit_reference
 from core.stellantis_audit_store import (
     bind_stellantis_runtime_config,
@@ -57,7 +57,7 @@ def render_stellantis_audit_guide_tab(
         )
 
     upload_tab, library_tab, reference_tab = st.tabs(
-        ["Upload guide (PDF)", "Saved guides", "Reason code reference"]
+        ["Upload guide", "Saved guides", "Reason code reference"]
     )
 
     with upload_tab:
@@ -76,11 +76,47 @@ def render_stellantis_audit_guide_tab(
                 key="stellantis_upload_set_active",
             )
             uploaded_files = st.file_uploader(
-                "Upload Stellantis warranty audit guide (PDF)",
-                type=["pdf"],
+                "Upload Stellantis warranty audit guide (PDF or .txt)",
+                type=["pdf", "txt"],
                 accept_multiple_files=False,
                 key="stellantis_audit_upload",
+                help="Scanned PDFs are OCR'd automatically when Poppler + Tesseract are installed on the server.",
             )
+            with st.expander("Paste guide text instead (if PDF upload fails)", expanded=False):
+                pasted_text = st.text_area(
+                    "Extracted guide text",
+                    height=200,
+                    placeholder="Paste OCR or copied text from the Stellantis audit guide…",
+                    key="stellantis_pasted_text",
+                )
+                paste_label = st.text_input(
+                    "Label for pasted upload",
+                    value="Pasted audit guide text",
+                    key="stellantis_paste_label",
+                )
+                if st.button("Save pasted text", key="stellantis_save_pasted"):
+                    if not pasted_text.strip():
+                        st.error("Paste the guide text first.")
+                    else:
+                        try:
+                            result = ingest_stellantis_audit_upload(
+                                supabase,
+                                file_name=f"{paste_label.strip() or 'pasted-guide'}.txt",
+                                file_bytes=b"",
+                                uploaded_by=auth_user_email() or "unknown",
+                                version_label=version_label,
+                                set_active=make_active,
+                                pasted_text=pasted_text,
+                            )
+                            if result.get("ok"):
+                                st.success(result.get("message") or "Guide saved.")
+                                bind_stellantis_runtime_config(supabase)
+                                st.rerun()
+                            else:
+                                st.error(result.get("message") or "Save failed.")
+                        except Exception as exc:
+                            st.error(f"Could not save pasted guide: {exc}")
+
             if uploaded_files is not None:
                 if st.button("Process and save guide", type="primary", key="stellantis_save_upload"):
                     try:
@@ -103,13 +139,16 @@ def render_stellantis_audit_guide_tab(
                     except Exception as exc:
                         st.error(f"Could not save OEM audit guide: {exc}")
                         st.caption(
-                            "If the table is missing, run the `stellantis_audit_documents` block in "
-                            "`docs/SUPABASE_SCHEMA.sql` in the Supabase SQL Editor."
+                            "Scanned PDFs need **Poppler** and **Tesseract** on the server. "
+                            "After the next deploy, packages.txt installs these on Streamlit Cloud. "
+                            "Until then, use **Paste guide text instead** or upload a `.txt` file."
                         )
 
-            if not ocr_available():
+            if not ocr_runtime_ready():
                 st.caption(
-                    "Scanned PDFs need OCR. Install Tesseract and `pdf2image` on the server for image-only guides."
+                    "Scanned PDF OCR requires Poppler + Tesseract. "
+                    "Streamlit Cloud installs them from packages.txt after redeploy. "
+                    "Use paste/.txt upload if PDF processing is unavailable."
                 )
 
     with library_tab:

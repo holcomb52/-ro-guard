@@ -179,10 +179,20 @@ def ingest_stellantis_audit_upload(
     uploaded_by: str,
     version_label: str = "",
     set_active: bool = True,
+    pasted_text: str = "",
 ) -> dict:
-    from core.ro_ocr import extract_ro_text, ocr_available
+    from core.ro_ocr import extract_ro_text
 
-    text, ocr_used = extract_ro_text(file_bytes, force_ocr=ocr_available())
+    name = str(file_name or "").strip().lower()
+    pasted = str(pasted_text or "").strip()
+    if pasted:
+        text = pasted
+        ocr_used = False
+    elif name.endswith(".txt"):
+        text = file_bytes.decode("utf-8", errors="replace")
+        ocr_used = False
+    else:
+        text, ocr_used = extract_ro_text(file_bytes, force_ocr=False)
     parsed = parse_stellantis_audit_guide(text)
     if not parsed.get("reason_codes"):
         return {

@@ -2943,7 +2943,7 @@ def prepare_declined_pdf_claims(file) -> tuple[list[str], str, dict]:
 
     if not has_codes:
         try:
-            ocr_text, ocr_used = extract_ro_text(io.BytesIO(pdf_bytes), force_ocr=ocr_available())
+            ocr_text, ocr_used = extract_ro_text(io.BytesIO(pdf_bytes), force_ocr=False)
             if ocr_text.strip():
                 document_text = ocr_text
                 if not pages:

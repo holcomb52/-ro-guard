@@ -42,6 +42,8 @@ After changing the URL, update **Streamlit Secrets** and **Supabase URL Configur
    - **Branch:** `main`
    - **Main file path:** `app.py`
 
+**OCR for scanned PDFs (TSB, OEM Audit Guide, RO scan):** the repo includes `packages.txt` with `poppler-utils` and `tesseract-ocr`. Streamlit Cloud installs these on deploy. If OCR fails after deploy, open **Manage app** → **Reboot app** once.
+
 ## 3. Add Secrets (required)
 
 In the app → **Settings** → **Secrets**, paste:
