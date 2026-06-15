@@ -1409,6 +1409,40 @@ THEME_CSS = {
         font-weight: 600;
         color: #ffe08a !important;
     }
+    section.main div[data-testid="stVerticalBlock"]:has(> .ro-signature-check-marker),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) {
+        border: 2px solid rgba(255, 120, 120, .62) !important;
+        background: linear-gradient(135deg, rgba(255, 70, 70, .16), rgba(255, 140, 60, .10)) !important;
+        border-radius: 16px !important;
+        padding: 0.85rem 1rem 0.65rem !important;
+        margin: 0.35rem 0 1rem !important;
+        box-shadow: 0 10px 28px rgba(255, 60, 60, .12);
+    }
+    .ro-signature-check-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #ffe4e6 !important;
+        letter-spacing: 0.01em;
+        margin-bottom: 0.2rem;
+    }
+    .ro-signature-check-caption {
+        font-size: 0.82rem;
+        color: #fecaca !important;
+        margin-bottom: 0.55rem;
+    }
+    .ro-signature-check-caption strong {
+        color: #fff1f2 !important;
+    }
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p {
+        font-size: 0.98rem !important;
+        font-weight: 700 !important;
+        color: #fff7ed !important;
+    }
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"] {
+        transform: scale(1.12);
+        transform-origin: left center;
+    }
     section.main .block-container,
     div[data-testid="stMainBlockContainer"],
     div[data-testid="stAppViewContainer"] > section.main {
@@ -2388,6 +2422,40 @@ THEME_CSS = {
         font-size: 0.9rem;
         font-weight: 600;
         color: #b45309 !important;
+    }
+    section.main div[data-testid="stVerticalBlock"]:has(> .ro-signature-check-marker),
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) {
+        border: 2px solid #f87171 !important;
+        background: linear-gradient(135deg, #fff1f2, #fff7ed) !important;
+        border-radius: 16px !important;
+        padding: 0.85rem 1rem 0.65rem !important;
+        margin: 0.35rem 0 1rem !important;
+        box-shadow: 0 10px 24px rgba(220, 38, 38, .12);
+    }
+    .ro-signature-check-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #991b1b !important;
+        letter-spacing: 0.01em;
+        margin-bottom: 0.2rem;
+    }
+    .ro-signature-check-caption {
+        font-size: 0.82rem;
+        color: #b91c1c !important;
+        margin-bottom: 0.55rem;
+    }
+    .ro-signature-check-caption strong {
+        color: #7f1d1d !important;
+    }
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] span,
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) label[data-baseweb="checkbox"] p {
+        font-size: 0.98rem !important;
+        font-weight: 700 !important;
+        color: #7f1d1d !important;
+    }
+    section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-marker) div[data-baseweb="checkbox"] {
+        transform: scale(1.12);
+        transform-origin: left center;
     }
     section.main .block-container,
     div[data-testid="stMainBlockContainer"],

@@ -4786,6 +4786,32 @@ def compute_live_audit_summary(
     }
 
 
+def _render_ro_signed_by_customer_check(form_version: int) -> bool:
+    """RO-level customer signature — grouped with documentation checkboxes."""
+    fv = int(form_version)
+    st.markdown(
+        '<div class="ro-signature-check-marker" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="ro-signature-check-title">RO signed by customer</div>'
+        '<div class="ro-signature-check-caption">'
+        "Required for the entire repair order · Stellantis reason code <strong>S</strong>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    ro_signed = st.checkbox(
+        "Confirm customer authorization signature is on file",
+        key=f"customer_signature_{fv}",
+        help="Hard stop when unchecked — Stellantis field audit reason code S.",
+    )
+    if not ro_signed:
+        st.error(
+            "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S)."
+        )
+    return ro_signed
+
+
 def render_live_submit_status_bar(summary: dict):
     status = summary["status"]
     if "DO NOT" in status:
@@ -5955,38 +5981,16 @@ def render_review():
     fv = st.session_state.form_version
     st.markdown("#### Audit & WAM compliance")
     st.caption(
-        "Confirm RO-level proof auditors and Stellantis expect before submit. Unchecked **RO signed by customer**, "
-        "missing test slips, manager sign-offs, and other WAM items are hard stops when enabled under Admin → Audit Rules."
+        "Optional vehicle mileage for Stellantis zero-mile paint/trim checks. Documentation proof "
+        "checkboxes are on each job below — **RO signed by customer** is at the bottom of that section."
     )
-    sig_col, mile_col = st.columns(2)
-    with sig_col:
-        ro_signed_by_customer = st.checkbox(
-            "RO signed by customer",
-            key=f"customer_signature_{fv}",
-            help="Stellantis reason code S — customer authorization signature must be on file.",
-        )
-        if not ro_signed_by_customer:
-            st.error(
-                "Hard stop: RO signed by customer must be confirmed before submit (Stellantis S)."
-            )
-    with mile_col:
-        st.number_input(
-            "Vehicle mileage (optional)",
-            min_value=0,
-            step=1,
-            key=f"vehicle_mileage_{fv}",
-            help="Used for Stellantis X zero-mile paint/trim authorization checks.",
-        )
-
-    live_summary = compute_live_audit_summary(
-        st.session_state.form_version,
-        int(job_count),
-        vin,
-        smart_warranty_time_exempt=smart_warranty_time_exempt,
-        audit_rules=audit_rules,
+    st.number_input(
+        "Vehicle mileage (optional)",
+        min_value=0,
+        step=1,
+        key=f"vehicle_mileage_{fv}",
+        help="Used for Stellantis X zero-mile paint/trim authorization checks.",
     )
-    if not simple_mode:
-        render_live_submit_status_bar(live_summary)
 
     oem_paid_amount = None
     short_pay_reason = ""
@@ -6274,6 +6278,18 @@ def render_review():
             simple_mode=simple_mode,
         )
         jobs.append(job)
+
+    _render_ro_signed_by_customer_check(fv)
+
+    live_summary = compute_live_audit_summary(
+        st.session_state.form_version,
+        int(job_count),
+        vin,
+        smart_warranty_time_exempt=smart_warranty_time_exempt,
+        audit_rules=audit_rules,
+    )
+    if not simple_mode:
+        render_live_submit_status_bar(live_summary)
 
     if simple_mode:
         close_simple_section()
