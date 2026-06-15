@@ -138,8 +138,9 @@ ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reviews JSONB DEFAULT
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_active_report JSONB;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reports_library JSONB DEFAULT '{"active_fingerprint":"","reports":{}}'::jsonb;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_notes_compliance JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS stellantis_audit_library JSONB DEFAULT '{"active_id":"","documents":{}}'::jsonb;
 
--- Stellantis OEM warranty audit guide uploads (reason code PDF library)
+-- Legacy table (optional — OEM Audit Guide now stores in dealer_settings.stellantis_audit_library)
 CREATE TABLE IF NOT EXISTS stellantis_audit_documents (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -22,14 +22,9 @@ from core.stellantis_audit_store import (
 
 
 def _format_supabase_error(exc: Exception) -> str:
-    text = str(exc or "").strip()
-    if "row-level security" in text.lower() or "42501" in text:
-        return (
-            "Supabase blocked the save (row-level security). "
-            "In Supabase → SQL Editor, run the file `docs/FIX_STELLANTIS_AUDIT_RLS.sql`, "
-            "then try again."
-        )
-    return text or "Upload failed."
+    from core.stellantis_audit_store import format_stellantis_save_error
+
+    return format_stellantis_save_error(exc)
 
 
 def _run_guide_ingest(
