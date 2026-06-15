@@ -85,6 +85,8 @@ from core.review_store import (
     smart_warranty_punch_exempt,
     update_review_outcome,
 )
+from core.stellantis_audit_admin import render_stellantis_audit_guide_tab
+from core.stellantis_audit_store import bind_stellantis_runtime_config
 from core.stellantis_audit import (
     apply_stellantis_job_checks,
     attach_stellantis_codes,
@@ -9750,6 +9752,8 @@ def main():
     except Exception:
         pass
 
+    bind_stellantis_runtime_config(supabase)
+
     tab_entries: list[tuple[str, callable]] = [
         ("Review", render_review),
         ("Pending Claims", render_pending_claims),
@@ -9760,6 +9764,12 @@ def main():
         ("Reporting", render_reporting),
         ("Admin", render_admin),
         ("TSB / Bulletins", render_tsb_bulletins),
+        ("OEM Audit Guide", lambda: render_stellantis_audit_guide_tab(
+            supabase,
+            can_upload=user_can_upload_library(),
+            render_role_gate_message=render_role_gate_message,
+            content_admin_roles=CONTENT_ADMIN_ROLES,
+        )),
         ("Scheduled Reports", render_scheduled_reports),
         ("WAM", render_wam),
     ]

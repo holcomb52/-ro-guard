@@ -139,6 +139,33 @@ ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_active_report JSONB;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_reports_library JSONB DEFAULT '{"active_fingerprint":"","reports":{}}'::jsonb;
 ALTER TABLE dealer_settings ADD COLUMN IF NOT EXISTS popps_notes_compliance JSONB DEFAULT '{}'::jsonb;
 
+-- Stellantis OEM warranty audit guide uploads (reason code PDF library)
+CREATE TABLE IF NOT EXISTS stellantis_audit_documents (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_file TEXT NOT NULL,
+    version_label TEXT,
+    content TEXT NOT NULL DEFAULT '',
+    parsed_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    uploaded_by TEXT,
+    ocr_used BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_stellantis_audit_documents_active
+    ON stellantis_audit_documents (is_active, created_at DESC);
+
+ALTER TABLE stellantis_audit_documents ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "stellantis_audit_documents_read" ON stellantis_audit_documents;
+DROP POLICY IF EXISTS "stellantis_audit_documents_write" ON stellantis_audit_documents;
+
+CREATE POLICY "stellantis_audit_documents_read" ON stellantis_audit_documents
+    FOR SELECT USING (true);
+
+CREATE POLICY "stellantis_audit_documents_write" ON stellantis_audit_documents
+    FOR ALL USING (true) WITH CHECK (true);
+
 -- Append-only POPPS review audit log (one row per Save review)
 CREATE TABLE IF NOT EXISTS popps_review_log (
     id BIGSERIAL PRIMARY KEY,

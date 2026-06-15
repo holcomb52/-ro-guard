@@ -51,6 +51,11 @@ SECTION_NAV_META: dict[str, dict[str, str]] = {
         "toast": "TSB / Bulletins — technical service information",
         "tag": "TSB",
     },
+    "OEM Audit Guide": {
+        "icon": "🛡️",
+        "toast": "OEM Audit Guide — upload Stellantis warranty audit rules",
+        "tag": "OEM Audit",
+    },
     "Scheduled Reports": {
         "icon": "🗓️",
         "toast": "Scheduled Reports — automated email delivery",

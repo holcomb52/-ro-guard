@@ -259,11 +259,65 @@ def detect_non_warranty_issues(*texts: str) -> list[tuple[str, str]]:
         return []
     hits: list[tuple[str, str]] = []
     seen_sub: set[str] = set()
-    for pattern, subcode, message in _NON_WARRANTY_PATTERNS:
+    for pattern, subcode, message in _effective_non_warranty_patterns():
         if re.search(pattern, blob, re.I) and subcode not in seen_sub:
             seen_sub.add(subcode)
             hits.append((subcode, message))
     return hits
+
+
+def get_effective_reason_codes() -> dict[str, dict]:
+    """Merge uploaded guide reason codes with built-in defaults."""
+    try:
+        from core.stellantis_audit_store import get_bound_stellantis_config
+
+        uploaded = get_bound_stellantis_config().get("reason_codes") or {}
+    except ImportError:
+        uploaded = {}
+
+    if not uploaded:
+        return STELLANTIS_REASON_CODES
+
+    merged = {**STELLANTIS_REASON_CODES}
+    for letter, meta in uploaded.items():
+        if not isinstance(meta, dict):
+            continue
+        base = merged.get(letter, {})
+        merged[letter] = {
+            "title": meta.get("title") or base.get("title") or "",
+            "summary": meta.get("summary") or base.get("summary") or "",
+            "subcodes": meta.get("subcodes") or base.get("subcodes") or [],
+        }
+    return merged
+
+
+def _effective_non_warranty_patterns() -> list[tuple[str, str, str]]:
+    patterns: list[tuple[str, str, str]] = list(_NON_WARRANTY_PATTERNS)
+    try:
+        from core.stellantis_audit_store import get_bound_stellantis_config
+
+        uploaded = get_bound_stellantis_config().get("non_warranty_patterns") or []
+    except ImportError:
+        uploaded = []
+
+    if not uploaded:
+        return patterns
+
+    seen_sub = {subcode for _pattern, subcode, _message in patterns}
+    extra: list[tuple[str, str, str]] = []
+    for item in uploaded:
+        if not isinstance(item, dict):
+            continue
+        subcode = str(item.get("subcode") or "").strip().upper()
+        pattern = str(item.get("pattern") or "").strip()
+        message = str(item.get("message") or "").strip()
+        if not subcode or not pattern or not message:
+            continue
+        if subcode in seen_sub:
+            continue
+        seen_sub.add(subcode)
+        extra.append((pattern, subcode, message))
+    return extra + patterns
 
 
 def _is_diagnostic_operation(job: dict) -> bool:
@@ -376,13 +430,27 @@ def render_stellantis_audit_reference() -> None:
     import streamlit as st
 
     st.subheader("Stellantis OEM audit reason codes")
+    active_note = ""
+    try:
+        from core.stellantis_audit_store import get_bound_stellantis_config
+
+        active = get_bound_stellantis_config()
+        if active.get("document_id"):
+            active_note = (
+                f" Active uploaded guide: **{active.get('source_file') or 'Guide'}** "
+                f"({int(active.get('reason_code_count') or 0)} codes parsed)."
+            )
+    except ImportError:
+        pass
     st.caption(
         "Reference from the Stellantis North America Dealer Audit — Warranty Audit "
         "Reason Code Application Guide. RO Guard maps internal audit rules to these codes "
         "and applies enabled rules as hard stops or warnings."
+        + active_note
     )
-    for letter in sorted(STELLANTIS_REASON_CODES):
-        meta = STELLANTIS_REASON_CODES[letter]
+    reason_codes = get_effective_reason_codes()
+    for letter in sorted(reason_codes):
+        meta = reason_codes[letter]
         title = meta.get("title") or ""
         summary = meta.get("summary") or ""
         subcodes = meta.get("subcodes") or []

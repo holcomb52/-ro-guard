@@ -10,6 +10,16 @@ RO Guard applies the **Stellantis North America Dealer Audit — Warranty Audit 
 | **Admin → Audit Rules** | Enable/disable each rule; set Hard Stop vs Warning |
 | **Admin → Audit Rules → expander** | Full reason code reference (A–X) |
 | **`core/stellantis_audit.py`** | Reason code catalog, rule mapping, detection logic |
+| **OEM Audit Guide tab** | Upload updated Stellantis PDF guides; active upload drives reason codes + B-keyword checks |
+
+## Uploading an updated guide
+
+1. Open **OEM Audit Guide** in the top navigation.
+2. Upload the new Stellantis warranty audit PDF (scanned PDFs use OCR automatically).
+3. Leave **Set as active guide after upload** checked.
+4. RO Guard parses reason codes and B-subcode keyword checks from the document.
+
+If Supabase was created before this feature, run the `stellantis_audit_documents` block in `docs/SUPABASE_SCHEMA.sql` once.
 
 ## Stellantis reason codes
 
