@@ -6,6 +6,7 @@ import streamlit as st
 
 from core.auth import auth_user_email
 from core.ro_ocr import ocr_runtime_ready
+from core.stellantis_compliance import render_compliance_checks_reference
 from core.stellantis_audit import render_stellantis_audit_reference
 from core.stellantis_audit_store import (
     bind_stellantis_runtime_config,
@@ -76,10 +77,9 @@ def render_stellantis_audit_guide_tab(
 ) -> None:
     st.header("OEM Audit Guide")
     st.caption(
-        "Upload the Stellantis **Warranty Audit — Reason Code Application Guide** PDF. "
-        "RO Guard extracts reason codes and keyword checks from the document and applies them "
-        "as hard stops on Review. When Stellantis publishes an updated guide, upload the new PDF "
-        "and set it active — no code deploy required."
+        "Supplements **WAM** and flags missing audit documentation before you submit — so claims get paid "
+        "and survive a Stellantis field audit. Upload an updated Stellantis audit PDF when policies change; "
+        "RO Guard maps gaps to hard stops on Review."
     )
 
     flash = pop_upload_flash()
@@ -111,8 +111,8 @@ def render_stellantis_audit_guide_tab(
             "Upload the dealer audit PDF below to replace the reference text and B-code keyword checks."
         )
 
-    upload_tab, library_tab, reference_tab = st.tabs(
-        ["Upload guide", "Saved guides", "Reason code reference"]
+    upload_tab, library_tab, compliance_tab, reference_tab = st.tabs(
+        ["Upload guide", "Saved guides", "Compliance checks", "Reason codes"]
     )
 
     with upload_tab:
@@ -286,6 +286,9 @@ def render_stellantis_audit_guide_tab(
                                 st.markdown(f"- {sub}")
                     with st.expander("Extracted text (first 8,000 characters)", expanded=False):
                         st.text(str(doc.get("content") or "")[:8000])
+
+    with compliance_tab:
+        render_compliance_checks_reference()
 
     with reference_tab:
         render_stellantis_audit_reference()

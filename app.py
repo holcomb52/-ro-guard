@@ -85,6 +85,7 @@ from core.review_store import (
     smart_warranty_punch_exempt,
     update_review_outcome,
 )
+from core.stellantis_compliance import evaluate_documentation_compliance
 from core.stellantis_audit_admin import render_stellantis_audit_guide_tab
 from core.stellantis_audit_store import bind_stellantis_runtime_config
 from core.stellantis_audit import (
@@ -3466,8 +3467,8 @@ def find_wam_matches(job):
 
 def _render_applicable_manual_sections_body(sections) -> None:
     st.caption(
-        "WAM excerpts require a checked warranty flag or explicit WAM reference. "
-        "TSB / bulletins match automatically when the repair narrative applies."
+        "These WAM / TSB excerpts supplement the audit checks above. If a gap is flagged, attach the "
+        "missing proof on the RO before submit to avoid denial or chargeback."
     )
 
     for idx, sec in enumerate(sections):
@@ -3830,37 +3831,30 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
                 "Pencil Wrench Correction: proper operation was not verified after repair.",
             )
 
-    if _narrative_indicates_repair(job, "oil_leak") and not job.get("oil_dye_billed"):
+    manual_sections = find_applicable_manual_sections(job)
+    job["manual_sections"] = manual_sections
+
+    for finding in evaluate_documentation_compliance(job, manual_sections):
         _add_audit_finding(
-            hard, warn, audit_rules, "oil_leak",
-            "Oil leak repair requires oil dye billed.",
+            hard,
+            warn,
+            audit_rules,
+            finding.get("rule"),
+            finding.get("message"),
         )
-
-    if _narrative_indicates_repair(job, "sublet_repair"):
-        if not job.get("sublet_vin"):
-            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must show VIN.")
-        if not job.get("sublet_mileage"):
-            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must show mileage.")
-        if not job.get("sublet_notes"):
-            _add_audit_finding(hard, warn, audit_rules, "sublet", "Sublet invoice must include detailed repair notes.")
-
-    if _rental_work_applies(job):
-        if job.get("rental_days", 0) <= 0:
-            _add_audit_finding(hard, warn, audit_rules, "rental", "Rental involved but rental days are not billed.")
-        if not job.get("manager_signed_rental"):
-            _add_audit_finding(hard, warn, audit_rules, "rental", "Rental involved but manager sign-off is missing.")
-        if job.get("rental_days", 0) >= rental_warn_days:
-            _add_audit_finding(
-                hard, warn, audit_rules, "rental_high_days",
-                f"{rental_warn_days} or more rental days billed: make sure all documentation to support "
-                "rental days is submitted to Stellantis with the claim.",
-            )
 
     if _narrative_indicates_repair(job, "warranty_add_on") and not job.get("manager_approval"):
         manager_name = service_manager_signoff_phrase()
         _add_audit_finding(
             hard, warn, audit_rules, "warranty_add_on",
-            f"Warranty add-on (W+) requires {manager_name} sign-off.",
+            f"Missing W+ manager sign-off — obtain {manager_name} approval (WAM + Stellantis L/E).",
+        )
+
+    if _rental_work_applies(job) and job.get("rental_days", 0) >= rental_warn_days:
+        _add_audit_finding(
+            hard, warn, audit_rules, "rental_high_days",
+            f"{rental_warn_days} or more rental days billed: make sure all documentation to support "
+            "rental days is submitted to Stellantis with the claim.",
         )
 
     tech_flagged_time = float(job.get("tech_flagged_time") or 0)
@@ -3890,36 +3884,6 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             _add_audit_finding(hard, warn, audit_rules, "tech_time", "Tech Flagged Time is missing.")
         elif tech_flagged_time > 0 and time_allotted <= 0:
             _add_audit_finding(hard, warn, audit_rules, "tech_time", "Time Allotted for the job is missing.")
-
-    if _narrative_indicates_repair(job, "battery_replacement") and not job.get("battery_test_slip"):
-        _add_audit_finding(
-            hard, warn, audit_rules, "battery_test_slip",
-            "Battery replacement requires failed battery test slip/code.",
-        )
-    if _narrative_indicates_repair(job, "ac_repair") and not job.get("ac_evac_slip"):
-        _add_audit_finding(
-            hard, warn, audit_rules, "ac_evac_slip",
-            "A/C repair requires EVAC/recharge slip.",
-        )
-    if _narrative_indicates_repair(job, "alignment_involved") and not job.get("alignment_report_attached"):
-        _add_audit_finding(
-            hard, warn, audit_rules, "alignment_report",
-            "Alignment requires printout report attached to the repair order.",
-        )
-    if _narrative_indicates_repair(job, "parts_warranty") and not job.get("mopa_original_ro"):
-        _add_audit_finding(
-            hard, warn, audit_rules, "parts_warranty_mopa",
-            "Parts warranty requires MOPAR and original RO support.",
-        )
-
-    manual_sections = find_applicable_manual_sections(job)
-    job["manual_sections"] = manual_sections
-
-    if manual_sections:
-        _add_audit_finding(
-            hard, warn, audit_rules, "manual_guidance",
-            "Applicable warranty manual guidance is shown below — confirm compliance before submission.",
-        )
 
     apply_stellantis_job_checks(
         job,
@@ -5973,10 +5937,10 @@ def render_review():
     render_vin_recall_panel(vin, st.session_state.form_version, job_count)
 
     fv = st.session_state.form_version
-    st.markdown("#### Stellantis OEM audit")
+    st.markdown("#### Audit & WAM compliance")
     st.caption(
-        "Confirm RO-level items auditors check before submit. Missing customer signature is a hard stop "
-        "when the Stellantis S rule is enabled under Admin → Audit Rules."
+        "Confirm RO-level proof auditors and Stellantis expect before submit. Missing customer signature, "
+        "test slips, manager sign-offs, and other WAM items are hard stops when enabled under Admin → Audit Rules."
     )
     sig_col, mile_col = st.columns(2)
     with sig_col:

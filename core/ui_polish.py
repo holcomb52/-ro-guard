@@ -53,7 +53,7 @@ SECTION_NAV_META: dict[str, dict[str, str]] = {
     },
     "OEM Audit Guide": {
         "icon": "🛡️",
-        "toast": "OEM Audit Guide — upload Stellantis warranty audit rules",
+        "toast": "OEM Audit Guide — WAM supplement & chargeback prevention",
         "tag": "OEM Audit",
     },
     "Scheduled Reports": {

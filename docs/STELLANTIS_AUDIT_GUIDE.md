@@ -1,6 +1,16 @@
 # Stellantis OEM Warranty Audit — RO Guard Integration
 
-RO Guard applies the **Stellantis North America Dealer Audit — Warranty Audit Reason Code Application Guide** as configurable **hard stops** and **warnings** on every review.
+RO Guard uses the uploaded Stellantis audit guide to **supplement WAM** — not replace it. On every Review, the tool compares the job story, warranty documentation checkboxes, WAM excerpts, and the active audit guide to flag **what is missing** before submit (paid first time + chargeback-safe).
+
+## What it does
+
+| Layer | Role |
+|-------|------|
+| **WAM tab** | Source policy text — upload Stellantis WAM PDFs |
+| **Review audit** | Hard stops when proof is missing (test slips, sublet VIN, rental sign-off, etc.) |
+| **WAM excerpts on Review** | Show the policy language that applies to this job |
+| **OEM Audit Guide upload** | Updates Stellantis chargeback keyword checks + reason-code reference |
+| **Compliance checks tab** | Lists every documentation item RO Guard enforces |
 
 ## Where it lives
 
