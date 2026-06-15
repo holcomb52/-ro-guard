@@ -248,6 +248,113 @@ def evaluate_documentation_compliance(
     return findings
 
 
+def _catalog_check_for_rule(rule_key: str) -> dict | None:
+    for check in DOCUMENTATION_CHECKS:
+        if check["rule_key"] == rule_key:
+            return check
+    return None
+
+
+def _requirement_trigger_hits(job: dict, check: dict) -> bool:
+    topic = check.get("topic")
+    if topic:
+        return work_applies(job, topic)
+
+    check_type = check.get("check_type")
+    if check_type == "tech_time_documented":
+        try:
+            if float(job.get("tech_flagged_time") or 0) > 0 or float(job.get("time_allotted") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            pass
+        text = _job_narrative_text(job)
+        return any(
+            phrase in text
+            for phrase in ("time punch", "time punches", "clock time", "flagged time", "punched")
+        )
+
+    if check_type == "diagnostic_narrative":
+        text = _job_narrative_text(job)
+        return any(
+            phrase in text
+            for phrase in ("diagnostic", "854", "dtc", "scan", "test result", "diagnosed")
+        )
+
+    return False
+
+
+def _requirement_satisfied(job: dict, check: dict) -> bool:
+    check_type = check.get("check_type")
+    if check_type in {"ro_customer_signature", "guide_acknowledgement"}:
+        return True
+    if check_type == "ccc_complete":
+        return all(str(job.get(key) or "").strip() for key in ("concern", "cause", "correction"))
+    if check_type == "tech_time_documented":
+        tech_flagged = float(job.get("tech_flagged_time") or 0)
+        time_allotted = float(job.get("time_allotted") or 0)
+        if tech_flagged > 0 and time_allotted > 0:
+            return True
+        evidence = [str(p).lower() for p in check.get("evidence_phrases") or []]
+        cause = str(job.get("cause") or "").lower()
+        return any(phrase in cause for phrase in evidence)
+    if check_type == "diagnostic_narrative":
+        evidence = [str(p).lower() for p in check.get("evidence_phrases") or []]
+        cause = str(job.get("cause") or "").lower()
+        return any(phrase in cause for phrase in evidence)
+
+    catalog = _catalog_check_for_rule(check.get("rule_key", ""))
+    merged = {**(catalog or {}), **check}
+    if merged.get("proof_field") or merged.get("proof_fields"):
+        return _has_proof(job, merged)
+    return True
+
+
+def _message_for_guide_requirement(check: dict) -> str:
+    letter = str(check.get("letter") or "").strip()
+    requirement = str(check.get("requirement") or "").strip()
+    snippet = requirement[:200] + ("…" if len(requirement) > 200 else "")
+    catalog = _catalog_check_for_rule(check.get("rule_key", ""))
+    codes = ", ".join(stellantis_codes_for_rule(check.get("rule_key", ""))) or letter or "audit"
+    if catalog:
+        return (
+            f"Stellantis guide ({letter}): missing {check.get('label') or catalog['label']} — "
+            f"{catalog['action']} ({snippet})"
+        )
+    return f"Stellantis guide ({letter}): confirm audit requirement — {snippet} (Stellantis {codes})."
+
+
+def evaluate_guide_requirement_checks(
+    job: dict,
+    requirement_checks: list[dict] | None,
+    seen_rules: set[str] | None = None,
+) -> list[dict]:
+    """Evaluate dynamic checks parsed from the active Stellantis audit guide."""
+    seen = set(seen_rules or [])
+    findings: list[dict] = []
+    for check in requirement_checks or []:
+        rule_key = str(check.get("rule_key") or "").strip()
+        if not rule_key or rule_key in seen:
+            continue
+        check_type = check.get("check_type")
+        if check_type in {"ro_customer_signature", "guide_acknowledgement"}:
+            continue
+        if not _requirement_trigger_hits(job, check):
+            continue
+        if _requirement_satisfied(job, check):
+            continue
+        seen.add(rule_key)
+        findings.append(
+            attach_stellantis_codes(
+                {
+                    "rule": rule_key,
+                    "message": _message_for_guide_requirement(check),
+                    "stellantis_letter": check.get("letter"),
+                }
+            )
+        )
+    return findings
+
+
 def list_compliance_check_catalog() -> list[dict]:
     rows = []
     for check in DOCUMENTATION_CHECKS:
@@ -286,7 +393,11 @@ def list_compliance_check_catalog() -> list[dict]:
     return rows
 
 
-def render_compliance_checks_reference() -> None:
+def render_compliance_checks_reference(
+    *,
+    requirement_checks: list[dict] | None = None,
+    dealer_requirements: dict[str, list[str]] | None = None,
+) -> None:
     import streamlit as st
 
     st.subheader("WAM & audit documentation checks")
@@ -298,6 +409,23 @@ def render_compliance_checks_reference() -> None:
     for row in list_compliance_check_catalog():
         st.markdown(f"**{row['label']}** (Stellantis {row['stellantis']})")
         st.markdown(f"- {row['action']}")
+
+    checks = requirement_checks or []
+    grouped = dealer_requirements or {}
+    if checks or grouped:
+        st.subheader("Active guide — dealer requirements")
+        st.caption(
+            f"{len(checks)} compliance checks parsed from Dealer Recommendations/Requirements "
+            f"across {len(grouped)} reason codes."
+        )
+        with st.expander("Parsed dealer requirements", expanded=False):
+            for letter in sorted(grouped):
+                st.markdown(f"**{letter}**")
+                for item in grouped[letter][:6]:
+                    st.markdown(f"- {item}")
+                if len(grouped[letter]) > 6:
+                    st.caption(f"+ {len(grouped[letter]) - 6} more for {letter}")
+
     st.caption(
         "Upload WAM PDFs under **WAM**. Upload an updated Stellantis audit guide here when "
         "Stellantis publishes changes."

@@ -12,6 +12,7 @@ from core.stellantis_audit_store import (
     bind_stellantis_runtime_config,
     bundled_stellantis_guide_text,
     delete_stellantis_audit_document,
+    get_bound_stellantis_config,
     get_stellantis_document_content,
     ingest_stellantis_audit_upload,
     list_stellantis_audit_documents,
@@ -288,7 +289,11 @@ def render_stellantis_audit_guide_tab(
                         st.text(str(doc.get("content") or "")[:8000])
 
     with compliance_tab:
-        render_compliance_checks_reference()
+        guide_config = get_bound_stellantis_config()
+        render_compliance_checks_reference(
+            requirement_checks=guide_config.get("requirement_checks"),
+            dealer_requirements=guide_config.get("dealer_requirements"),
+        )
 
     with reference_tab:
         render_stellantis_audit_reference()

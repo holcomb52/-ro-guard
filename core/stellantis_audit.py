@@ -145,6 +145,7 @@ AUDIT_RULE_TO_STELLANTIS: dict[str, list[str]] = {
     "stellantis_non_warranty_item": ["B"],
     "stellantis_diagnostic_op": ["T"],
     "stellantis_zero_mile_paint": ["X", "L"],
+    "stellantis_guide_requirement": [],
 }
 
 STELLANTIS_AUDIT_RULES: dict[str, dict] = {
@@ -152,6 +153,7 @@ STELLANTIS_AUDIT_RULES: dict[str, dict] = {
     "stellantis_non_warranty_item": {"enabled": True, "severity": "hard"},
     "stellantis_diagnostic_op": {"enabled": True, "severity": "hard"},
     "stellantis_zero_mile_paint": {"enabled": True, "severity": "hard"},
+    "stellantis_guide_requirement": {"enabled": True, "severity": "warn"},
 }
 
 STELLANTIS_AUDIT_LABELS: dict[str, str] = {
@@ -159,6 +161,7 @@ STELLANTIS_AUDIT_LABELS: dict[str, str] = {
     "stellantis_non_warranty_item": "Stellantis B — non-warranty item in story",
     "stellantis_diagnostic_op": "Stellantis T — diagnostic operation / DTC support",
     "stellantis_zero_mile_paint": "Stellantis X — zero-mile paint/trim manager authorization",
+    "stellantis_guide_requirement": "Stellantis audit guide — dealer requirement",
 }
 
 STELLANTIS_COACHING_PHRASES: dict[str, str] = {
@@ -166,6 +169,7 @@ STELLANTIS_COACHING_PHRASES: dict[str, str] = {
     "stellantis_non_warranty_item": "non-warranty language in the story (Stellantis B)",
     "stellantis_diagnostic_op": "diagnostic operation not supported (Stellantis T)",
     "stellantis_zero_mile_paint": "zero-mile paint/trim without manager authorization (Stellantis X)",
+    "stellantis_guide_requirement": "open item from uploaded Stellantis audit guide",
 }
 
 _NON_WARRANTY_PATTERNS: list[tuple[str, str, str]] = [

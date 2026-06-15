@@ -779,6 +779,8 @@ def classify_finding_message(message: str) -> str:
         return "stellantis_diagnostic_op"
     if "stellantis x" in msg or "zero-mile paint" in msg or "zero mile paint" in msg:
         return "stellantis_zero_mile_paint"
+    if "stellantis guide" in msg:
+        return "stellantis_guide_requirement"
     return "other"
 
 

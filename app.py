@@ -85,9 +85,9 @@ from core.review_store import (
     smart_warranty_punch_exempt,
     update_review_outcome,
 )
-from core.stellantis_compliance import evaluate_documentation_compliance
+from core.stellantis_compliance import evaluate_documentation_compliance, evaluate_guide_requirement_checks
 from core.stellantis_audit_admin import render_stellantis_audit_guide_tab
-from core.stellantis_audit_store import bind_stellantis_runtime_config
+from core.stellantis_audit_store import bind_stellantis_runtime_config, get_bound_stellantis_config
 from core.stellantis_audit import (
     apply_stellantis_job_checks,
     attach_stellantis_codes,
@@ -3834,7 +3834,23 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
     manual_sections = find_applicable_manual_sections(job)
     job["manual_sections"] = manual_sections
 
+    seen_doc_rules: set[str] = set()
     for finding in evaluate_documentation_compliance(job, manual_sections):
+        seen_doc_rules.add(str(finding.get("rule") or ""))
+        _add_audit_finding(
+            hard,
+            warn,
+            audit_rules,
+            finding.get("rule"),
+            finding.get("message"),
+        )
+
+    guide_config = get_bound_stellantis_config()
+    for finding in evaluate_guide_requirement_checks(
+        job,
+        guide_config.get("requirement_checks"),
+        seen_doc_rules,
+    ):
         _add_audit_finding(
             hard,
             warn,

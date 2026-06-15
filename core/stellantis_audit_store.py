@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
-from core.stellantis_audit_parser import parse_stellantis_audit_guide
+from core.stellantis_audit_parser import enrich_parsed_config, parse_stellantis_audit_guide
 from core.ro_ocr import extract_audit_guide_text
 
 _FLASH_KEY = "stellantis_upload_flash"
@@ -101,7 +101,7 @@ def _fetch_active_config_from_db(supabase) -> dict:
     if not row:
         return {"_loaded": True}
 
-    parsed = row.get("parsed_config") or {}
+    parsed = enrich_parsed_config(str(row.get("content") or ""), row.get("parsed_config") or {})
     return {
         "_loaded": True,
         "document_id": row.get("id"),
@@ -112,9 +112,12 @@ def _fetch_active_config_from_db(supabase) -> dict:
         "ocr_used": bool(row.get("ocr_used")),
         "reason_codes": parsed.get("reason_codes") or {},
         "non_warranty_patterns": parsed.get("non_warranty_patterns") or [],
+        "dealer_requirements": parsed.get("dealer_requirements") or {},
+        "requirement_checks": parsed.get("requirement_checks") or [],
         "parse_warnings": parsed.get("parse_warnings") or [],
         "parsed_at": parsed.get("parsed_at"),
         "reason_code_count": parsed.get("reason_code_count") or len(parsed.get("reason_codes") or {}),
+        "requirement_check_count": parsed.get("requirement_check_count") or len(parsed.get("requirement_checks") or []),
     }
 
 
@@ -283,8 +286,12 @@ def ingest_stellantis_audit_upload(
     result.update(
         {
             "ok": True,
-            "message": f"Saved {len(parsed.get('reason_codes') or {})} reason codes from {file_name}.",
+            "message": (
+                f"Saved {len(parsed.get('reason_codes') or {})} reason codes and "
+                f"{parsed.get('requirement_check_count', 0)} dealer requirement checks from {file_name}."
+            ),
             "reason_code_count": len(parsed.get("reason_codes") or {}),
+            "requirement_check_count": parsed.get("requirement_check_count") or 0,
             "ocr_used": ocr_used,
             "parse_warnings": parsed.get("parse_warnings") or [],
         }
