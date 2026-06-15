@@ -21,6 +21,17 @@ from core.stellantis_audit_store import (
 )
 
 
+def _format_supabase_error(exc: Exception) -> str:
+    text = str(exc or "").strip()
+    if "row-level security" in text.lower() or "42501" in text:
+        return (
+            "Supabase blocked the save (row-level security). "
+            "In Supabase → SQL Editor, run the file `docs/FIX_STELLANTIS_AUDIT_RLS.sql`, "
+            "then try again."
+        )
+    return text or "Upload failed."
+
+
 def _run_guide_ingest(
     supabase,
     *,
@@ -134,9 +145,9 @@ def render_stellantis_audit_guide_tab(
                             make_active=True,
                             pasted_text=bundled_text,
                         )
-                    except Exception as exc:
-                        set_upload_flash(kind="error", message=f"Could not load built-in guide: {exc}")
-                        st.rerun()
+                except Exception as exc:
+                    set_upload_flash(kind="error", message=_format_supabase_error(exc))
+                    st.rerun()
 
             with st.form("stellantis_upload_form", clear_on_submit=False):
                 version_label = st.text_input(
@@ -176,7 +187,7 @@ def render_stellantis_audit_guide_tab(
                         make_active=make_active,
                     )
                 except Exception as exc:
-                    set_upload_flash(kind="error", message=f"Could not save OEM audit guide: {exc}")
+                    set_upload_flash(kind="error", message=_format_supabase_error(exc))
                     st.rerun()
 
             with st.expander("Paste guide text instead (if PDF upload fails)", expanded=False):
@@ -205,7 +216,7 @@ def render_stellantis_audit_guide_tab(
                                 pasted_text=pasted_text,
                             )
                         except Exception as exc:
-                            set_upload_flash(kind="error", message=f"Could not save pasted guide: {exc}")
+                            set_upload_flash(kind="error", message=_format_supabase_error(exc))
                             st.rerun()
 
             if not ocr_runtime_ready():

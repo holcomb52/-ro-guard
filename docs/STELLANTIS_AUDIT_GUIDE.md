@@ -21,6 +21,8 @@ RO Guard applies the **Stellantis North America Dealer Audit — Warranty Audit 
 
 If Supabase was created before this feature, run the `stellantis_audit_documents` block in `docs/SUPABASE_SCHEMA.sql` once.
 
+If upload fails with **row-level security policy**, run **`docs/FIX_STELLANTIS_AUDIT_RLS.sql`** in the Supabase SQL Editor (creates read/write policies for the app).
+
 ## Stellantis reason codes
 
 | Code | Title | RO Guard rules |

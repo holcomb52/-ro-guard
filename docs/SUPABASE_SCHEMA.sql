@@ -166,6 +166,9 @@ CREATE POLICY "stellantis_audit_documents_read" ON stellantis_audit_documents
 CREATE POLICY "stellantis_audit_documents_write" ON stellantis_audit_documents
     FOR ALL USING (true) WITH CHECK (true);
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON stellantis_audit_documents TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE stellantis_audit_documents_id_seq TO anon, authenticated;
+
 -- Append-only POPPS review audit log (one row per Save review)
 CREATE TABLE IF NOT EXISTS popps_review_log (
     id BIGSERIAL PRIMARY KEY,
