@@ -57,19 +57,19 @@ def _run_guide_ingest(
             progress=_progress,
         )
 
-    if result.get("ok"):
-        status.update(label="Guide saved", state="complete")
-        msg = result.get("message") or "Guide saved."
-        warnings = result.get("parse_warnings") or []
-        if warnings:
-            msg = f"{msg} ({'; '.join(warnings)})"
-        set_upload_flash(kind="success", message=msg)
-        bind_stellantis_runtime_config(supabase)
-        st.rerun()
-    else:
-        status.update(label="Could not save guide", state="error")
-        set_upload_flash(kind="error", message=result.get("message") or "Upload failed.")
-        st.rerun()
+        if result.get("ok"):
+            status.update(label="Guide saved", state="complete")
+            msg = result.get("message") or "Guide saved."
+            warnings = result.get("parse_warnings") or []
+            if warnings:
+                msg = f"{msg} ({'; '.join(warnings)})"
+            set_upload_flash(kind="success", message=msg)
+            bind_stellantis_runtime_config(supabase)
+            st.rerun()
+        else:
+            status.update(label="Could not save guide", state="error")
+            set_upload_flash(kind="error", message=result.get("message") or "Upload failed.")
+            st.rerun()
 
 
 def render_stellantis_audit_guide_tab(
@@ -145,9 +145,9 @@ def render_stellantis_audit_guide_tab(
                             make_active=True,
                             pasted_text=bundled_text,
                         )
-                except Exception as exc:
-                    set_upload_flash(kind="error", message=_format_supabase_error(exc))
-                    st.rerun()
+                    except Exception as exc:
+                        set_upload_flash(kind="error", message=_format_supabase_error(exc))
+                        st.rerun()
 
             with st.form("stellantis_upload_form", clear_on_submit=False):
                 version_label = st.text_input(
