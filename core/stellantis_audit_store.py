@@ -8,8 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from core.stellantis_audit_parser import parse_stellantis_audit_guide
+from core.ro_ocr import extract_audit_guide_text
 
 _TABLE = "stellantis_audit_documents"
+_FLASH_KEY = "stellantis_upload_flash"
 
 
 def _utc_now_iso() -> str:
@@ -180,19 +182,25 @@ def ingest_stellantis_audit_upload(
     version_label: str = "",
     set_active: bool = True,
     pasted_text: str = "",
+    progress=None,
 ) -> dict:
-    from core.ro_ocr import extract_ro_text
-
     name = str(file_name or "").strip().lower()
     pasted = str(pasted_text or "").strip()
     if pasted:
+        if progress:
+            progress("Parsing pasted guide text…")
         text = pasted
         ocr_used = False
     elif name.endswith(".txt"):
+        if progress:
+            progress("Reading .txt guide file…")
         text = file_bytes.decode("utf-8", errors="replace")
         ocr_used = False
     else:
-        text, ocr_used = extract_ro_text(file_bytes, force_ocr=False)
+        text, ocr_used = extract_audit_guide_text(file_bytes, progress=progress)
+
+    if progress:
+        progress("Parsing Stellantis reason codes…")
     parsed = parse_stellantis_audit_guide(text)
     if not parsed.get("reason_codes"):
         return {
@@ -237,3 +245,21 @@ def get_stellantis_document_content(supabase, document_id: int) -> dict | None:
         or []
     )
     return rows[0] if rows else None
+
+
+def bundled_stellantis_guide_text() -> tuple[str, bool]:
+    """Return repo-bundled OCR text for the default Stellantis audit guide, if present."""
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "docs" / "stellantis_audit_ocr.txt"
+    if not path.is_file():
+        return "", False
+    return path.read_text(encoding="utf-8", errors="replace"), True
+
+
+def pop_upload_flash() -> dict | None:
+    return st.session_state.pop(_FLASH_KEY, None)
+
+
+def set_upload_flash(*, kind: str, message: str) -> None:
+    st.session_state[_FLASH_KEY] = {"kind": kind, "message": message}

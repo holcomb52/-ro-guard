@@ -9,13 +9,56 @@ from core.ro_ocr import ocr_runtime_ready
 from core.stellantis_audit import render_stellantis_audit_reference
 from core.stellantis_audit_store import (
     bind_stellantis_runtime_config,
+    bundled_stellantis_guide_text,
     delete_stellantis_audit_document,
     get_stellantis_document_content,
     ingest_stellantis_audit_upload,
     list_stellantis_audit_documents,
     load_active_stellantis_config,
+    pop_upload_flash,
     set_active_stellantis_audit_document,
+    set_upload_flash,
 )
+
+
+def _run_guide_ingest(
+    supabase,
+    *,
+    file_name: str,
+    file_bytes: bytes,
+    version_label: str,
+    make_active: bool,
+    pasted_text: str = "",
+) -> None:
+    with st.status("Processing OEM audit guide…", expanded=True) as status:
+
+        def _progress(message: str) -> None:
+            status.write(message)
+
+        result = ingest_stellantis_audit_upload(
+            supabase,
+            file_name=file_name,
+            file_bytes=file_bytes,
+            uploaded_by=auth_user_email() or "unknown",
+            version_label=version_label,
+            set_active=make_active,
+            pasted_text=pasted_text,
+            progress=_progress,
+        )
+
+    if result.get("ok"):
+        status.update(label="Guide saved", state="complete")
+        msg = result.get("message") or "Guide saved."
+        warnings = result.get("parse_warnings") or []
+        if warnings:
+            msg = f"{msg} ({'; '.join(warnings)})"
+        set_upload_flash(kind="success", message=msg)
+        bind_stellantis_runtime_config(supabase)
+        st.rerun()
+    else:
+        status.update(label="Could not save guide", state="error")
+        set_upload_flash(kind="error", message=result.get("message") or "Upload failed.")
+        st.rerun()
 
 
 def render_stellantis_audit_guide_tab(
@@ -33,6 +76,13 @@ def render_stellantis_audit_guide_tab(
         "and set it active — no code deploy required."
     )
 
+    flash = pop_upload_flash()
+    if flash:
+        if flash.get("kind") == "success":
+            st.success(flash.get("message") or "Guide saved.")
+        else:
+            st.error(flash.get("message") or "Upload failed.")
+
     bind_stellantis_runtime_config(supabase)
     active = load_active_stellantis_config(supabase)
 
@@ -47,9 +97,8 @@ def render_stellantis_audit_guide_tab(
             f"Uploaded by {active.get('uploaded_by') or '—'}."
         )
         warnings = active.get("parse_warnings") or []
-        if warnings:
-            for warning in warnings:
-                st.warning(warning)
+        for warning in warnings:
+            st.warning(warning)
     else:
         st.info(
             "No uploaded guide is active yet. Built-in default Stellantis rules still apply. "
@@ -65,23 +114,71 @@ def render_stellantis_audit_guide_tab(
             render_role_gate_message(content_admin_roles, "upload OEM audit guides")
             st.info("Upload is available to Manager and Warranty Admin only.")
         else:
-            version_label = st.text_input(
-                "Version label (optional)",
-                placeholder="e.g. 2026 field audit guide",
-                key="stellantis_upload_version",
-            )
-            make_active = st.checkbox(
-                "Set as active guide after upload",
-                value=True,
-                key="stellantis_upload_set_active",
-            )
-            uploaded_files = st.file_uploader(
-                "Upload Stellantis warranty audit guide (PDF or .txt)",
-                type=["pdf", "txt"],
-                accept_multiple_files=False,
-                key="stellantis_audit_upload",
-                help="Scanned PDFs are OCR'd automatically when Poppler + Tesseract are installed on the server.",
-            )
+            bundled_text, has_bundled = bundled_stellantis_guide_text()
+            if has_bundled:
+                st.caption(
+                    "Fastest option: load the Stellantis guide text already included with RO Guard "
+                    "(same content as your scanned PDF)."
+                )
+                if st.button(
+                    "Load built-in Stellantis audit guide",
+                    type="secondary",
+                    key="stellantis_load_bundled",
+                ):
+                    try:
+                        _run_guide_ingest(
+                            supabase,
+                            file_name="WARRANTY AUDIT (built-in).txt",
+                            file_bytes=b"",
+                            version_label="Built-in RO Guard guide",
+                            make_active=True,
+                            pasted_text=bundled_text,
+                        )
+                    except Exception as exc:
+                        set_upload_flash(kind="error", message=f"Could not load built-in guide: {exc}")
+                        st.rerun()
+
+            with st.form("stellantis_upload_form", clear_on_submit=False):
+                version_label = st.text_input(
+                    "Version label (optional)",
+                    placeholder="e.g. 2026 field audit guide",
+                )
+                make_active = st.checkbox(
+                    "Set as active guide after upload",
+                    value=True,
+                )
+                uploaded_files = st.file_uploader(
+                    "Upload Stellantis warranty audit guide (PDF or .txt)",
+                    type=["pdf", "txt"],
+                    accept_multiple_files=False,
+                    help="Scanned PDFs are OCR'd page-by-page. Large scans can take several minutes — keep this tab open.",
+                )
+                submitted = st.form_submit_button(
+                    "Process and save guide",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            if uploaded_files is not None:
+                size_mb = len(uploaded_files.getvalue()) / (1024 * 1024)
+                st.caption(f"Selected: **{uploaded_files.name}** ({size_mb:.1f} MB)")
+
+            if submitted:
+                if uploaded_files is None:
+                    set_upload_flash(kind="error", message="Choose a PDF or .txt file first.")
+                    st.rerun()
+                try:
+                    _run_guide_ingest(
+                        supabase,
+                        file_name=uploaded_files.name,
+                        file_bytes=uploaded_files.getvalue(),
+                        version_label=version_label,
+                        make_active=make_active,
+                    )
+                except Exception as exc:
+                    set_upload_flash(kind="error", message=f"Could not save OEM audit guide: {exc}")
+                    st.rerun()
+
             with st.expander("Paste guide text instead (if PDF upload fails)", expanded=False):
                 pasted_text = st.text_area(
                     "Extracted guide text",
@@ -99,56 +196,28 @@ def render_stellantis_audit_guide_tab(
                         st.error("Paste the guide text first.")
                     else:
                         try:
-                            result = ingest_stellantis_audit_upload(
+                            _run_guide_ingest(
                                 supabase,
                                 file_name=f"{paste_label.strip() or 'pasted-guide'}.txt",
                                 file_bytes=b"",
-                                uploaded_by=auth_user_email() or "unknown",
                                 version_label=version_label,
-                                set_active=make_active,
+                                make_active=make_active,
                                 pasted_text=pasted_text,
                             )
-                            if result.get("ok"):
-                                st.success(result.get("message") or "Guide saved.")
-                                bind_stellantis_runtime_config(supabase)
-                                st.rerun()
-                            else:
-                                st.error(result.get("message") or "Save failed.")
                         except Exception as exc:
-                            st.error(f"Could not save pasted guide: {exc}")
-
-            if uploaded_files is not None:
-                if st.button("Process and save guide", type="primary", key="stellantis_save_upload"):
-                    try:
-                        result = ingest_stellantis_audit_upload(
-                            supabase,
-                            file_name=uploaded_files.name,
-                            file_bytes=uploaded_files.getvalue(),
-                            uploaded_by=auth_user_email() or "unknown",
-                            version_label=version_label,
-                            set_active=make_active,
-                        )
-                        if result.get("ok"):
-                            st.success(result.get("message") or "Guide saved.")
-                            for warning in result.get("parse_warnings") or []:
-                                st.warning(warning)
-                            bind_stellantis_runtime_config(supabase)
+                            set_upload_flash(kind="error", message=f"Could not save pasted guide: {exc}")
                             st.rerun()
-                        else:
-                            st.error(result.get("message") or "Upload failed.")
-                    except Exception as exc:
-                        st.error(f"Could not save OEM audit guide: {exc}")
-                        st.caption(
-                            "Scanned PDFs need **Poppler** and **Tesseract** on the server. "
-                            "After the next deploy, packages.txt installs these on Streamlit Cloud. "
-                            "Until then, use **Paste guide text instead** or upload a `.txt` file."
-                        )
 
             if not ocr_runtime_ready():
                 st.caption(
                     "Scanned PDF OCR requires Poppler + Tesseract. "
                     "Streamlit Cloud installs them from packages.txt after redeploy. "
-                    "Use paste/.txt upload if PDF processing is unavailable."
+                    "Until then, use **Load built-in Stellantis audit guide** or paste/.txt upload."
+                )
+            elif uploaded_files is not None and str(uploaded_files.name or "").lower().endswith(".pdf"):
+                st.caption(
+                    "Scanned PDF selected — after you click **Process and save guide**, "
+                    "a progress panel appears below. Do not switch tabs until it finishes."
                 )
 
     with library_tab:
@@ -178,7 +247,7 @@ def render_stellantis_audit_guide_tab(
                         try:
                             set_active_stellantis_audit_document(supabase, doc_id)
                             bind_stellantis_runtime_config(supabase)
-                            st.success("Active guide updated.")
+                            set_upload_flash(kind="success", message="Active guide updated.")
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Could not activate guide: {exc}")
@@ -186,7 +255,7 @@ def render_stellantis_audit_guide_tab(
                         try:
                             delete_stellantis_audit_document(supabase, doc_id)
                             bind_stellantis_runtime_config(supabase)
-                            st.success("Guide deleted.")
+                            set_upload_flash(kind="success", message="Guide deleted.")
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Could not delete guide: {exc}")

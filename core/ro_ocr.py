@@ -91,7 +91,12 @@ def _extract_text_layer(pdf_bytes: bytes) -> str:
     return _normalize_text("\n".join(chunks))
 
 
-def _ocr_pdf_bytes(pdf_bytes: bytes, dpi: int = 200) -> str:
+def _ocr_pdf_bytes(
+    pdf_bytes: bytes,
+    dpi: int = 200,
+    *,
+    progress=None,
+) -> str:
     if not ocr_available():
         raise RuntimeError(
             "OCR is not available. Install: python3 -m pip install pytesseract pdf2image Pillow "
@@ -104,6 +109,24 @@ def _ocr_pdf_bytes(pdf_bytes: bytes, dpi: int = 200) -> str:
             "On Mac: brew install poppler."
         )
     try:
+        if progress:
+            from pdf2image import pdfinfo_from_bytes
+
+            info = pdfinfo_from_bytes(pdf_bytes) or {}
+            page_count = max(int(info.get("Pages") or 0), 1)
+            chunks: list[str] = []
+            for page_no in range(1, page_count + 1):
+                progress(f"OCR page {page_no} of {page_count}…")
+                images = convert_from_bytes(
+                    pdf_bytes,
+                    dpi=dpi,
+                    first_page=page_no,
+                    last_page=page_no,
+                )
+                for image in images:
+                    chunks.append(pytesseract.image_to_string(image))
+            return _normalize_text("\n".join(chunks))
+
         images = convert_from_bytes(pdf_bytes, dpi=dpi)
     except Exception as exc:
         message = str(exc or "").strip()
@@ -116,6 +139,30 @@ def _ocr_pdf_bytes(pdf_bytes: bytes, dpi: int = 200) -> str:
         raise
     chunks = [pytesseract.image_to_string(img) for img in images]
     return _normalize_text("\n".join(chunks))
+
+
+def extract_audit_guide_text(
+    pdf_bytes: bytes,
+    *,
+    progress=None,
+) -> tuple[str, bool]:
+    """Extract Stellantis audit guide text — text layer first, then page-by-page OCR."""
+    text = _extract_text_layer(pdf_bytes)
+    if _is_extracted_text_usable(text):
+        if progress:
+            progress("Using selectable PDF text (no OCR needed).")
+        return text, False
+    if not ocr_runtime_ready():
+        if text.strip():
+            return text, False
+        raise RuntimeError(
+            "This PDF has little or no selectable text and OCR is not available on the server. "
+            "Install Poppler + Tesseract (see packages.txt on Streamlit Cloud), "
+            "or upload a .txt copy of the document text."
+        )
+    if progress:
+        progress("Scanned PDF detected — starting OCR (this can take several minutes)…")
+    return _ocr_pdf_bytes(pdf_bytes, dpi=120, progress=progress), True
 
 
 def _is_extracted_text_usable(text: str) -> bool:
