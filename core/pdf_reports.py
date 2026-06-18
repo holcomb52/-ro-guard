@@ -40,6 +40,15 @@ def _safe_text(value) -> str:
     return " ".join(tokens)
 
 
+def _true_claim_value(claim_value, deductible=0) -> float:
+    try:
+        claim = float(claim_value or 0)
+        ded = float(deductible or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, claim - ded)
+
+
 def _safe_multi_cell(pdf: FPDF, h: float, text: str, *, align: str = "L") -> None:
     """Write wrapped text without tripping fpdf2 zero-width layout errors."""
     cleaned = _safe_text(text)
@@ -659,6 +668,16 @@ def build_audit_report_pdf(data: dict) -> bytes:
             [
                 ("Job Score", str(job.get("score", ""))),
                 ("Claim Value", f"${float(job.get('claim_value') or 0):,.2f}"),
+                *(
+                    [("Deductible", f"${float(job.get('deductible') or 0):,.2f}")]
+                    if float(job.get("deductible") or 0) > 0
+                    else []
+                ),
+                *(
+                    [("True Claim Total", f"${_true_claim_value(job.get('claim_value'), job.get('deductible')):,.2f}")]
+                    if float(job.get("deductible") or 0) > 0
+                    else []
+                ),
                 ("Tech Flagged Time", str(job.get("tech_flagged_time", ""))),
                 ("Time Allotted", str(job.get("time_allotted", ""))),
             ],

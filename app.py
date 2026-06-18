@@ -4208,6 +4208,7 @@ def _build_job_from_session(form_version: int, job_no: int) -> dict:
         "tech_flagged_time": float(st.session_state.get(f"tech_time_{j}", 0) or 0),
         "time_allotted": float(st.session_state.get(f"allotted_{j}", 0) or 0),
         "claim_value": float(st.session_state.get(f"claim_value_{j}", 0) or 0),
+        "deductible": float(st.session_state.get(f"deductible_{j}", 0) or 0),
         "oil_leak": bool(st.session_state.get(f"oil_leak_{j}", False)),
         "oil_dye_billed": bool(st.session_state.get(f"oil_dye_{j}", False)),
         "battery_replacement": bool(st.session_state.get(f"battery_{j}", False)),
@@ -4240,6 +4241,16 @@ def _format_dc_copy_number(value: float | int | str) -> str:
     if abs(number - round(number)) < 0.001:
         return str(int(round(number))) if number == int(number) else f"{number:.2f}".rstrip("0").rstrip(".")
     return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _true_claim_value(claim_value, deductible=0) -> float:
+    """Claim value minus deductible — never below zero."""
+    try:
+        claim = float(claim_value or 0)
+        ded = float(deductible or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, claim - ded)
 
 
 def _format_dc_copy_date(value) -> str:
@@ -4651,6 +4662,19 @@ def _render_dealer_connect_job_lines_body(
                     value=_format_dc_copy_number(job["claim_value"]),
                     copy_id=f"copy_dc_value_j{job_no}_{fv}",
                 )
+            if float(job.get("deductible") or 0) > 0:
+                _render_dealer_connect_copy_field(
+                    label="Deductible",
+                    value=_format_dc_copy_number(job["deductible"]),
+                    copy_id=f"copy_dc_deductible_j{job_no}_{fv}",
+                )
+                _render_dealer_connect_copy_field(
+                    label="True claim total",
+                    value=_format_dc_copy_number(
+                        _true_claim_value(job.get("claim_value"), job.get("deductible"))
+                    ),
+                    copy_id=f"copy_dc_net_value_j{job_no}_{fv}",
+                )
 
 
 def _render_dealer_connect_job_lines_export(
@@ -4671,7 +4695,8 @@ def _render_dealer_connect_job_lines_export(
         tech_time = float(job.get("tech_flagged_time") or 0)
         allotted = float(job.get("time_allotted") or 0)
         claim_value = float(job.get("claim_value") or 0)
-        if operation_code or tech_time or allotted or claim_value:
+        deductible = float(job.get("deductible") or 0)
+        if operation_code or tech_time or allotted or claim_value or deductible:
             line_jobs.append(
                 {
                     "job_no": job_no,
@@ -4679,6 +4704,8 @@ def _render_dealer_connect_job_lines_export(
                     "tech_flagged_time": tech_time,
                     "time_allotted": allotted,
                     "claim_value": claim_value,
+                    "deductible": deductible,
+                    "net_claim_value": _true_claim_value(claim_value, deductible),
                 }
             )
 
@@ -4737,9 +4764,10 @@ def compute_live_audit_summary(
             vehicle_mileage=vehicle_mileage,
         )
         claim_val = float(job.get("claim_value") or 0)
-        total_value += claim_val
+        net_val = _true_claim_value(claim_val, job.get("deductible"))
+        total_value += net_val
         if hard:
-            hard_value += claim_val
+            hard_value += net_val
         all_hard.extend(hard)
         all_warn.extend(warn)
         scores.append(score)
@@ -4982,6 +5010,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         st.session_state[f"tech_time_{job_no}"] = 0.0
         st.session_state[f"allotted_{job_no}"] = 0.0
         st.session_state[f"claim_value_{job_no}"] = 0.0
+        st.session_state[f"deductible_{job_no}"] = 0.0
         st.session_state[f"operation_code_{job_no}"] = ""
         st.session_state[f"rental_days_{job_no}"] = 0
         st.session_state[f"concern_{job_no}_{fv}"] = ""
@@ -4995,6 +5024,7 @@ def _apply_saved_review_to_form(review: dict, form_version: int) -> None:
         st.session_state[f"tech_time_{idx}"] = float(job.get("tech_flagged_time") or 0)
         st.session_state[f"allotted_{idx}"] = float(job.get("time_allotted") or 0)
         st.session_state[f"claim_value_{idx}"] = float(job.get("claim_value") or 0)
+        st.session_state[f"deductible_{idx}"] = float(job.get("deductible") or 0)
         st.session_state[f"operation_code_{idx}"] = str(job.get("operation_code") or "").strip()
         st.session_state[f"rental_days_{idx}"] = int(float(job.get("rental_days") or 0))
         for src, dest in _JOB_CHECKBOX_FIELDS:
@@ -5212,6 +5242,8 @@ def _apply_ro_scan_to_form(import_data: dict):
             st.session_state[f"allotted_{idx}"] = float(job["time_allotted"])
         if job.get("claim_value"):
             st.session_state[f"claim_value_{idx}"] = float(job["claim_value"])
+        if job.get("deductible"):
+            st.session_state[f"deductible_{idx}"] = float(job["deductible"])
         if job.get("operation_code"):
             st.session_state[f"operation_code_{idx}"] = str(job["operation_code"]).strip()
         for src, dest in checkbox_map.items():
@@ -5568,7 +5600,7 @@ def _render_review_job_panel(
             )
 
     st.markdown("**Times & claim value**")
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         tech_flagged_time = _render_number_input_with_copy(
             "Tech flagged time",
@@ -5592,6 +5624,20 @@ def _render_review_job_panel(
             copy_id=f"copy_claim_value_{job_no}",
             min_value=0.0,
             step=1.0,
+        )
+    with c4:
+        deductible = _render_number_input_with_copy(
+            "Deductible",
+            f"deductible_{job_no}",
+            copy_id=f"copy_deductible_{job_no}",
+            min_value=0.0,
+            step=1.0,
+        )
+    net_claim_value = _true_claim_value(claim_value, deductible)
+    if float(claim_value or 0) > 0 or float(deductible or 0) > 0:
+        st.caption(
+            f"**True claim total:** ${net_claim_value:,.2f} "
+            f"(${float(claim_value or 0):,.2f} claim value − ${float(deductible or 0):,.2f} deductible)"
         )
     operation_code = _render_text_input_with_copy(
         "Labor operation code",
@@ -5749,6 +5795,8 @@ def _render_review_job_panel(
         "tech_flagged_time": tech_flagged_time,
         "time_allotted": time_allotted,
         "claim_value": claim_value,
+        "deductible": deductible,
+        "net_claim_value": net_claim_value,
         "oil_leak": oil_leak,
         "oil_dye_billed": oil_dye_billed,
         "battery_replacement": battery_replacement,
@@ -6409,7 +6457,7 @@ def render_review():
         use_container_width=True,
         disabled=recall_audit_block or sign_in_required,
     ):
-        total_value = sum(float(j.get("claim_value") or 0) for j in jobs)
+        total_value = sum(_true_claim_value(j.get("claim_value"), j.get("deductible")) for j in jobs)
         ok_outcome, parsed_or_msg = _parse_review_outcome_selection(
             first_pass_paid=first_pass_paid,
             rejected=rejected,
@@ -6449,7 +6497,7 @@ def render_review():
                 all_warn.extend(warn)
 
                 if hard:
-                    hard_value += float(job.get("claim_value") or 0)
+                    hard_value += _true_claim_value(job.get("claim_value"), job.get("deductible"))
 
             ro_level_hard, ro_level_warn = _append_stellantis_ro_level_findings(
                 all_hard, all_warn, audit_rules, fv
@@ -7884,7 +7932,9 @@ def _rejection_detail_frame(df: pd.DataFrame) -> pd.DataFrame:
 def _form_submitted_claim_value(job_count: int) -> float:
     total = 0.0
     for job_no in range(1, max(int(job_count or 0), 0) + 1):
-        total += float(st.session_state.get(f"claim_value_{job_no}", 0) or 0)
+        claim = float(st.session_state.get(f"claim_value_{job_no}", 0) or 0)
+        deductible = float(st.session_state.get(f"deductible_{job_no}", 0) or 0)
+        total += _true_claim_value(claim, deductible)
     return total
 
 
