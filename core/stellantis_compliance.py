@@ -23,23 +23,8 @@ JOB_TOPICS: dict[str, list[str]] = {
 
 DOCUMENTATION_CHECKS: list[dict] = [
     {
-        "rule_key": "battery_test_slip",
-        "topic": "battery_replacement",
-        "proof_field": "battery_test_slip",
-        "wam_phrases": ["battery test", "test slip", "failed battery", "battery code"],
-        "action": "Attach failed battery test slip/code to the RO.",
-        "label": "Battery test slip",
-    },
-    {
-        "rule_key": "ac_evac_slip",
-        "topic": "ac_repair",
-        "proof_field": "ac_evac_slip",
-        "wam_phrases": ["evac", "recharge", "refrigerant", "a/c repair"],
-        "action": "Attach A/C EVAC/recharge slip to the RO.",
-        "label": "A/C EVAC slip",
-    },
-    {
         "rule_key": "oil_leak",
+        "parent_field": "oil_leak",
         "topic": "oil_leak",
         "proof_field": "oil_dye_billed",
         "wam_phrases": ["oil dye", "leak detection", "oil leak"],
@@ -47,7 +32,62 @@ DOCUMENTATION_CHECKS: list[dict] = [
         "label": "Oil dye billed",
     },
     {
+        "rule_key": "battery_test_slip",
+        "parent_field": "battery_replacement",
+        "topic": "battery_replacement",
+        "proof_field": "battery_test_slip",
+        "wam_phrases": ["battery test", "test slip", "failed battery", "battery code"],
+        "action": "Attach failed battery test slip/code to the RO.",
+        "label": "Battery test slip",
+    },
+    {
+        "rule_key": "alignment_report",
+        "parent_field": "alignment_involved",
+        "topic": "alignment_involved",
+        "proof_field": "alignment_report_attached",
+        "wam_phrases": ["alignment", "wheel alignment", "align vehicle"],
+        "action": "Attach alignment printout to the repair order.",
+        "label": "Alignment report",
+    },
+    {
+        "rule_key": "ac_evac_slip",
+        "parent_field": "ac_repair",
+        "topic": "ac_repair",
+        "proof_field": "ac_evac_slip",
+        "wam_phrases": ["evac", "recharge", "refrigerant", "a/c repair"],
+        "action": "Attach A/C EVAC/recharge slip to the RO.",
+        "label": "A/C EVAC slip",
+    },
+    {
+        "rule_key": "parts_warranty_mopa",
+        "parent_field": "parts_warranty",
+        "topic": "parts_warranty",
+        "proof_field": "mopa_original_ro",
+        "wam_phrases": ["parts warranty", "mopar", "mopa", "original ro"],
+        "action": "Attach MOPAR and original RO support for parts warranty.",
+        "label": "Parts warranty / MOPAR",
+    },
+    {
+        "rule_key": "warranty_add_on",
+        "parent_field": "warranty_add_on",
+        "topic": "warranty_add_on",
+        "proof_field": "manager_approval",
+        "wam_phrases": ["add-on", "w+", "warranty add-on", "manager approval"],
+        "action": "Obtain Service Manager sign-off for W+ add-on work.",
+        "label": "W+ manager sign-off",
+    },
+    {
+        "rule_key": "warranty_add_on_customer_signoff",
+        "parent_field": "warranty_add_on",
+        "topic": "warranty_add_on",
+        "proof_field": "customer_warranty_add_on_signoff",
+        "wam_phrases": ["add-on", "w+", "warranty add-on", "customer authorization"],
+        "action": "Confirm customer signed off on warranty add-on work.",
+        "label": "W+ customer sign-off",
+    },
+    {
         "rule_key": "sublet",
+        "parent_field": "sublet_repair",
         "topic": "sublet_repair",
         "proof_fields": ["sublet_vin", "sublet_mileage", "sublet_notes"],
         "wam_phrases": ["sublet", "outside repair", "sublet invoice"],
@@ -56,29 +96,20 @@ DOCUMENTATION_CHECKS: list[dict] = [
     },
     {
         "rule_key": "rental",
+        "parent_field": "rental_involved",
         "topic": "rental_involved",
         "proof_fields": ["rental_days", "manager_signed_rental"],
         "wam_phrases": ["rental", "loaner"],
         "action": "Bill rental days and obtain manager sign-off on the RO.",
         "label": "Rental documentation",
     },
-    {
-        "rule_key": "parts_warranty_mopa",
-        "topic": "parts_warranty",
-        "proof_field": "mopa_original_ro",
-        "wam_phrases": ["parts warranty", "mopar", "mopa", "original ro"],
-        "action": "Attach MOPAR and original RO support for parts warranty.",
-        "label": "Parts warranty / MOPAR",
-    },
-    {
-        "rule_key": "alignment_report",
-        "topic": "alignment_involved",
-        "proof_field": "alignment_report_attached",
-        "wam_phrases": ["alignment", "wheel alignment", "align vehicle"],
-        "action": "Attach alignment printout to the repair order.",
-        "label": "Alignment report",
-    },
 ]
+
+
+def _parent_checkbox_checked(job: dict, check: dict) -> bool:
+    """True only when the user checked the parent warranty checkbox on Review."""
+    parent = check.get("parent_field") or check.get("topic")
+    return bool(job.get(parent))
 
 
 def _job_narrative_text(job: dict) -> str:
@@ -123,20 +154,11 @@ def _has_proof(job: dict, check: dict) -> bool:
     return bool(job.get(field)) if field else True
 
 
-def _wam_mentions_check(manual_sections: list, check: dict) -> bool:
-    phrases = [p.lower() for p in check.get("wam_phrases") or []]
-    for section in manual_sections or []:
-        blob = f"{section.get('snippet', '')} {section.get('section', '')}".lower()
-        if any(phrase in blob for phrase in phrases):
-            return True
-    return False
-
-
-def _message_for_gap(check: dict, *, source: str) -> str:
+def _message_for_gap(check: dict) -> str:
     codes = ", ".join(stellantis_codes_for_rule(check["rule_key"])) or "audit"
     return (
         f"Missing {check['label']} — {check['action']} "
-        f"(WAM + Stellantis {codes}; {source})."
+        f"(WAM + Stellantis {codes})."
     )
 
 
@@ -144,16 +166,14 @@ def evaluate_documentation_compliance(
     job: dict,
     manual_sections: list | None = None,
 ) -> list[dict]:
-    """Return finding dicts for missing WAM/audit documentation on this job."""
-    manual_sections = manual_sections or []
+    """Return findings when a parent warranty checkbox is checked but proof is not."""
+    del manual_sections  # Score uses checkbox pairs only — not WAM excerpts or narrative.
     findings: list[dict] = []
     seen_rules: set[str] = set()
 
     for check in DOCUMENTATION_CHECKS:
         rule_key = check["rule_key"]
-        wam_hit = _wam_mentions_check(manual_sections, check)
-        work_hit = work_applies(job, check["topic"])
-        if not work_hit and not wam_hit:
+        if not _parent_checkbox_checked(job, check):
             continue
 
         if rule_key == "sublet":
@@ -215,32 +235,11 @@ def evaluate_documentation_compliance(
         if _has_proof(job, check) or rule_key in seen_rules:
             continue
         seen_rules.add(rule_key)
-        source = "matched WAM/TSB excerpt" if wam_hit and not work_hit else "repair story or flags"
         findings.append(
             attach_stellantis_codes(
                 {
                     "rule": rule_key,
-                    "message": _message_for_gap(check, source=source),
-                }
-            )
-        )
-
-    for check in DOCUMENTATION_CHECKS:
-        topic = check["topic"]
-        if not narrative_indicates_repair(job, topic):
-            continue
-        if job.get(topic):
-            continue
-        if check["rule_key"] in seen_rules:
-            continue
-        findings.append(
-            attach_stellantis_codes(
-                {
-                    "rule": "manual_guidance",
-                    "message": (
-                        f"Story mentions {check['label'].lower()} work — confirm warranty documentation "
-                        f"on the RO and check the matching box on Review when proof is attached."
-                    ),
+                    "message": _message_for_gap(check),
                 }
             )
         )
@@ -258,7 +257,7 @@ def _catalog_check_for_rule(rule_key: str) -> dict | None:
 def _requirement_trigger_hits(job: dict, check: dict) -> bool:
     topic = check.get("topic")
     if topic:
-        return work_applies(job, topic)
+        return bool(job.get(topic))
 
     check_type = check.get("check_type")
     if check_type == "tech_time_documented":
@@ -410,9 +409,8 @@ def render_compliance_checks_reference(
 
     st.subheader("WAM & audit documentation checks")
     st.caption(
-        "RO Guard compares the job story, warranty documentation checkboxes, uploaded WAM excerpts, "
-        "and the active Stellantis audit guide. Gaps are hard stops (or warnings per Admin → Audit Rules) "
-        "so claims are paid the first time and survive a field audit."
+        "RO Guard compares warranty documentation checkboxes on Review. Score is reduced only when a "
+        "parent box is checked (e.g. Oil Leak, Battery Replacement) but its matching proof box is not."
     )
     for row in list_compliance_check_catalog():
         st.markdown(f"**{row['label']}** (Stellantis {row['stellantis']})")

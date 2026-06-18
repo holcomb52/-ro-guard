@@ -3108,16 +3108,12 @@ def _narrative_indicates_repair(job, topic: str) -> bool:
 
 
 def _rental_work_applies(job) -> bool:
-    if _narrative_indicates_repair(job, "rental_involved"):
+    if bool(job.get("rental_involved")):
         return True
     try:
         return int(job.get("rental_days") or 0) > 0
     except (TypeError, ValueError):
         return False
-
-
-def _warranty_add_on_applies(job) -> bool:
-    return bool(job.get("warranty_add_on")) or _narrative_indicates_repair(job, "warranty_add_on")
 
 
 def _significant_terms(text):
@@ -3863,23 +3859,7 @@ def audit_job(job, time_bypass, *, smart_warranty_time_exempt=False, audit_rules
             finding.get("message"),
         )
 
-    if _narrative_indicates_repair(job, "warranty_add_on") and not job.get("manager_approval"):
-        manager_name = service_manager_signoff_phrase()
-        _add_audit_finding(
-            hard, warn, audit_rules, "warranty_add_on",
-            f"Missing W+ manager sign-off — obtain {manager_name} approval (WAM + Stellantis L/E).",
-        )
-
-    if _warranty_add_on_applies(job) and not job.get("customer_warranty_add_on_signoff"):
-        _add_audit_finding(
-            hard,
-            warn,
-            audit_rules,
-            "warranty_add_on_customer_signoff",
-            "Hard stop: customer signed off on warranty add-on must be confirmed before submit (Stellantis E/L).",
-        )
-
-    if _rental_work_applies(job) and job.get("rental_days", 0) >= rental_warn_days:
+    if job.get("rental_involved") and job.get("rental_days", 0) >= rental_warn_days:
         _add_audit_finding(
             hard, warn, audit_rules, "rental_high_days",
             f"{rental_warn_days} or more rental days billed: make sure all documentation to support "
@@ -5697,16 +5677,24 @@ def _render_review_job_panel(
             parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
             mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
 
-    if _narrative_indicates_repair(narrative_preview, "alignment_involved") and not alignment_report_attached:
-        st.error("Hard stop: alignment printout report must be attached to the repair order.")
-    if _narrative_indicates_repair(narrative_preview, "warranty_add_on") and not manager_approval:
+    if oil_leak and not oil_dye_billed:
+        st.error("Hard stop: Oil Leak is checked — Oil Dye Billed must also be checked.")
+    if battery_replacement and not battery_test_slip:
+        st.error("Hard stop: Battery Replacement is checked — MAXIMUS Battery slip must also be checked.")
+    if alignment_involved and not alignment_report_attached:
+        st.error("Hard stop: Alignment is checked — Alignment Report Attached to RO must also be checked.")
+    if warranty_add_on and not manager_approval:
         st.error(
-            f"Hard stop: W+ add-on requires {service_manager_signoff_phrase()} sign-off before submission."
+            f"Hard stop: Warranty Add-On (W+) is checked — {service_manager_signoff_phrase()} sign-off must also be checked."
         )
-    if _warranty_add_on_applies({**narrative_preview, "warranty_add_on": warranty_add_on}) and not customer_warranty_add_on_signoff:
+    if warranty_add_on and not customer_warranty_add_on_signoff:
         st.error(
-            "Hard stop: customer signed off on warranty add-on must be confirmed before submission."
+            "Hard stop: Warranty Add-On (W+) is checked — Customer signed off on warranty add on must also be checked."
         )
+    if ac_repair and not ac_evac_slip:
+        st.error("Hard stop: A/C Repair is checked — A/C EVAC Slip must also be checked.")
+    if parts_warranty and not mopa_original_ro:
+        st.error("Hard stop: Parts Warranty is checked — MOPAR + Original RO must also be checked.")
 
     preview_job = {
         "concern": concern,
