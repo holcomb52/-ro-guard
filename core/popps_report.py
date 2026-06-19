@@ -2769,7 +2769,7 @@ def _render_popps_priority_section(
             csv_filename=(
                 f"RO_Guard_POPPS_Claims_{report.dealer_code}_P{section.priority_rank}.csv".replace(" ", "_")
             ),
-            export_key=f"popps_claims_{report_fp}_{section.priority_rank}",
+            export_key=f"popps_claims_{_safe_widget_suffix(section_review_entry_key(section), report_fp, scope='tbl')}",
         )
 
         if review_exempt:
@@ -2884,39 +2884,40 @@ def _render_popps_audit_panel(
 
 
 def _claims_dataframe(claims: list[PoppsClaimRow]) -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
+    columns = [
+        "Row Type",
+        "Fleet Vehicle",
+        "Vehicle Identification",
+        "Vehicle Number",
+        "Claim / Condition Number",
+        "Labor Operation / Message Code",
+        "Authorization",
+        "Technician Identification Number",
+        "Mileage",
+        "Expense Amount",
+        "Days to Process",
+        "Concern Codes (plain language)",
+    ]
+    rows: list[dict[str, str]] = []
     for claim in claims:
-        if claim.row_type == "message":
-            rows.append(
-                {
-                    "Fleet Vehicle": claim.fleet_vehicle,
-                    "Vehicle Identification": claim.vehicle_identification,
-                    "Vehicle Number": claim.vehicle_number,
-                    "Claim Number": claim.claim_condition_or_number,
-                    "Message Code": claim.labor_operation_or_message_code,
-                    "Authorization Identifier": claim.authorization_flag,
-                    "Technician Identification Number": claim.technician_id,
-                    "Mileage": claim.mileage,
-                    "Expense Amount": claim.expense_amount,
-                    "Days to Process": claim.days_to_process,
-                    "Concern Codes (plain language)": claim.concern_codes_plain,
-                }
-            )
-        else:
-            rows.append(
-                {
-                    "Vehicle Identification": claim.vehicle_identification,
-                    "Vehicle Number": claim.vehicle_number,
-                    "Claim and Condition Number": claim.claim_condition_or_number,
-                    "Labor Operation Code": claim.labor_operation_or_message_code,
-                    "Technician Identification Number": claim.technician_id,
-                    "Mileage": claim.mileage,
-                    "Authorization Flag": claim.authorization_flag or "—",
-                    "Expense Amount": claim.expense_amount,
-                    "Concern Codes (plain language)": claim.concern_codes_plain,
-                }
-            )
-    return pd.DataFrame(rows)
+        is_message = str(claim.row_type or "").strip().lower() == "message"
+        rows.append(
+            {
+                "Row Type": "Message" if is_message else "Repair",
+                "Fleet Vehicle": str(claim.fleet_vehicle or "—"),
+                "Vehicle Identification": str(claim.vehicle_identification or "—"),
+                "Vehicle Number": str(claim.vehicle_number or "—"),
+                "Claim / Condition Number": str(claim.claim_condition_or_number or "—"),
+                "Labor Operation / Message Code": str(claim.labor_operation_or_message_code or "—"),
+                "Authorization": str(claim.authorization_flag or "—"),
+                "Technician Identification Number": str(claim.technician_id or "—"),
+                "Mileage": str(claim.mileage or "—"),
+                "Expense Amount": str(claim.expense_amount or "—"),
+                "Days to Process": str(claim.days_to_process or "—"),
+                "Concern Codes (plain language)": str(claim.concern_codes_plain or "—"),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns).fillna("—").astype(str)
 
 
 def _summary_dataframe(rows: list[PoppsSummaryRow]) -> pd.DataFrame:

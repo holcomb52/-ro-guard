@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import Any, Callable
 
 import pandas as pd
@@ -14,6 +16,17 @@ BRANDED_EXPORT_CAPTION = (
 )
 
 _EXPORT_CSS_INJECTED = "_roguard_report_export_css"
+
+
+def _safe_export_key(export_key: str) -> str:
+    """Streamlit widget keys must not contain pipes, spaces, or other unsafe characters."""
+    raw = str(export_key or "export").strip()
+    cleaned = re.sub(r"[^\w]", "_", raw)
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    if cleaned and re.fullmatch(r"[\w]+", cleaned):
+        return cleaned[:120]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    return f"export_{digest}"
 
 
 def period_label_from_df(df: pd.DataFrame | None, *, default: str = "Selected period") -> str:
@@ -97,6 +110,7 @@ def render_branded_pdf_download(
 ) -> None:
     """Branded PDF download card (no table) — audit, ROI summary, etc."""
     inject_report_export_styles()
+    export_key = _safe_export_key(export_key)
 
     pdf_bytes: bytes | None = None
     pdf_error: str | None = None
@@ -147,6 +161,7 @@ def render_branded_report_table(
 ) -> None:
     """Report table with Download PDF where users expect the toolbar download button."""
     inject_report_export_styles()
+    export_key = _safe_export_key(export_key)
     export_frame = _coerce_export_frame(export_df if export_df is not None else df)
     builder = _resolve_pdf_builder(
         export_frame,
