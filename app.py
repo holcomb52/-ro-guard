@@ -2752,9 +2752,10 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += streamlit_primary_override_css(theme)
     css += main_scroll_fix_css()
     css += script_embed_collapse_css()
-    from core.ui_polish import workspace_polish_css
+    from core.ui_polish import layout_system_css, workspace_polish_css
 
     css += workspace_polish_css(theme)
+    css += layout_system_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:
@@ -5427,8 +5428,11 @@ def _render_warranty_checks_grouped(
     *,
     narrative_preview: dict,
     rental_dollars_per_day: float,
+    simple_mode: bool = False,
 ) -> dict:
-    """Grouped documentation checkboxes for Simple Review view."""
+    """Grouped documentation checkboxes for Review (Simple and Full)."""
+    from core.ui_polish import render_form_section
+
     applies = lambda topic: _narrative_indicates_repair(narrative_preview, topic)
 
     groups: list[tuple[str, list[str], list[tuple[str, str, str]]]] = [
@@ -5496,8 +5500,10 @@ def _render_warranty_checks_grouped(
     values: dict = {}
     rental_days = 0.0
 
-    st.markdown("**Documentation**")
-    st.caption("Step 3 — open a group and check boxes to confirm proof is on the RO.")
+    if simple_mode:
+        render_form_section("Documentation", "Open a group and check boxes to confirm proof is on the RO.", step="Step 3")
+    else:
+        render_form_section("Warranty checks", "Parent topic checked → matching proof checkbox required.")
     for title, topics, fields in groups:
         relevant = any(applies(t) for t in topics)
         checked_any = any(st.session_state.get(key, False) for _, _, key in fields)
@@ -5531,6 +5537,44 @@ def _render_warranty_checks_grouped(
     return values
 
 
+def _documentation_hard_stop_messages(
+    *,
+    oil_leak: bool,
+    oil_dye_billed: bool,
+    battery_replacement: bool,
+    battery_test_slip: bool,
+    alignment_involved: bool,
+    alignment_report_attached: bool,
+    warranty_add_on: bool,
+    manager_approval: bool,
+    customer_warranty_add_on_signoff: bool,
+    ac_repair: bool,
+    ac_evac_slip: bool,
+    parts_warranty: bool,
+    mopa_original_ro: bool,
+) -> list[str]:
+    messages: list[str] = []
+    if oil_leak and not oil_dye_billed:
+        messages.append("Oil Leak is checked — also check Oil Dye Billed.")
+    if battery_replacement and not battery_test_slip:
+        messages.append("Battery Replacement is checked — attach MAXIMUS Battery slip.")
+    if alignment_involved and not alignment_report_attached:
+        messages.append("Alignment is checked — attach Alignment Report to RO.")
+    if warranty_add_on and not manager_approval:
+        messages.append(
+            f"Warranty Add-On (W+) is checked — {service_manager_signoff_phrase()} sign-off required."
+        )
+    if warranty_add_on and not customer_warranty_add_on_signoff:
+        messages.append(
+            "Warranty Add-On (W+) is checked — customer must sign off on the warranty add-on."
+        )
+    if ac_repair and not ac_evac_slip:
+        messages.append("A/C Repair is checked — attach A/C EVAC Slip.")
+    if parts_warranty and not mopa_original_ro:
+        messages.append("Parts Warranty is checked — attach MOPAR + Original RO.")
+    return messages
+
+
 def _render_review_job_panel(
     job_no: int,
     *,
@@ -5540,17 +5584,22 @@ def _render_review_job_panel(
     simple_mode: bool = False,
 ) -> tuple[dict, bool, str]:
     """Render one warranty job on the Review tab."""
+    from core.ui_polish import render_form_section, render_hard_stop_panel
+
     fv = form_version
     time_bypass = False
     time_bypass_user = ""
 
-    st.markdown("**Narratives**")
     st.markdown(
         '<div class="review-job-narratives-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
     if simple_mode:
-        st.caption("Step 2 — job story. Use **Copy all** once to paste into Dealer Connect.")
+        render_form_section(
+            "Narratives",
+            "Job story — use Copy all once to paste into Dealer Connect.",
+            step="Step 2",
+        )
         concern = st.text_area("Concern", key=f"concern_{job_no}_{fv}", height=72)
         cause = st.text_area("Cause", key=f"cause_{job_no}_{fv}", height=72)
         correction = st.text_area("Correction", key=f"correction_{job_no}_{fv}", height=72)
@@ -5564,7 +5613,7 @@ def _render_review_job_panel(
             iframe_width=120,
         )
     else:
-        st.caption("Use **Copy** under each field to paste into Dealer Connect.")
+        render_form_section("Narratives", "Use Copy under each field to paste into Dealer Connect.")
         concern = _render_narrative_field(
             "Concern",
             f"concern_{job_no}_{fv}",
@@ -5599,9 +5648,9 @@ def _render_review_job_panel(
                 "Time punch bypass requires a linked **Manager** or **Warranty Admin** account."
             )
 
-    st.markdown("**Times & claim value**")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
+    render_form_section("Times & claim value")
+    time_col1, time_col2 = st.columns(2)
+    with time_col1:
         tech_flagged_time = _render_number_input_with_copy(
             "Tech flagged time",
             f"tech_time_{job_no}",
@@ -5609,7 +5658,7 @@ def _render_review_job_panel(
             min_value=0.0,
             step=0.1,
         )
-    with c2:
+    with time_col2:
         time_allotted = _render_number_input_with_copy(
             "Time allotted",
             f"allotted_{job_no}",
@@ -5617,7 +5666,8 @@ def _render_review_job_panel(
             min_value=0.0,
             step=0.1,
         )
-    with c3:
+    claim_col1, claim_col2, claim_col3 = st.columns(3)
+    with claim_col1:
         claim_value = _render_number_input_with_copy(
             "Claim value",
             f"claim_value_{job_no}",
@@ -5625,7 +5675,7 @@ def _render_review_job_panel(
             min_value=0.0,
             step=1.0,
         )
-    with c4:
+    with claim_col2:
         deductible = _render_number_input_with_copy(
             "Deductible",
             f"deductible_{job_no}",
@@ -5634,11 +5684,8 @@ def _render_review_job_panel(
             step=1.0,
         )
     net_claim_value = _true_claim_value(claim_value, deductible)
-    if float(claim_value or 0) > 0 or float(deductible or 0) > 0:
-        st.caption(
-            f"**True claim total:** ${net_claim_value:,.2f} "
-            f"(${float(claim_value or 0):,.2f} claim value − ${float(deductible or 0):,.2f} deductible)"
-        )
+    with claim_col3:
+        st.metric("True claim total", f"${net_claim_value:,.2f}")
     operation_code = _render_text_input_with_copy(
         "Labor operation code",
         f"operation_code_{job_no}",
@@ -5646,101 +5693,51 @@ def _render_review_job_panel(
         help="Auto-filled from invoice scan — edit if needed before copying to Dealer Connect.",
     )
 
-    st.markdown("**Warranty checks**")
     narrative_preview = {"concern": concern, "cause": cause, "correction": correction}
-    if simple_mode:
-        check_values = _render_warranty_checks_grouped(
-            job_no,
-            narrative_preview=narrative_preview,
-            rental_dollars_per_day=rental_dollars_per_day,
-        )
-        oil_leak = check_values["oil_leak"]
-        oil_dye_billed = check_values["oil_dye_billed"]
-        battery_replacement = check_values["battery_replacement"]
-        battery_test_slip = check_values["battery_test_slip"]
-        alignment_involved = check_values["alignment_involved"]
-        alignment_report_attached = check_values["alignment_report_attached"]
-        sublet_repair = check_values["sublet_repair"]
-        sublet_vin = check_values["sublet_vin"]
-        sublet_mileage = check_values["sublet_mileage"]
-        sublet_notes = check_values["sublet_notes"]
-        rental_involved = check_values["rental_involved"]
-        rental_days = check_values["rental_days"]
-        manager_signed_rental = check_values["manager_signed_rental"]
-        warranty_add_on = check_values["warranty_add_on"]
-        customer_warranty_add_on_signoff = check_values["customer_warranty_add_on_signoff"]
-        manager_approval = check_values["manager_approval"]
-        ac_repair = check_values["ac_repair"]
-        ac_evac_slip = check_values["ac_evac_slip"]
-        parts_warranty = check_values["parts_warranty"]
-        mopa_original_ro = check_values["mopa_original_ro"]
-    else:
-        c1, c2 = st.columns(2)
-        with c1:
-            oil_leak = st.checkbox("Oil Leak", key=f"oil_leak_{job_no}")
-            oil_dye_billed = st.checkbox("Oil Dye Billed", key=f"oil_dye_{job_no}")
-            battery_replacement = st.checkbox("Battery Replacement", key=f"battery_{job_no}")
-            battery_test_slip = st.checkbox("MAXIMUS Battery slip attached", key=f"battery_slip_{job_no}")
-            alignment_involved = st.checkbox("Alignment", key=f"alignment_{job_no}")
-            alignment_report_attached = st.checkbox(
-                "Alignment Report Attached to RO",
-                key=f"alignment_report_{job_no}",
-            )
-            sublet_repair = st.checkbox("Sublet Repair", key=f"sublet_{job_no}")
-            sublet_vin = st.checkbox("Sublet VIN Present", key=f"sublet_vin_{job_no}")
-            sublet_mileage = st.checkbox("Sublet Mileage Present", key=f"sublet_mileage_{job_no}")
-            sublet_notes = st.checkbox("Sublet Detailed Notes Present", key=f"sublet_notes_{job_no}")
-        with c2:
-            rental_involved = st.checkbox("Rental Involved", key=f"rental_{job_no}")
-            rental_days = _render_number_input_with_copy(
-                "Rental days billed",
-                f"rental_days_{job_no}",
-                copy_id=f"copy_rental_days_{job_no}",
-                min_value=0.0,
-                step=1.0,
-            )
-            if rental_dollars_per_day > 0:
-                rental_total = float(rental_days or 0) * rental_dollars_per_day
-                st.caption(
-                    f"**Rental total:** ${rental_total:,.2f} "
-                    f"(${rental_dollars_per_day:,.2f}/day × {int(rental_days or 0)} days)"
-                )
-            manager_signed_rental = st.checkbox(
-                service_manager_action_label("Signed Rental"),
-                key=f"rental_signed_{job_no}",
-            )
-            warranty_add_on = st.checkbox("Warranty Add-On (W+)", key=f"addon_{job_no}")
-            customer_warranty_add_on_signoff = st.checkbox(
-                "Customer signed off on warranty add on",
-                key=f"customer_addon_signoff_{job_no}",
-            )
-            manager_approval = st.checkbox(
-                service_manager_action_label("Signed Off"),
-                key=f"manager_approval_{job_no}",
-            )
-            ac_repair = st.checkbox("A/C Repair", key=f"ac_{job_no}")
-            ac_evac_slip = st.checkbox("A/C EVAC Slip", key=f"ac_slip_{job_no}")
-            parts_warranty = st.checkbox("Parts Warranty", key=f"parts_warranty_{job_no}")
-            mopa_original_ro = st.checkbox("MOPAR + Original RO", key=f"mopa_{job_no}")
+    check_values = _render_warranty_checks_grouped(
+        job_no,
+        narrative_preview=narrative_preview,
+        rental_dollars_per_day=rental_dollars_per_day,
+        simple_mode=simple_mode,
+    )
+    oil_leak = check_values["oil_leak"]
+    oil_dye_billed = check_values["oil_dye_billed"]
+    battery_replacement = check_values["battery_replacement"]
+    battery_test_slip = check_values["battery_test_slip"]
+    alignment_involved = check_values["alignment_involved"]
+    alignment_report_attached = check_values["alignment_report_attached"]
+    sublet_repair = check_values["sublet_repair"]
+    sublet_vin = check_values["sublet_vin"]
+    sublet_mileage = check_values["sublet_mileage"]
+    sublet_notes = check_values["sublet_notes"]
+    rental_involved = check_values["rental_involved"]
+    rental_days = check_values["rental_days"]
+    manager_signed_rental = check_values["manager_signed_rental"]
+    warranty_add_on = check_values["warranty_add_on"]
+    customer_warranty_add_on_signoff = check_values["customer_warranty_add_on_signoff"]
+    manager_approval = check_values["manager_approval"]
+    ac_repair = check_values["ac_repair"]
+    ac_evac_slip = check_values["ac_evac_slip"]
+    parts_warranty = check_values["parts_warranty"]
+    mopa_original_ro = check_values["mopa_original_ro"]
 
-    if oil_leak and not oil_dye_billed:
-        st.error("Hard stop: Oil Leak is checked — Oil Dye Billed must also be checked.")
-    if battery_replacement and not battery_test_slip:
-        st.error("Hard stop: Battery Replacement is checked — MAXIMUS Battery slip must also be checked.")
-    if alignment_involved and not alignment_report_attached:
-        st.error("Hard stop: Alignment is checked — Alignment Report Attached to RO must also be checked.")
-    if warranty_add_on and not manager_approval:
-        st.error(
-            f"Hard stop: Warranty Add-On (W+) is checked — {service_manager_signoff_phrase()} sign-off must also be checked."
+    render_hard_stop_panel(
+        _documentation_hard_stop_messages(
+            oil_leak=oil_leak,
+            oil_dye_billed=oil_dye_billed,
+            battery_replacement=battery_replacement,
+            battery_test_slip=battery_test_slip,
+            alignment_involved=alignment_involved,
+            alignment_report_attached=alignment_report_attached,
+            warranty_add_on=warranty_add_on,
+            manager_approval=manager_approval,
+            customer_warranty_add_on_signoff=customer_warranty_add_on_signoff,
+            ac_repair=ac_repair,
+            ac_evac_slip=ac_evac_slip,
+            parts_warranty=parts_warranty,
+            mopa_original_ro=mopa_original_ro,
         )
-    if warranty_add_on and not customer_warranty_add_on_signoff:
-        st.error(
-            "Hard stop: Warranty Add-On (W+) is checked — Customer signed off on warranty add on must also be checked."
-        )
-    if ac_repair and not ac_evac_slip:
-        st.error("Hard stop: A/C Repair is checked — A/C EVAC Slip must also be checked.")
-    if parts_warranty and not mopa_original_ro:
-        st.error("Hard stop: Parts Warranty is checked — MOPAR + Original RO must also be checked.")
+    )
 
     preview_job = {
         "concern": concern,
@@ -5822,10 +5819,13 @@ def _render_review_job_panel(
 
 
 def render_pending_claims():
-    st.header("Pending Claims")
-    st.caption(
-        "Repair orders saved in RO Shield that have **not** been marked paid or rejected by the OEM yet. "
-        "Open one in **Review** to fix audit issues and update the saved record — no retyping required."
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "Pending Claims",
+        "Open claims saved in RO Guard that are still waiting on OEM payment or rejection.",
+        icon="⏳",
+        tips=["Resume in Review", "Fix hard stops", "No retyping"],
     )
 
     df = load_reviews()
@@ -5920,6 +5920,8 @@ def render_pending_claims():
 
 def render_review():
     _ensure_review_form_session()
+    from core.ui_polish import render_section_hero
+
     st.markdown(
         '<div class="review-workspace-marker" aria-hidden="true"></div>',
         unsafe_allow_html=True,
@@ -5927,6 +5929,12 @@ def render_review():
 
     theme = st.session_state.get("appearance", "Dark")
     simple_mode = render_review_view_toggle(theme=theme)
+    render_section_hero(
+        "Review",
+        "Audit warranty ROs before submit — scan documents, confirm proof, and save your audit trail.",
+        icon="🔍",
+        tips=["Live hard stops", "Dealer Connect copy", "Team cloud save"],
+    )
     if simple_mode:
         st.markdown(
             '<div class="review-simple-mode" aria-hidden="true"></div>',
@@ -6973,10 +6981,13 @@ def _render_declined_claims_learning(all_claims: pd.DataFrame) -> None:
 
 
 def render_claims():
-    st.header("Claim Learning")
-    st.caption(
-        "Build two libraries from Dealer Connect: **paid claims** show what passed; "
-        "**declined claims** show what to avoid before submit."
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "Claim Learning",
+        "Build libraries from Dealer Connect — paid claims show what passed; declined claims show what to avoid.",
+        icon="📚",
+        tips=["Paid patterns", "Decline alerts", "Live coaching"],
     )
 
     if st.button("Clear Claim Learning Cache"):
@@ -7655,8 +7666,14 @@ def _render_coaching_focus_section(df: pd.DataFrame, metrics: dict) -> None:
 
 
 def render_coaching():
-    st.header("Coaching")
-    st.caption("Advisor focus areas and top rejection reasons for the selected date range.")
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "Coaching",
+        "Advisor focus areas and top rejection reasons for the selected date range.",
+        icon="🎯",
+        tips=["Advisor trends", "Top rejections", "Team patterns"],
+    )
 
     col_refresh, _ = st.columns([1, 3])
     with col_refresh:
@@ -9000,14 +9017,13 @@ def render_reporting_review_log(df: pd.DataFrame) -> None:
 
 
 def render_reporting():
-    st.markdown(
-        """
-        <div class="reporting-hero">
-            <h2>Reporting</h2>
-            <p>Team-wide review history stored in Supabase.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "Reporting",
+        "Team-wide review history, exports, and manager summaries stored in Supabase.",
+        icon="📋",
+        tips=["Review log", "Rejections", "Team performance"],
     )
 
     col_refresh, col_migrate = st.columns([1, 2])
@@ -9211,10 +9227,13 @@ def render_personnel_admin():
 
 
 def render_admin():
-    st.header("Admin")
-    st.caption(
-        "Dealership settings, audit rules, rejection reasons, and personnel. "
-        "Saves require a linked **Manager**, **Warranty Admin**, or **Admin** account."
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "Admin",
+        "Dealership settings, audit rules, rejection reasons, and personnel.",
+        icon="⚙️",
+        tips=["Audit rules", "Personnel", "Smart Warranty"],
     )
 
     admin_tab_labels = [
@@ -9247,10 +9266,13 @@ def render_scheduled_reports():
 
 
 def render_tsb_bulletins():
-    st.header("TSB / Service Bulletins")
-    st.caption(
-        "Upload Stellantis Technical Service Bulletins (PDF) or add manual rules. "
-        "During Review, matching bulletins appear when the repair applies to the job."
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "TSB / Service Bulletins",
+        "Upload Stellantis bulletins or add manual rules — matching items surface during Review.",
+        icon="📢",
+        tips=["PDF upload", "Manual rules", "Review alerts"],
     )
 
     can_upload = user_can_upload_library()
@@ -9701,8 +9723,14 @@ def render_rejection_reason_library_admin():
 
 
 def render_wam():
-    st.header("WAM / Warranty Manual Learning")
-    st.caption("Upload WAM PDFs or warranty policy documents. RO Shield will store the text and use it for audit reference.")
+    from core.ui_polish import render_section_hero
+
+    render_section_hero(
+        "WAM / Warranty Manual",
+        "Upload warranty policy PDFs — RO Guard stores the text for audit reference during Review.",
+        icon="📖",
+        tips=["PDF library", "Keyword search", "Audit reference"],
+    )
 
     can_upload = user_can_upload_library()
     if not can_upload:
@@ -9864,19 +9892,12 @@ def main():
 
     section_labels = [label for label, _ in tab_entries]
     apply_pending_help_navigation(section_labels=section_labels)
-    st.markdown(
-        '<div class="rg-section-nav-marker" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
-    )
-    active_section = st.radio(
-        "Section",
+    from core.ui_polish import notify_section_change, render_main_section_nav
+
+    active_section = render_main_section_nav(
         section_labels,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="main_section_nav",
         on_change=clear_user_guide_view,
     )
-    from core.ui_polish import notify_section_change
 
     theme = st.session_state.get("appearance", "Dark")
     if st.session_state.get("show_user_guide"):

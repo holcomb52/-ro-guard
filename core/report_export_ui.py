@@ -11,9 +11,7 @@ import streamlit as st
 
 from .pdf_reports import build_dataframe_report_pdf
 
-BRANDED_EXPORT_CAPTION = (
-    "Use **Download PDF report** for the branded RO GUARD export with ROGUARD watermark on every page."
-)
+BRANDED_EXPORT_CAPTION = "Branded PDF export with RO GUARD watermark."
 
 _EXPORT_CSS_INJECTED = "_roguard_report_export_css"
 
@@ -122,23 +120,25 @@ def render_branded_pdf_download(
         pdf_error = f"PDF could not be generated: {exc}"
 
     st.markdown('<div class="roguard-report-export-card">', unsafe_allow_html=True)
-    tool_left, tool_right = st.columns([1.6, 1])
-    with tool_left:
-        st.caption(caption)
-    with tool_right:
-        if pdf_bytes:
-            st.download_button(
-                label,
-                data=pdf_bytes,
-                file_name=pdf_filename,
-                mime="application/pdf",
-                key=f"{export_key}_pdf_primary",
-                use_container_width=True,
-                type="primary",
-                help="Professional RO GUARD PDF with ROGUARD ghost watermark",
-            )
-        elif pdf_error:
-            st.error(pdf_error)
+    st.markdown(
+        f'<div class="roguard-report-export-toolbar">'
+        f'<div class="roguard-report-export-label">{caption}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    if pdf_bytes:
+        st.download_button(
+            label,
+            data=pdf_bytes,
+            file_name=pdf_filename,
+            mime="application/pdf",
+            key=f"{export_key}_pdf_primary",
+            use_container_width=True,
+            type="primary",
+            help="Professional RO GUARD PDF with ROGUARD ghost watermark",
+        )
+    elif pdf_error:
+        st.error(pdf_error)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -184,34 +184,37 @@ def render_branded_report_table(
 
     st.markdown('<div class="roguard-report-export-card">', unsafe_allow_html=True)
 
-    tool_left, tool_right = st.columns([1.6, 1])
-    with tool_left:
-        st.caption(table_caption)
-    with tool_right:
-        if pdf_bytes:
-            st.download_button(
-                "Download PDF report",
-                data=pdf_bytes,
-                file_name=pdf_filename,
-                mime="application/pdf",
-                key=f"{export_key}_pdf_primary",
-                use_container_width=True,
-                type="primary",
-                help="Professional RO GUARD PDF with ROGUARD ghost watermark",
-            )
-        elif pdf_error:
-            st.error(pdf_error)
+    st.markdown(
+        f'<div class="roguard-report-export-toolbar">'
+        f'<div class="roguard-report-export-label">{table_caption}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    if pdf_bytes:
+        st.download_button(
+            "Download PDF report",
+            data=pdf_bytes,
+            file_name=pdf_filename,
+            mime="application/pdf",
+            key=f"{export_key}_pdf_primary",
+            use_container_width=True,
+            type="primary",
+            help="Professional RO GUARD PDF with ROGUARD ghost watermark",
+        )
+    elif pdf_error:
+        st.error(pdf_error)
 
     st.dataframe(df, use_container_width=True, hide_index=True, **dataframe_kwargs)
 
     if show_csv and csv_filename:
-        st.download_button(
-            "Download CSV (spreadsheet)",
-            export_frame.to_csv(index=False),
-            csv_filename,
-            "text/csv",
-            use_container_width=True,
-            key=f"{export_key}_csv_secondary",
-        )
+        with st.expander("CSV export", expanded=False):
+            st.download_button(
+                "Download CSV (spreadsheet)",
+                export_frame.to_csv(index=False),
+                csv_filename,
+                "text/csv",
+                use_container_width=True,
+                key=f"{export_key}_csv_secondary",
+            )
 
     st.markdown("</div>", unsafe_allow_html=True)

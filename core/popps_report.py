@@ -2752,10 +2752,11 @@ def _render_popps_priority_section(
                 st.caption("No sample claims were listed for this group in the PDF.")
             return
 
-        st.markdown("**Claims in this category**")
         claims_df = _claims_dataframe(section.claims)
+        display_df = _claims_display_dataframe(section.claims)
         render_branded_report_table(
-            claims_df,
+            display_df,
+            export_df=claims_df,
             pdf_title="RO GUARD POPPS Claims Analysis",
             period_label=(
                 f"Dealer {report.dealer_code} · {report.period_label or 'POPPS'} · "
@@ -2770,21 +2771,17 @@ def _render_popps_priority_section(
                 f"RO_Guard_POPPS_Claims_{report.dealer_code}_P{section.priority_rank}.csv".replace(" ", "_")
             ),
             export_key=f"popps_claims_{_safe_widget_suffix(section_review_entry_key(section), report_fp, scope='tbl')}",
+            table_caption="Sample claims — full detail in PDF/CSV export.",
         )
 
         if review_exempt:
             return
 
-        st.markdown(
-            '<div class="popps-notes-panel">'
-            "<h4>Notes &amp; review (below the table)</h4>"
-            "<p>Each sample claim needs its own notes. Open a "
-            "<strong>repair order tab</strong> to document that RO for your audit trail.</p>"
-            "</div>",
-            unsafe_allow_html=True,
+        st.caption(
+            "Add notes and review status on each repair order tab below. "
+            "Notes are append-only — Admin can delete if needed."
         )
 
-        st.markdown("**Review each repair order / claim**")
         tab_labels: list[str] = []
         for claim_index, claim in enumerate(section.claims):
             claim_key = claim_review_entry_key(section, claim, claim_index=claim_index)
@@ -2918,6 +2915,20 @@ def _claims_dataframe(claims: list[PoppsClaimRow]) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows, columns=columns).fillna("—").astype(str)
+
+
+def _claims_display_dataframe(claims: list[PoppsClaimRow]) -> pd.DataFrame:
+    """Compact on-screen table — full columns remain in PDF/CSV export."""
+    full = _claims_dataframe(claims)
+    display_cols = [
+        "Row Type",
+        "Vehicle Identification",
+        "Claim / Condition Number",
+        "Labor Operation / Message Code",
+        "Expense Amount",
+        "Concern Codes (plain language)",
+    ]
+    return full[display_cols]
 
 
 def _summary_dataframe(rows: list[PoppsSummaryRow]) -> pd.DataFrame:
@@ -3863,18 +3874,9 @@ def render_popps_report(
             expanded=False,
             key="popps_sec_repair_groups",
         ):
-            st.markdown(
-                '<p class="popps-review-hint">'
-                "Expand each <strong>Claims Analysis</strong> priority below. Scroll past the claims table to the blue "
-                "<strong>Notes &amp; review</strong> box, then use the "
-                "<strong>repair order tabs</strong> to add notes (with your name), set review status, "
-                "and save. Notes cannot be edited — only Admin can delete a note."
-                "</p>",
-                unsafe_allow_html=True,
-            )
             if sections_needing_notes:
                 labels = [_priority_section_note_label(section) for section in sections_needing_notes]
-                st.caption("**Repair groups that need notes:** " + " · ".join(labels))
+                st.caption("**Needs notes:** " + " · ".join(labels))
             elif compliance_status and compliance_status.get("needs_warning"):
                 st.caption("No sample claims are listed for review in this POPPS file.")
             for section in report.priority_sections:

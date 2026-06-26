@@ -1440,7 +1440,8 @@ THEME_CSS = {
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--pending) {
         border-color: rgba(255, 110, 110, .92) !important;
         background: linear-gradient(135deg, rgba(120, 20, 30, .72), rgba(80, 12, 18, .55)) !important;
-        animation: ro-signature-pulse 2.2s ease-in-out infinite;
+        box-shadow: 0 0 0 1px rgba(255, 110, 110, .35), 0 10px 28px rgba(255, 40, 40, .16) !important;
+        animation: none !important;
     }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed),
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) {
@@ -2548,7 +2549,8 @@ THEME_CSS = {
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--pending) {
         border-color: #ef4444 !important;
         background: linear-gradient(135deg, #fff1f2, #fff7ed) !important;
-        animation: ro-signature-pulse 2.2s ease-in-out infinite;
+        box-shadow: 0 0 0 1px rgba(239, 68, 68, .25), 0 10px 24px rgba(220, 38, 38, .12) !important;
+        animation: none !important;
     }
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.ro-signature-check-panel--confirmed),
     section.main div[data-testid="stVerticalBlock"]:has(.ro-signature-check-panel--confirmed) {
