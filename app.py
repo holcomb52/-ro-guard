@@ -2752,10 +2752,9 @@ def apply_style(theme="Dark", display_prefs: dict | None = None):
     css += streamlit_primary_override_css(theme)
     css += main_scroll_fix_css()
     css += script_embed_collapse_css()
-    from core.ui_polish import layout_system_css, workspace_polish_css
+    from core.ui_polish import workspace_polish_css
 
     css += workspace_polish_css(theme)
-    css += layout_system_css(theme)
     if streamlit_cloud_chrome_allowed():
         _inject_streamlit_cloud_chrome_restore()
     else:

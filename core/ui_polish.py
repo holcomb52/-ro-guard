@@ -298,6 +298,115 @@ def render_section_hero(
     )
 
 
+def layout_system_css(theme: str = "Dark") -> str:
+    """Shared spacing, form sections, and page rhythm outside Review-specific CSS."""
+    is_light = str(theme).lower() == "light"
+    text = "#0f172a" if is_light else "#f8fbff"
+    muted = "#64748b" if is_light else "#94a3b8"
+    border = "#c7d5e3" if is_light else "rgba(62, 150, 255, 0.28)"
+    surface = "rgba(255, 255, 255, 0.92)" if is_light else "rgba(7, 19, 34, 0.55)"
+    stop_bg = "#fef2f2" if is_light else "rgba(80, 12, 18, 0.55)"
+    stop_border = "#f87171" if is_light else "rgba(255, 110, 110, 0.85)"
+    stop_text = "#991b1b" if is_light else "#fecaca"
+    return f"""
+    .stApp:not(:has(.review-workspace-marker)) .app-workspace-chips {{
+        display: none !important;
+    }}
+    .stApp:not(:has(.review-workspace-marker)) .app-workspace-header h2 {{
+        font-size: 1.15rem !important;
+        margin-bottom: 0.15rem !important;
+    }}
+    .stApp:not(:has(.review-workspace-marker)) .app-workspace-header p,
+    .stApp:not(:has(.review-workspace-marker)) .app-workspace-accent {{
+        display: none !important;
+    }}
+    .rg-form-section {{
+        margin: 0.85rem 0 0.55rem 0;
+        padding-bottom: 0.15rem;
+        border-bottom: 1px solid {border};
+    }}
+    .rg-form-section-step {{
+        display: inline-block;
+        margin-bottom: 0.2rem;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: {"#1d4ed8" if is_light else "#93c5fd"} !important;
+        background: {"rgba(219, 234, 254, 0.95)" if is_light else "rgba(37, 99, 235, 0.18)"};
+        border: 1px solid {border};
+    }}
+    .rg-form-section-title {{
+        font-size: 1rem;
+        font-weight: 750;
+        color: {text} !important;
+        line-height: 1.25;
+    }}
+    .rg-form-section-caption {{
+        margin-top: 0.2rem;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: {muted} !important;
+    }}
+    .rg-hard-stop-panel {{
+        margin: 0.65rem 0 0.85rem 0;
+        padding: 0.75rem 0.95rem;
+        border-radius: 12px;
+        border: 1px solid {stop_border};
+        background: {stop_bg};
+    }}
+    .rg-hard-stop-title {{
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: {stop_text} !important;
+        margin-bottom: 0.35rem;
+    }}
+    .rg-hard-stop-list {{
+        margin: 0;
+        padding-left: 1.1rem;
+        color: {stop_text} !important;
+        font-size: 0.88rem;
+        line-height: 1.45;
+    }}
+    .rg-hard-stop-list li + li {{
+        margin-top: 0.2rem;
+    }}
+    section.main div[data-testid="stMarkdownContainer"]:has(.rg-form-section) + div,
+    section.main div[data-testid="stMarkdownContainer"]:has(.rg-hard-stop-panel) + div {{
+        margin-top: 0 !important;
+    }}
+    div.roguard-report-export-card {{
+        border: 1px solid {border} !important;
+        border-radius: 12px !important;
+        padding: 0.55rem 0.65rem 0.35rem !important;
+        margin: 0.35rem 0 0.65rem 0 !important;
+        background: {surface} !important;
+    }}
+    div.roguard-report-export-card [data-testid="stCaptionContainer"] p {{
+        font-size: 0.76rem !important;
+        line-height: 1.35 !important;
+        margin-bottom: 0 !important;
+    }}
+    div.roguard-report-export-toolbar {{
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.45rem 0.75rem;
+        margin-bottom: 0.35rem;
+    }}
+    div.roguard-report-export-label {{
+        font-size: 0.78rem;
+        color: {muted} !important;
+        line-height: 1.35;
+    }}
+    """
+
+
 def workspace_polish_css(theme: str = "Dark") -> str:
     """Animations, pill navigation, metric hover, and section heroes."""
     is_light = str(theme).lower() == "light"
@@ -521,113 +630,4 @@ def workspace_polish_css(theme: str = "Dark") -> str:
             transform: none !important;
         }}
     }}
-    """
-
-
-def layout_system_css(theme: str = "Dark") -> str:
-    """Shared spacing, form sections, and page rhythm outside Review-specific CSS."""
-    is_light = str(theme).lower() == "light"
-    text = "#0f172a" if is_light else "#f8fbff"
-    muted = "#64748b" if is_light else "#94a3b8"
-    border = "#c7d5e3" if is_light else "rgba(62, 150, 255, 0.28)"
-    surface = "rgba(255, 255, 255, 0.92)" if is_light else "rgba(7, 19, 34, 0.55)"
-    stop_bg = "#fef2f2" if is_light else "rgba(80, 12, 18, 0.55)"
-    stop_border = "#f87171" if is_light else "rgba(255, 110, 110, 0.85)"
-    stop_text = "#991b1b" if is_light else "#fecaca"
-    return f"""
-    .stApp:not(:has(.review-workspace-marker)) .app-workspace-chips {{
-        display: none !important;
-    }}
-    .stApp:not(:has(.review-workspace-marker)) .app-workspace-header h2 {{
-        font-size: 1.15rem !important;
-        margin-bottom: 0.15rem !important;
-    }}
-    .stApp:not(:has(.review-workspace-marker)) .app-workspace-header p,
-    .stApp:not(:has(.review-workspace-marker)) .app-workspace-accent {{
-        display: none !important;
-    }}
-    .rg-form-section {{
-        margin: 0.85rem 0 0.55rem 0;
-        padding-bottom: 0.15rem;
-        border-bottom: 1px solid {border};
-    }}
-    .rg-form-section-step {{
-        display: inline-block;
-        margin-bottom: 0.2rem;
-        padding: 0.15rem 0.55rem;
-        border-radius: 999px;
-        font-size: 0.68rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: {"#1d4ed8" if is_light else "#93c5fd"} !important;
-        background: {"rgba(219, 234, 254, 0.95)" if is_light else "rgba(37, 99, 235, 0.18)"};
-        border: 1px solid {border};
-    }}
-    .rg-form-section-title {{
-        font-size: 1rem;
-        font-weight: 750;
-        color: {text} !important;
-        line-height: 1.25;
-    }}
-    .rg-form-section-caption {{
-        margin-top: 0.2rem;
-        font-size: 0.8rem;
-        line-height: 1.4;
-        color: {muted} !important;
-    }}
-    .rg-hard-stop-panel {{
-        margin: 0.65rem 0 0.85rem 0;
-        padding: 0.75rem 0.95rem;
-        border-radius: 12px;
-        border: 1px solid {stop_border};
-        background: {stop_bg};
-    }}
-    .rg-hard-stop-title {{
-        font-size: 0.82rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: {stop_text} !important;
-        margin-bottom: 0.35rem;
-    }}
-    .rg-hard-stop-list {{
-        margin: 0;
-        padding-left: 1.1rem;
-        color: {stop_text} !important;
-        font-size: 0.88rem;
-        line-height: 1.45;
-    }}
-    .rg-hard-stop-list li + li {{
-        margin-top: 0.2rem;
-    }}
-    section.main div[data-testid="stMarkdownContainer"]:has(.rg-form-section) + div,
-    section.main div[data-testid="stMarkdownContainer"]:has(.rg-hard-stop-panel) + div {{
-        margin-top: 0 !important;
-    }}
-    div.roguard-report-export-card {{
-        border: 1px solid {border} !important;
-        border-radius: 12px !important;
-        padding: 0.55rem 0.65rem 0.35rem !important;
-        margin: 0.35rem 0 0.65rem 0 !important;
-        background: {surface} !important;
-    }}
-    div.roguard-report-export-card [data-testid="stCaptionContainer"] p {{
-        font-size: 0.76rem !important;
-        line-height: 1.35 !important;
-        margin-bottom: 0 !important;
-    }}
-    div.roguard-report-export-toolbar {{
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.45rem 0.75rem;
-        margin-bottom: 0.35rem;
-    }}
-    div.roguard-report-export-label {{
-        font-size: 0.78rem;
-        color: {muted} !important;
-        line-height: 1.35;
-    }}
-    """
+    """ + layout_system_css(theme)
