@@ -162,8 +162,8 @@ CONCERN_TYPE_LABELS = {
 }
 
 STANDARD_CLAIM_LINE = re.compile(
-    r"^(?P<vehicle_id>\S+)\s+(?P<vehicle_number>\S+)\s+"
-    r"(?P<claim_condition>\d{6}-\S+)\s+(?P<labor_operation>\S+)\s+"
+    r"^(?:(?P<fleet_marker>X)\s+)?(?P<vehicle_id>\S+)\s+(?P<vehicle_number>\S+)\s+"
+    r"(?P<claim_condition>[\dA-Za-z]{6}-\S+)\s+(?P<labor_operation>\S+)\s+"
     r"(?P<technician_id>\d+)\s+(?P<mileage>[\d,]+)\s+"
     r"(?:(?P<authorization_flag>\S+)\s+)?"
     r"(?P<expense>[\d,]+\.?\d*)\s+(?P<concern_codes>.+)$"
@@ -176,13 +176,15 @@ MESSAGE_CLAIM_LINE = re.compile(
     r"(?P<expense>[\d,]+\.?\d*)\s+(?P<days_to_process>\d+)\s+(?P<concern_codes>.+)$"
 )
 
+# Group % columns: early-quarter reports fill only the first month (Jul/Aug blank),
+# so the second and third values are optional.
 CAP_HEADER_LINE = re.compile(
     r"^(?P<priority>\d+)\s+"
     r"(?P<labor_operation>\d{4})\s+"
     r"-(?P<repair_group>.+?)\s+"
     r"(?P<quarters>\d+)\s+(?P<total_conditions>\d+)\s+"
-    r"(?P<concern_codes>[\d,\s#]+)\s+"
-    r"(?P<march>\d+)\s+(?P<april>\d+)\s+(?P<may>\d+)\s*$",
+    r"(?P<concern_codes>[\d,\s#]+?)\s+"
+    r"(?P<march>\d+)(?:\s+(?P<april>\d+))?(?:\s+(?P<may>\d+))?\s*$",
     re.IGNORECASE,
 )
 
@@ -190,8 +192,8 @@ MSG_CAP_HEADER_LINE = re.compile(
     r"^(?P<priority>MSG\s+CODE)\s+"
     r"(?P<repair_group>.+?)\s+"
     r"(?P<quarters>\d+)\s+(?P<total_conditions>\d+)\s+"
-    r"(?P<concern_codes>[\d,\s#]+)\s+"
-    r"(?P<march>\d+)\s+(?P<april>\d+)\s+(?P<may>\d+)\s*$",
+    r"(?P<concern_codes>[\d,\s#]+?)\s+"
+    r"(?P<march>\d+)(?:\s+(?P<april>\d+))?(?:\s+(?P<may>\d+))?\s*$",
     re.IGNORECASE,
 )
 
@@ -355,6 +357,7 @@ def _parse_claim_line(line: str) -> PoppsClaimRow | None:
         groups = match.groupdict()
         concerns = groups.get("concern_codes") or ""
         return PoppsClaimRow(
+            fleet_vehicle="Yes" if groups.get("fleet_marker") else "No",
             vehicle_identification=groups["vehicle_id"],
             vehicle_number=groups["vehicle_number"],
             claim_condition_or_number=groups["claim_condition"],
@@ -446,34 +449,27 @@ def _parse_daze(text: str, report: PoppsReport) -> None:
         if not stripped:
             continue
         if re.search(r"Dealership\s+DAZE", stripped, re.IGNORECASE):
-            pairs = re.findall(r"(\d+)\s*\.\s*(\d+)\s*%", stripped)
-            if len(pairs) >= 3:
-                daze.dealership_march = f"{pairs[0][0]}.{pairs[0][1]}%"
-                daze.dealership_april = f"{pairs[1][0]}.{pairs[1][1]}%"
-                daze.dealership_may = f"{pairs[2][0]}.{pairs[2][1]}%"
+            pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
+            if len(pcts) >= 3:
+                daze.dealership_march = f"{pcts[0]}%"
+                daze.dealership_april = f"{pcts[1]}%"
+                daze.dealership_may = f"{pcts[2]}%"
                 line_hits += 1
-            else:
-                pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
-                if len(pcts) >= 3:
-                    daze.dealership_march = f"{pcts[0]}%"
-                    daze.dealership_april = f"{pcts[1]}%"
-                    daze.dealership_may = f"{pcts[2]}%"
-                    line_hits += 1
+            elif len(pcts) >= 1:
+                # Early-quarter report: only the first month is populated.
+                daze.dealership_march = f"{pcts[0]}%"
+                line_hits += 1
             continue
         if re.search(r"Business\s+Center\s+DAZE", stripped, re.IGNORECASE):
-            pairs = re.findall(r"(\d+)\s*\.\s*(\d+)\s*%", stripped)
-            if len(pairs) >= 3:
-                daze.business_center_march = f"{pairs[0][0]}.{pairs[0][1]}%"
-                daze.business_center_april = f"{pairs[1][0]}.{pairs[1][1]}%"
-                daze.business_center_may = f"{pairs[2][0]}.{pairs[2][1]}%"
+            pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
+            if len(pcts) >= 3:
+                daze.business_center_march = f"{pcts[0]}%"
+                daze.business_center_april = f"{pcts[1]}%"
+                daze.business_center_may = f"{pcts[2]}%"
                 line_hits += 1
-            else:
-                pcts = re.findall(r"(\d+\.\d+)\s*%", stripped)
-                if len(pcts) >= 3:
-                    daze.business_center_march = f"{pcts[0]}%"
-                    daze.business_center_april = f"{pcts[1]}%"
-                    daze.business_center_may = f"{pcts[2]}%"
-                    line_hits += 1
+            elif len(pcts) >= 1:
+                daze.business_center_march = f"{pcts[0]}%"
+                line_hits += 1
             continue
         if re.search(r"DAZE\s+Expense", stripped, re.IGNORECASE):
             money = _parse_daze_line_money_tokens(stripped)
@@ -481,6 +477,9 @@ def _parse_daze(text: str, report: PoppsReport) -> None:
                 daze.expense_march = _parse_money(money[0])
                 daze.expense_april = _parse_money(money[1])
                 daze.expense_may = _parse_money(money[2])
+                line_hits += 1
+            elif len(money) >= 1:
+                daze.expense_march = _parse_money(money[0])
                 line_hits += 1
 
     if line_hits >= 3:
@@ -545,7 +544,7 @@ def _parse_summary_line(line: str, *, early_warning: bool = False) -> PoppsSumma
         r"^MSG CODE\s+(?P<desc>.+?)\s+"
         r"(?P<conds>\d+)\s+"
         r"(?P<ctype>\w+)\s+"
-        r"(?P<g1>[\d.N/A]+)\s+(?P<g2>[\d.N/A]+)\s+(?P<g3>[\d.N/A]+)",
+        r"(?P<g1>[\d.N/A]+)(?:\s+(?P<g2>[\d.N/A]+)\s+(?P<g3>[\d.N/A]+))?\s*$",
         line,
         re.IGNORECASE,
     )
@@ -560,9 +559,9 @@ def _parse_summary_line(line: str, *, early_warning: bool = False) -> PoppsSumma
             april_percent="—",
             may_percent="—",
             concern_type=expand_concern_type(g["ctype"]),
-            march_group_value=g["g1"] if g["g1"] != "N/A" else "—",
-            april_group_value=g["g2"] if g["g2"] != "N/A" else "—",
-            may_group_value=g["g3"] if g["g3"] != "N/A" else "—",
+            march_group_value=(g["g1"] or "—") if g["g1"] != "N/A" else "—",
+            april_group_value=(g["g2"] or "—") if g["g2"] != "N/A" else "—",
+            may_group_value=(g["g3"] or "—") if g["g3"] != "N/A" else "—",
         )
 
     top_match = re.match(
@@ -572,8 +571,8 @@ def _parse_summary_line(line: str, *, early_warning: bool = False) -> PoppsSumma
         r"(?P<conds>\d+)\s+"
         r"(?:(?P<p1>[\d.]+)\s+(?P<p2>[\d.]+)\s+(?P<p3>[\d.]+)|(?P<p_single>[\d.]+))\s+"
         r"(?P<ctype>\w+)\s+"
-        r"(?P<g1>[\d.N/A]+)\s+(?P<g2>[\d.N/A]+)\s+(?P<g3>[\d.N/A]+)"
-        r"(?:\s+(?P<expense>N/A|[\d,]+))?",
+        r"(?P<g1>[\d.N/A]+)(?:\s+(?P<g2>[\d.N/A]+)\s+(?P<g3>[\d.N/A]+))?"
+        r"(?:\s+(?P<expense>N/A|[\d,]+))?\s*$",
         line,
         re.IGNORECASE,
     )
@@ -589,9 +588,9 @@ def _parse_summary_line(line: str, *, early_warning: bool = False) -> PoppsSumma
             april_percent=(g.get("p2") or "—"),
             may_percent=(g.get("p3") or "—"),
             concern_type=expand_concern_type(g["ctype"]),
-            march_group_value=g["g1"] if g["g1"] != "N/A" else "—",
-            april_group_value=g["g2"] if g["g2"] != "N/A" else "—",
-            may_group_value=g["g3"] if g["g3"] != "N/A" else "—",
+            march_group_value=(g["g1"] or "—") if g["g1"] != "N/A" else "—",
+            april_group_value=(g["g2"] or "—") if g["g2"] != "N/A" else "—",
+            may_group_value=(g["g3"] or "—") if g["g3"] != "N/A" else "—",
             may_expense=_parse_money(g.get("expense") or ""),
         )
     return None
@@ -722,9 +721,9 @@ def _parse_priority_sections(text: str, report: PoppsReport) -> None:
                 total_conditions=g["total_conditions"],
                 concern_codes_raw=g["concern_codes"].strip(),
                 concern_codes_plain=expand_concern_codes(g["concern_codes"]),
-                group_march=g["march"],
-                group_april=g["april"],
-                group_may=g["may"],
+                group_march=g["march"] or "",
+                group_april=g["april"] or "",
+                group_may=g["may"] or "",
             )
             continue
 
