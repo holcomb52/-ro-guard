@@ -398,6 +398,23 @@ def _parse_header(text: str, report: PoppsReport) -> None:
     )
     if period:
         report.period_label = f"{period.group(1)} {period.group(2)} — {period.group(3)}"
+    else:
+        # Quarterly / other DealerCONNECT variants (e.g. "2nd Quarter, 2026 - Quarterly Report").
+        quarter = re.search(
+            r"([1-4])(?:st|nd|rd|th)\s+Quarter,?\s*(\d{4})",
+            text,
+            re.IGNORECASE,
+        )
+        if quarter:
+            report.period_label = f"Q{quarter.group(1)} {quarter.group(2)} — Quarterly Report"
+        else:
+            other = re.search(
+                r"([A-Za-z]+),\s*(\d{4})\s*-\s*((?:Quarterly|Management|Annual)\s+Report)",
+                text,
+                re.IGNORECASE,
+            )
+            if other:
+                report.period_label = f"{other.group(1)} {other.group(2)} — {other.group(3)}"
 
     dealer = re.search(
         r"Dealer:\s*(\d+)\s*-\s*(.+?)\s*-\s*Warranty",
@@ -739,9 +756,21 @@ def parse_popps_pdf(pdf_bytes: bytes) -> PoppsReport:
     if not report.priority_sections and not report.top_problems:
         report.parse_warnings.append(
             "We could read the PDF but could not match the expected POPPS layout. "
-            "Try uploading the full Dealer POPPS Management Report PDF from DealerCONNECT."
+            "Quarterly and summary exports are not supported — upload the **monthly** "
+            "Dealer POPPS Management Report PDF from DealerCONNECT."
         )
     return report
+
+
+def popps_report_has_content(report: PoppsReport) -> bool:
+    """True when the parse produced usable POPPS sections (not a stray/unsupported PDF)."""
+    if report.priority_sections or report.top_problems or report.early_warning:
+        return True
+    daze = report.daze
+    return any(
+        str(getattr(daze, f"dealership_{slot}", "") or "").strip() not in ("", "—", "-", "N/A", "n/a")
+        for slot in ("march", "april", "may")
+    )
 
 
 def popps_report_fingerprint(report: PoppsReport, file_name: str) -> str:
@@ -783,6 +812,13 @@ def popps_period_sort_key(
         if re.search(rf"\b{re.escape(name)}\b", text):
             month = number
             break
+    if not month:
+        # Quarterly labels (e.g. "Q2 2026" or "2nd Quarter 2026") → last month of the quarter.
+        q_match = re.search(r"\bq([1-4])\b", text) or re.search(
+            r"\b([1-4])(?:st|nd|rd|th)\s+quarter\b", text
+        )
+        if q_match:
+            month = int(q_match.group(1)) * 3
     if not month:
         file_low = str(file_name or "").lower()
         for name, number in MONTH_NAME_TO_NUMBER.items():
@@ -902,11 +938,28 @@ def _sort_popps_library_entries(
     )
 
 
+def _stored_entry_has_content(entry: dict) -> bool:
+    """Cheap check on the stored report dict (mirrors popps_report_has_content)."""
+    report = entry.get("report") if isinstance(entry.get("report"), dict) else {}
+    if report.get("priority_sections") or report.get("top_problems") or report.get("early_warning"):
+        return True
+    daze = report.get("daze") or {}
+    return any(
+        str(daze.get(f"dealership_{slot}") or "").strip() not in ("", "—", "-", "N/A", "n/a")
+        for slot in ("march", "april", "may")
+    )
+
+
 def _active_library_fingerprint(reports: dict[str, dict]) -> str:
     """Newest POPPS report month on file (e.g. May 2026 over March 2026)."""
     if not reports:
         return ""
     ordered = _sort_popps_library_entries(list(reports.values()), newest_first=True)
+    # Skip saved entries with no usable data (e.g. a Quarterly export that parsed empty)
+    # so they never take over the main screen from a real monthly report.
+    for entry in ordered:
+        if _stored_entry_has_content(entry):
+            return str(entry.get("fingerprint") or "")
     return str(ordered[0].get("fingerprint") or "")
 
 
@@ -1212,6 +1265,16 @@ def import_popps_pdf_files(
         file_name = str(getattr(uploaded, "name", "") or "POPPS report.pdf")
         try:
             report = parse_popps_pdf(uploaded.getvalue())
+            if not popps_report_has_content(report):
+                results["failed"].append({
+                    "file_name": file_name,
+                    "error": (
+                        "no POPPS data found — this looks like a Quarterly or summary export. "
+                        "Upload the monthly Dealer POPPS Management Report PDF from DealerCONNECT "
+                        "(header reads like 'May, 2026 - Interim Report')."
+                    ),
+                })
+                continue
             entry = _popps_entry_from_report(report, file_name, uploaded_by)
             library["reports"][entry["fingerprint"]] = entry
             results["imported"].append(entry)
