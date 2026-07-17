@@ -742,9 +742,8 @@ def _parse_priority_sections(text: str, report: PoppsReport) -> None:
         report.priority_sections.append(current)
 
 
-def parse_popps_pdf(pdf_bytes: bytes) -> PoppsReport:
-    """Parse a Dealer POPPS PDF into structured, plain-language sections."""
-    text = _extract_pdf_text(pdf_bytes)
+def _parse_popps_text(text: str) -> PoppsReport:
+    """Parse already-extracted POPPS text, including text restored from cloud storage."""
     report = PoppsReport(raw_text=text)
     _parse_header(text, report)
     _parse_daze(text, report)
@@ -759,6 +758,11 @@ def parse_popps_pdf(pdf_bytes: bytes) -> PoppsReport:
             "Dealer POPPS Management Report PDF from DealerCONNECT."
         )
     return report
+
+
+def parse_popps_pdf(pdf_bytes: bytes) -> PoppsReport:
+    """Parse a Dealer POPPS PDF into structured, plain-language sections."""
+    return _parse_popps_text(_extract_pdf_text(pdf_bytes))
 
 
 def popps_report_has_content(report: PoppsReport) -> bool:
@@ -1436,7 +1440,15 @@ def _hydrate_stored_report_daze(data: dict | None) -> dict:
 
 
 def popps_report_from_storage_dict(data: dict | None) -> PoppsReport:
-    return _dataclass_from_dict(PoppsReport, _hydrate_stored_report_daze(data))
+    payload = dict(data or {})
+    raw_text = str(payload.get("raw_text") or "").strip()
+    if raw_text:
+        # Stored entries may have been parsed by an older parser. Rebuild all sections
+        # from the retained PDF text so parser fixes take effect without another upload.
+        refreshed = _parse_popps_text(raw_text)
+        if popps_report_has_content(refreshed):
+            return refreshed
+    return _dataclass_from_dict(PoppsReport, _hydrate_stored_report_daze(payload))
 
 
 def reset_popps_hydrate_attempt_flags() -> None:
